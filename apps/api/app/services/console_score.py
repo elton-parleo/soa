@@ -892,7 +892,8 @@ def compare(now: dict, prev_code: Optional[str], prev_stored: Optional[dict],
             'applicable_max': prev_max,
             'applicable_note': TEMPLATES['previous.applicable'].format(prev=_fmt(float(prev_max)), now=_fmt(float(now_max)))
             if changed else None,
-            'dimension_deltas': dimension_deltas(now, prev_stored)}
+            'dimension_deltas': dimension_deltas(now, prev_stored),
+            'pillar_deltas': pillar_deltas(now, prev_stored)}
 
 
 def score_facts(now: dict, prev_code: str, prev_stored: dict, studies: Optional[tuple]) -> tuple:
@@ -922,6 +923,25 @@ def score_facts(now: dict, prev_code: str, prev_stored: dict, studies: Optional[
 
 def _dims_of(body: dict) -> Dict[str, dict]:
     return {d['code']: d for p in body.get('pillars') or [] for d in p.get('dimensions') or []}
+
+
+def pillar_deltas(now: dict, prev: dict) -> List[dict]:
+    """2P-1 (B3): each pillar's change against a compared previous score, only
+    where both scored it on the same applicable points (a pillar whose
+    applicable max moved has no delta: its points are on another scale), in
+    the score's pillar order. {code, name, delta, score, previous}."""
+    then = {p.get('code'): p for p in prev.get('pillars') or []}
+    out = []
+    for p in now.get('pillars') or []:
+        q = then.get(p.get('code'))
+        if not q or p.get('score') is None or q.get('score') is None:
+            continue
+        if q.get('applicable_max') is not None and p.get('applicable_max') is not None and \
+                round(float(q['applicable_max']), 1) != round(float(p['applicable_max']), 1):
+            continue
+        out.append({'code': p['code'], 'name': p.get('name'), 'delta': round(float(p['score']) - float(q['score']), 1),
+                    'score': p['score'], 'previous': q['score']})
+    return out
 
 
 def dimension_deltas(now: dict, prev: dict) -> List[dict]:
@@ -1093,6 +1113,17 @@ def comparable_version(body: Optional[dict]) -> Optional[str]:
         # a score stored under 2O-1, which counted version-2 rows only
         return SINGLE_CALL_CODER_VERSION
     return version
+
+
+def outcomes_version(rows: List[dict]) -> str:
+    """2P-1 (B2): the version a cycle's counts compare under, read from its
+    outcomes (load_overview_rows' rows), never a stored score: the current
+    scorer, or the version its oldest brand-direct outcome was coded under
+    (comparable_version). The Changes block, the Impact history and every
+    other two-cycle count pass it to cycle_compare beside the study, so a
+    cycle on an older coder reads "Scored under v<n>, re-score to compare"
+    there as on the score tile, and is never compared silently."""
+    return comparable_version({'scorer_version': SCORER_VERSION, 'brand_coder': brand_coder(rows)})
 
 
 def verdict(score: Optional[int], true_value: Optional[dict], unmeasured: float) -> Optional[str]:

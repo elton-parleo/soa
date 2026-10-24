@@ -128,15 +128,36 @@ def _without_zero(x, key):
     return x
 
 
+def _before_2p1(x):
+    """2P-1 names the unprompted set "brand-choice" (console_parity._answers, _tier_words; the revenue model's set); main
+    named it "unprompted" (these fixtures ask no comparison question)."""
+    if isinstance(x, dict):
+        return {k: _before_2p1(v) for k, v in x.items()}
+    if isinstance(x, list):
+        return [_before_2p1(v) for v in x]
+    if not isinstance(x, str):
+        return x
+    x = x.replace("a brand-choice answer's coding carries no list of other brands", 'unprompted answers carry no list of other brands')
+    return x.replace('brand-choice', 'unprompted')
+
+
 def per_surface_view(endpoint, body):
+    body = _before_2p1(body)
     if endpoint == 'score':
         # 2L-4: the brand tiles beside the five, and the rows the merchant's kind picks
         body = before_2l4(body)
         # 2O-1 adds the brand-direct coder count beside the score; no value it served moved
         body = {k: v for k, v in body.items() if k != 'brand_coder'}
+        # 2P-1 adds the pillars' deltas beside the dimensions' against a compared cycle
+        if isinstance(body.get('previous'), dict):
+            body['previous'] = {k: v for k, v in body['previous'].items() if k != 'pillar_deltas'}
     body = _strip_volatile(_strip_all(copy.deepcopy(body)))
     for k in DEFAULT_READERS.get(endpoint, ()):
         body.pop(k, None)
+    if endpoint in ('visibility', 'true-value'):
+        # 2P-1 adds the previous cycle and what moved since it (moved, drift) when the two compare
+        for k in ('previous', 'moved', 'drift'):
+            body.pop(k, None)
     if endpoint == 'visibility':
         # 2K-1 adds `brand_choice` beside each row (unprompted or comparison); no value it served moved
         for row in body.get('byQuestion') or []:
@@ -160,8 +181,9 @@ def per_surface_view(endpoint, body):
         # 2K-3 adds the start day in the merchant's zone beside `started`; 2K-4 the cycle's study
         for k in ('start_date_local', 'created_at_local', 'timezone', 'study'):
             body.pop(k, None)
-        # 2L-3 adds each product's and each signal's narrative
+        # 2L-3 adds each product's and each signal's narrative; 2P-1 the condition that failed
         for block in (body.get('by_surface') or {}).values():
+            block.pop('changes_condition', None)
             for item in (block.get('products') or []) + (block.get('signals') or []):
                 item.pop('narrative', None)
         for item in (body.get('products') or []) + (body.get('signals') or []):
@@ -233,7 +255,7 @@ def test_the_headline_counts_every_agent_first(fl12):
     assert (heads['consumer_ui']['first'], heads['consumer_ui']['denom']) == (11, 34)
     assert (heads['all']['first'], heads['all']['denom']) == (22 + 11, 68 + 34)
     assert heads['all']['named'] == heads['grounded_api']['named'] + heads['consumer_ui']['named']
-    assert heads['all']['text'] == vis['headline'] == 'First in 33 of 102 unprompted answers.'
+    assert heads['all']['text'] == vis['headline'] == 'First in 33 of 102 brand-choice answers.'
     assert vis['ranking']['surface'] == 'all' and vis['ranking']['denom'] == 515
 
 
@@ -287,7 +309,7 @@ def test_the_overview_reads_all_by_default_with_six_agents(fl12):
     for k in ('answers', 'named', 'first', 'named_of', 'exact', 'scored', 'wrong', 'other_brand', 'fabricated'):
         assert every['totals'][k] == g['totals'][k] + c['totals'][k], k
     assert every['totals']['first'] == 33 and every['totals']['named_of'] == 102
-    assert every['summary']['lines'][0] == 'First in 33 of 102 unprompted answers, ahead of every other brand.'
+    assert every['summary']['lines'][0] == 'First in 33 of 102 brand-choice answers, ahead of every other brand.'
     assert over['coverage']['unprompted'] == 102
 
 

@@ -86,11 +86,13 @@ def test_the_headline_reads_brand_choice_answers_when_the_cycle_asked_comparison
     assert head['text'] == 'Named in 117 of 174 brand-choice answers. Pampers first in 57, Huggies in 42.'
 
 
-def test_without_a_comparison_question_the_headline_is_2i8_s_unprompted_wording(http, db, upstream):
+def test_without_a_comparison_question_the_headline_reads_the_unprompted_set_in_one_wording(http, db, upstream):
     _fl12_2i8(db)
     head = _visibility(http)['headlines']['all']
     assert (head['tier'], head['denom']) == ('unprompted', 102)
-    assert 'unprompted answers' in head['text'] and 'brand-choice' not in head['text']
+    # 2P-1: the unprompted set, named the console's one way ("brand-choice answers": with no comparison question asked
+    # the two sets are the same answers)
+    assert head['text'].endswith('brand-choice answers.')
 
 
 def test_the_first_pick_tiles_and_metric_counts_read_brand_choice_share_of_mentions_does_not(http, db, upstream):
@@ -174,6 +176,6 @@ def test_the_lead_headline_reads_first_in_n_of_m_brand_choice_answers():
         [row('comparison', rival, False)]
     head = parity.visibility_headline(rows, 'all', 'Pampers')
     assert (head['tier'], head['text']) == ('brand_choice', 'First in 5 of 6 brand-choice answers.')
-    # no comparison question: the unprompted wording, over the unprompted rows only
+    # no comparison question: over the unprompted rows only, in the one wording (2P-1)
     head = parity.visibility_headline(rows[:3], 'all', 'Pampers')
-    assert (head['tier'], head['text']) == ('unprompted', 'First in 3 of 3 unprompted answers.')
+    assert (head['tier'], head['text']) == ('unprompted', 'First in 3 of 3 brand-choice answers.')

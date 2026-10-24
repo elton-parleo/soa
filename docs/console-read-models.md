@@ -4638,7 +4638,7 @@ answer, so W&S is the only row.
       "consumer_ui": {}
     }
   },
-  "note": "First pick is the first brand the answer names, as coded when it was scored. The coding ranks every brand named, so when the comparison set's first brand sits second or later, another brand came first, and the brands the answer named outside the set decide which, by where each first appears. When no coding names that brand (unprompted answers carry no list of other brands), nobody gets the pick.",
+  "note": "First pick is the first brand the answer names, as coded when it was scored. The coding ranks every brand named, so when the comparison set's first brand sits second or later, another brand came first, and the brands the answer named outside the set decide which, by where each first appears. When no coding names that brand (a brand-choice answer's coding carries no list of other brands), nobody gets the pick.",
   "surfaces": [
     {
       "surface": "grounded_api",
@@ -4849,7 +4849,7 @@ store). Two of 516 rows (one first pick by span position, one uncoded) and 4 of 
       }
     }
   },
-  "note": "First pick is the first brand the answer names, as coded when it was scored. The coding ranks every brand named, so when the comparison set's first brand sits second or later, another brand came first, and the brands the answer named outside the set decide which, by where each first appears. When no coding names that brand (unprompted answers carry no list of other brands), nobody gets the pick.",
+  "note": "First pick is the first brand the answer names, as coded when it was scored. The coding ranks every brand named, so when the comparison set's first brand sits second or later, another brand came first, and the brands the answer named outside the set decide which, by where each first appears. When no coding names that brand (a brand-choice answer's coding carries no list of other brands), nobody gets the pick.",
   "surfaces": [
     {
       "surface": "grounded_api",
@@ -7872,3 +7872,107 @@ identical), on `fixtures/brand_claim/pampers_brand_pages_2o6.json` built by `fix
 `apps/api/tests/test_console_2o6.py`. FL14's fixture: before (2O-5's served shape) grounded 38, unverified 132;
 after (2O-6's) grounded 46, unverified 124, the bullets grounding eight attribute answers; fabricated 0 either way
 (its 21 count answers all name a count a page lists, and it holds no contradicted value).
+
+## 2P-1: the one-shot pass before loop #2
+
+No scorer version: nothing a dimension reads changed (`SCORER_VERSION` stays **16**). No migration.
+
+### B1: `--refresh-reference` writes when any served field changed
+
+After supply #31 the refresh compared price cells only, printed "reference cells that differ: 0 … nothing to
+write" while supply served the brand page, attributes, deals, titles and the brand's lines, and the brand-direct
+rescores that followed read the cached rows. `rescore_cycle.served_diff` now diffs every served key of a row both
+sides have beyond the price cells (the brand page's `json_ld` / `size_chart` / `bullets` / `final_url` named as one,
+`brand_page`; a cached own row without them while supply serves them is changed) and the payload's keys
+(`brand_lines`, `brand_lines_complete`, …, the refresh's own `refreshed_at` / `previous_sha256` aside). The printout
+adds "rows with new or changed fields: N (fields)" and "payload fields that differ: …" beside the price-cell line,
+and the refresh writes when any differs. `--restore` puts the column's text back byte for byte, so the whole payload.
+Tests: `apps/pipeline/tests/test_refresh_served_fields_2p1.py`.
+
+### B2: one comparability rule on every reader
+
+`soa_shared/cycle_compare.cycles_comparable` was the rule everywhere, but the Overview's Changes block and the
+Impact history passed it no version, so a previous cycle whose brand-direct rows an older coder coded was compared
+silently while the score tile read "Scored under v15, re-score to compare.". Both now pass
+`console_score.outcomes_version(rows)`: the score's `comparable_version`, read from the cycle's outcomes (the current
+scorer, or the version its oldest brand-direct row was coded under). A previous cycle of the same study that does
+not compare for another reason gets no brand Changes line (before, they read `new`, "First cycle with this
+question"); against another study they still read `new`. The Overview's surface blocks carry `changes_condition`
+(cycle_compare's condition, null when compared).
+
+| Reader | Rule | Version passed |
+|---|---|---|
+| Overview score tile and five brand tiles (`/score` `previous`, `metrics[].delta`) | `cycles_comparable` | the stored scores' `comparable_version` |
+| Changes block and agent table (`/overview` `changes_status`) | `cycles_comparable` | `outcomes_version` (2P-1) |
+| Impact history (`/revenue/history` `vs_previous`) | `cycles_comparable` | `outcomes_version` (2P-1) |
+| Visibility movement, True Value drift, Trade promotions, Impact since the baseline (2P-1, below) | `cycles_comparable` through the router's `_compared` | `outcomes_version` |
+| Console: Visibility sparklines, Overview trend, Impact series, run dialog | the API's `previous` / `vs_previous` (truesync 2P-1) | — |
+
+FL14 after the sequence below: the stored score on scorer 16, `brand_coder` `{version 6, coded = of, oldest 6}`,
+`comparable_version` "16"; a new FL14-study cycle scored on the same versions compares on every reader.
+
+    python3 scripts/rescore_cycle.py --cycle FL14-pampers-20261023 --refresh-reference --classify-only --backup <path>
+    python3 scripts/rescore_cycle.py --cycle FL14-pampers-20261023 --tier brand_direct
+    python3 scripts/rescore_cycle.py --cycle FL14-pampers-20261023 --tier brand_direct
+    python3 scripts/rescore_cycle.py --cycle FL14-pampers-20261023 --narratives
+
+The classify-only refresh keeps each row's coder stamp; only `--tier brand_direct` stamps coder 6 on every
+brand-direct row (intent questions included: every brand-direct question's expectation is `brand_mention`). The
+next console read recomputes ('cycle reference refreshed', then 'outcomes re-scored'). Tests:
+`apps/api/tests/test_console_2p1_comparable.py`.
+
+### B3: week over week on a synthetic second cycle
+
+`tests/console_fixture_2p1.py`: FL14's shape as cycle 1 (229) and cycle 2 (230) seven days later with controlled
+differences (its docstring). New reads, each only when the previous cycle compares (`previous: {cycle, status,
+note}` beside each):
+
+* `/score` `previous.pillar_deltas`: `[{code, name, previous, score, delta}]`, a pillar whose applicable max moved
+  left out.
+* `/visibility` `previous`, `moved: {surface: {brands: [{name, you, first, prev_first, delta, dir, detail}],
+  coverage, routing: [{name, domain, first, prev_first, delta}], retired}}`.
+* `/true-value` `previous`, `drift: [{product, variant_id, column, column_name, was, now, was_quoted, now_quoted,
+  was_live, now_live, dir, detail}]`: the cells whose verdict changed (`stale` its own verdict).
+* `/prove` `previous`, `rows[].change` ('new' | 'kept'), `rows[].change_note`, `ended: [{retailer, title, kind,
+  kind_label, change: 'ended' | 'not_read', note}]` (a deal whose retailer was walled this cycle is `not_read`, never
+  ended), `aside.delta`.
+* `/revenue` `baseline_cycle` (the first cycle of the run of compared cycles ending here; this one on a first
+  cycle), `baseline_started`, `since_baseline: [{key, label, then, now, delta, dir, detail}]` (null on a baseline).
+* Narratives (`soa_shared/narratives.write_cycle`): a subject whose facts digest is an accepted line's in the
+  study's previous cycle keeps that line with no call (`reason: carried:<cycle>`); one whose facts changed is
+  written. A price answer's or product's facts carry the read's day, so on a real second cycle those are written
+  again; on the 2L-3 fixture 30 of 132 subjects carry.
+
+Tests: `apps/api/tests/test_console_2p1_two_cycles.py` (every read above by hand; `SOA_2P1_SAMPLE_DUMP=<dir>`
+writes the console's samples), `apps/api/tests/test_narratives_2p1.py`.
+
+### B4: narrative facts and the drawer for 2O-5's verdicts
+
+2O-5 made "fabricated" mean contradicted by what the brand publishes, but the narrative writer still told the model
+"<brand> never published it": false for a claim the brand's chart states otherwise. Now:
+
+* **The facts carry the contradiction.** `narratives.contradiction()` reads the scorer's reason
+  ("fabricated: '2 to 9 lbs' for Swaddlers Newborn — pampers.com's chart says under 10 lb") into `contradicted:
+  {claimed, for, source, says}`; the scorer's dash sentence is no longer handed over as `scorer_note`;
+  `claim_facts` names a coder-5 fact with a slot `stated_otherwise`, never `never_published`; the meaning reads
+  "… that the brand's own pages or record state otherwise". Its own prompt, `CONTRADICTED_PROMPT`: `<assistant>
+  said "<claimed>" for <for>. <source> says <says>.` Two checks: `contradicted_never_published`,
+  `contradiction_not_said`; the whole claimed value and the brand's value may be quoted however short.
+* **Unverified answers get no narrative** (stored unscoreable, reason `unverified`, never flagged); the drawer's
+  template is the scorer's note, "'…' — not on the pages read; nothing contradicts it".
+* **The drawer lists every judged sentence with its evidence.** The scorer stores `evidence` on each contradicted
+  fact ("pampers.com's chart says under 10 lb", `brand_claim_verdict.stated_instead`, the reason's half after the
+  dash) from the next `--tier brand_direct` rescore on; `/answers` `brand_claim.sentences[].evidence` lists them.
+
+Recorded (`scripts/record_narratives.py --cycle fl14`, two subjects, gpt-5.4-nano, $0.002) on
+`narratives_fixture.fl14_claims` and replayed: Gemini's line "Gemini said "2 to 9 lbs" for Swaddlers Newborn.
+pampers.com's chart says under 10 lb."; Claude's "Claude said "6 to 12 lbs" for Swaddlers Size 1. Pampers' record
+says "8 to 14 lb"."; Perplexity's unverified answer no subject. Tests: `apps/api/tests/test_narratives_2p1.py`.
+
+### Copy: one name for the answers a first pick counts
+
+The console's copy scan (truesync 2P-1) asks for "brand-choice answers" in place of "unprompted answers". soa named the
+set by whether the cycle asked a comparison question (2K-1); it now names the unprompted set and the brand-choice set the
+one way (`console_parity._answers`, `_tier_words`; the revenue model's `set`, `counts.lost_set`): with no comparison
+question asked the two sets are the same answers. The `tier` fields (`unprompted` | `brand_choice`) are unchanged.
+`test_console_2i8`'s and `test_console_2k1_score_pin`'s pins map the word back to what main served.

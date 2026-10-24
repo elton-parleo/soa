@@ -239,7 +239,7 @@ def test_the_driver_sentences_and_by_agent(http, db, upstream):
     lost, missed = body['drivers']
     # the recorded W&S tenant lists the merchant as a brand: the brand wording
     assert lost['title'] == 'Another brand gets the first pick'
-    assert lost['measured'] == ('57 of the 102 unprompted answers put another brand first, 56%. '
+    assert lost['measured'] == ('57 of the 102 brand-choice answers put another brand first, 56%. '
                                 'Huggies first in 30, Pampers in 27. Wiggle & Snug came first in 33.')
     assert missed['measured'] == ("62 of the 96 price answers got the price wrong or quoted another brand's price, 65%. "
                                   "Counted once: only for shoppers the brand choice did not already send elsewhere, 28%.")
@@ -268,7 +268,7 @@ def test_a_brand_merchant_reads_the_brand_wording_and_a_retailer_first_is_not_lo
     inputs = revenue_svc.inputs_view(None, 'pampers')
     model = revenue_svc.build_model(shares, inputs, cycle='C', kind='brand', name='Pampers', domain='pampers.com')
     assert model['drivers'][0]['title'] == 'Another brand gets the first pick'
-    assert model['drivers'][0]['measured'].startswith('1 of the 4 unprompted answers put another brand first, 25%.')
+    assert model['drivers'][0]['measured'].startswith('1 of the 4 brand-choice answers put another brand first, 25%.')
     assert len(model['drivers']) == 1                                     # no price question: no Missed line
 
 

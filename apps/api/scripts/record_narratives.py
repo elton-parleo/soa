@@ -6,6 +6,7 @@ so the tests replay them and never call a model.
 
     python scripts/record_narratives.py --cycle fl13
     python scripts/record_narratives.py --cycle fl13 --compare
+    python scripts/record_narratives.py --cycle fl14     (2P-1: the FL14 brand claims beside it)
 
 One JSON file per subject's facts digest in tests/fixtures/narratives/, with
 both calls (soa_shared/narratives.py CALLS), each call's usage, the model and
@@ -55,14 +56,15 @@ def summary(reports, seconds: float) -> str:
 
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
-    p.add_argument('--cycle', default=fx.NAME, choices=[fx.NAME], help='the fixture to record')
+    p.add_argument('--cycle', default=fx.NAME, choices=[fx.NAME, 'fl14'],
+                   help="the fixture to record (fl14: 2P-1's brand claims on it, narratives_fixture.fl14_claims)")
     p.add_argument('--out', default=fx.FIXTURES)
     p.add_argument('--force', action='store_true', help='re-record current recordings too')
     p.add_argument('--compare', action='store_true', help='call again and compare with the recordings; write nothing')
     p.add_argument('--no-record', action='store_true', help='list what would be recorded; no call')
     args = p.parse_args(argv)
 
-    engine = fx.engine()
+    engine = fx.engine(args.cycle)
     with engine.connect() as conn:
         facts = n.load_cycle_facts(conn, fx.CYCLE_ID)
     os.makedirs(args.out, exist_ok=True)

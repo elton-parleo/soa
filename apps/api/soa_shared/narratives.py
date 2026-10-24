@@ -158,6 +158,8 @@ MEANINGS = {
     'stale_price': "The price the assistant gave is an old price, not the one the retailer charged that day.",
     'other_brand_price': "The only price in the answer was for another brand's product, so it gave none for this one.",
     'brand_fabricated': "The answer stated something about the brand that the brand never published and no source backs.",
+    # 2P-1 (B4): a fabricated claim the brand's pages state otherwise (2O-5), in place of the line above
+    'brand_contradicted': "The answer stated something about the brand that the brand's own pages or record state otherwise.",
     'brand_misattributed': "The answer described another brand's product as if it were this brand's.",
     'fabricated_citation': "The answer cited a source that does not exist or does not say this.",
     'fabricated_availability': "The answer said where the product is sold, and that is not true.",
@@ -397,6 +399,36 @@ never published that list."
 """
 
 
+#: 2P-1 (B4): a brand-direct claim the brand's own pages state otherwise (2O-5:
+#: fabricated means contradicted). The scorer's reason says what the brand states
+#: ("fabricated: '2 to 9 lbs' for Swaddlers Newborn — pampers.com's chart says
+#: under 10 lb"); the facts give it as `contradicted`, and the line says it. The
+#: brand did publish something, so "never published" would be false. Its own
+#: prompt, so the other answers' requests (and their recordings) are unchanged.
+CONTRADICTED_PROMPT = """You write the one line a product console shows beside a shopping assistant's \
+answer. You get the facts a scorer recorded and nothing else.
+
+The assistant stated something about the brand's product that the brand's own pages or record \
+state otherwise. contradicted gives what the assistant claimed (claimed), what it was about (for), \
+where the brand states it (source) and what that says (says).
+
+What the line says, in this pattern and only this pattern:
+
+<assistant> said "<claimed>" for <for>. <source> says <says>.
+
+With no for in contradicted: <assistant> said "<claimed>". <source> says <says>.
+
+Rules:
+- Two short sentences, at most 200 characters.
+- Write claimed, for, source and says exactly as contradicted writes them. The quote is claimed \
+alone, never the whole sentence the answer said.
+- Never write "never published": the brand published something else.
+""" + _COMMON_RULES + """
+
+Style: "Gemini said "2 to 9 lbs" for Swaddlers Newborn. pampers.com's chart says under 10 lb."
+"""
+
+
 def system_prompt(facts: dict) -> str:
     if facts.get('kind') == PRODUCT:
         return PRODUCT_PROMPT
@@ -406,6 +438,8 @@ def system_prompt(facts: dict) -> str:
         return PROMO_PROMPT
     if facts.get('named_stores') and 'brand_fabricated' in (facts.get('why') or []):
         return STORES_PROMPT
+    if facts.get('contradicted') and 'brand_fabricated' in (facts.get('why') or []):
+        return CONTRADICTED_PROMPT
     return SYSTEM_PROMPT
 
 
@@ -713,6 +747,9 @@ def answer_facts(run: dict, outcome: Optional[dict], mentions: List[dict], merch
     rival = 'rival_first_pick' in why
     spans = _spans(extraction, claims)
     stores = named_stores(o.get('outcome_reason'))
+    # 2P-1 (B4): what the brand's pages state instead, for a claim they contradict
+    against = contradiction(o.get('outcome_reason')) if brand and not intent and o.get('outcome') == 'fabricated' \
+        else None
     quoted = [f for f in (_claim_fact(c) for c in claims) if f]
     directions = []
     for q in quoted:
@@ -724,7 +761,8 @@ def answer_facts(run: dict, outcome: Optional[dict], mentions: List[dict], merch
     return _drop_none({
         'kind': ANSWER,
         'why': why,
-        'meaning': [MEANINGS[w] for w in why if w in MEANINGS],
+        'meaning': [MEANINGS['brand_contradicted' if against and w == 'brand_fabricated' else w]
+                    for w in why if w in MEANINGS],
         'question': run.get('query_text'),
         'agent': _agent(run.get('platform')),
         'surface': surfaces.SURFACE_LABELS.get(surface, surface),
@@ -734,8 +772,10 @@ def answer_facts(run: dict, outcome: Optional[dict], mentions: List[dict], merch
         'price_direction': DIRECTION_WORDS.get(direction),
         'verdict': None if brand else VERDICT_WORDS.get(o.get('outcome'), o.get('outcome')),
         'reason_code': o.get('reason_code'),
-        # 2N-2: a where-to-buy claim's note is the scorer's label: its why only, the stores apart
-        'scorer_note': _note_why(o.get('outcome_reason')) if stores else o.get('outcome_reason'),
+        # 2N-2: a where-to-buy claim's note is the scorer's label: its why only, the stores apart;
+        # 2P-1: a contradicted claim's is `contradicted`, in the scorer's own words
+        'scorer_note': None if against else _note_why(o.get('outcome_reason')) if stores else o.get('outcome_reason'),
+        'contradicted': against,
         'named_stores': stores,
         # 2N-1: the brand-claim verdict is the AI-written questions' only
         'brand_verdict': o.get('outcome') if brand and not intent else None,
@@ -765,9 +805,33 @@ def claim_facts(extraction: dict) -> Optional[dict]:
     if not 0 <= claim['decided_by'] < len(spans):
         return None
     span = spans[claim['decided_by']]
+    missing = [f for f in span.get('facts_missing') or [] if isinstance(f, dict)]
+    # 2P-1 (B4): a coder-5 fact the brand states otherwise (it carries its slot) is
+    # contradicted, not unpublished: only a fact with no slot (coder 3 and 4) never was
     return _drop_none({'said': span.get('text'),
-                       'never_published': [f.get('text') for f in span.get('facts_missing') or []] or None,
+                       'never_published': [f.get('text') for f in missing if not f.get('slot')] or None,
+                       'stated_otherwise': [f.get('text') for f in missing if f.get('slot')] or None,
                        'published': [f.get('text') for f in span.get('facts_found') or []] or None})
+
+
+#: 2P-1 (B4): the scorer's contradiction() ("fabricated: '<claimed>' for <subject> —
+#: <source> says <published>", scoring/brand_claim_verdict.py)
+_CONTRADICTION = re.compile(r"""^fabricated: (?P<claimed>'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*")"""
+                            r"(?: for (?P<subject>.+?))? — (?P<source>.+?) says (?P<says>.+)$")
+
+
+def contradiction(note: Optional[str]) -> Optional[dict]:
+    """{claimed, for, source, says} from a contradicted claim's reason, or None
+    for any other reason (a fact no page states, a line off the line list)."""
+    m = _CONTRADICTION.match(str(note or '').strip())
+    if not m:
+        return None
+    try:
+        claimed = ast.literal_eval(m.group('claimed'))
+    except (ValueError, SyntaxError):
+        return None
+    return _drop_none({'claimed': claimed, 'for': m.group('subject'), 'source': m.group('source'),
+                       'says': m.group('says').rstrip('.')})
 
 
 def attribute_facts(run: dict, attribute: dict, why: List[str], merchant: Merchant, ref: dict,
@@ -1555,6 +1619,8 @@ def claim_texts(facts: dict) -> List[str]:
     it refused 17 FL13 lines that quoted the scorer_note's claim verbatim.
     2N-2: never the where-to-buy label, which is the scorer's words."""
     out = [str(s) for s in facts.get('answer_spans') or [] if s]
+    if (facts.get('contradicted') or {}).get('claimed'):
+        out.append(str(facts['contradicted']['claimed']))
     claim = _note_claim(facts.get('scorer_note'))
     if claim and not claim.startswith(WHERE_TO_BUY_LABEL):
         out.append(claim)
@@ -1598,9 +1664,15 @@ def claim_check(line: str, facts: dict) -> Optional[str]:
     if not texts:
         # nothing the answer said is in the facts: any claim in the line is the writer's own
         return 'no_claim_in_facts'
+    against = facts.get('contradicted') or {}
+    claimed, says = (_plain(str(against.get(k) or '')) for k in ('claimed', 'says'))
     for quoted in quotes:
+        if says and quoted == says:
+            continue   # 2P-1 (B4): the brand's own value, as the scorer wrote it
         if not any(quoted in t for t in texts):
             return 'quote_not_in_facts'
+        if claimed and quoted == claimed:
+            continue   # 2P-1 (B4): the contradicted value, whole, as the scorer quoted it
         cut = _cut_quote(quoted, texts)
         if cut:
             return cut
@@ -1680,6 +1752,14 @@ def check(line: Optional[str], facts: dict) -> Optional[str]:
         claimed = claim_check(line, facts)
         if claimed:
             return claimed
+        against = facts.get('contradicted')
+        if against:
+            # 2P-1 (B4): the brand published something else, and the line says what
+            if 'never published' in line.lower():
+                return 'contradicted_never_published'
+            if _plain(against.get('says') or '') not in _plain(line):
+                return 'contradiction_not_said'
+
     if facts.get('kind') == ANSWER and facts.get('agent_quoted') and not names_product(line, facts):
         return 'no_product'
     known = facts_text(facts)
@@ -1834,19 +1914,54 @@ def product_line(lines: Dict[str, str], *keys) -> Optional[str]:
     return None
 
 
+def previous_lines(conn, cycle_id: int) -> Tuple[Optional[str], Dict[str, dict]]:
+    """2P-1: (the cycle code, {digest: its accepted row}) of the newest
+    earlier cycle of the same study that has lines; (None, {}) when none.
+    A subject's facts digest is the same in two cycles only when every fact
+    the line may state is (the prices, the day, the quotes, the verdicts), so
+    its line holds for the new cycle word for word."""
+    if not table_exists(conn):
+        return None, {}
+    row = conn.execute(text(f"""
+        SELECT c.id, c.cycle_code FROM soa_cycles c
+        WHERE c.study_type = (SELECT study_type FROM soa_cycles WHERE id = :c) AND c.id <> :c
+          AND c.start_date <= (SELECT start_date FROM soa_cycles WHERE id = :c)
+          AND EXISTS (SELECT 1 FROM {TABLE} n WHERE n.cycle_id = c.id)
+        ORDER BY c.start_date DESC, c.id DESC
+    """), {'c': cycle_id}).fetchone()
+    if row is None:
+        return None, {}
+    lines = {r['facts_digest']: dict(r) for r in conn.execute(text(
+        f"SELECT facts_digest, line, model FROM {TABLE} WHERE cycle_id = :c AND status = 'accepted' "
+        f"AND line IS NOT NULL"), {'c': row[0]}).mappings()}
+    return row[1], lines
+
+
 def write_cycle(engine, cycle_id: int, writer: Writer, *, dry_run: bool = False, force: bool = False,
                 max_workers: int = MAX_WORKERS, log: Callable[[str], None] = lambda s: None) -> List[dict]:
     """Write the cycle's lines: each subject's facts, two calls, the checks,
     and (unless dry_run) the row. Without force, a subject whose stored row
     has the current digest is skipped. Returns one report per subject:
-    {subject, facts, digest, status, line, reason, calls, model}."""
+    {subject, facts, digest, status, line, reason, calls, model}.
+
+    2P-1, the digest rule across cycles: without force, a subject whose
+    facts digest is an accepted line's in the study's previous cycle
+    (previous_lines) keeps that line, with no call: status 'accepted',
+    reason 'carried:<cycle>'. A subject whose facts changed is written."""
     with engine.connect() as conn:
         facts = load_cycle_facts(conn, cycle_id)
         have = {} if force else stored(conn, cycle_id)
+        before, carried = (None, {}) if force else previous_lines(conn, cycle_id)
     todo = [(s, f) for s, f in facts.items()
             if force or (have.get(s) or {}).get('facts_digest') != facts_digest(f)]
+    carry = [(s, f) for s, f in todo if facts_digest(f) in carried]
+    todo = [(s, f) for s, f in todo if facts_digest(f) not in carried]
     log(f"narratives: {len(facts)} subjects, {len(todo)} to write"
-        f"{' (dry run, nothing stored)' if dry_run else ''}")
+        + (f", {len(carry)} carried from {before} (facts unchanged)" if carry else '')
+        + f"{' (dry run, nothing stored)' if dry_run else ''}")
+    kept = [{'subject': s, 'facts': f, 'digest': facts_digest(f), 'status': 'accepted',
+             'line': carried[facts_digest(f)]['line'], 'reason': f'carried:{before}', 'calls': [],
+             'model': carried[facts_digest(f)]['model']} for s, f in carry]
 
     def one(item):
         subject, f = item
@@ -1861,7 +1976,7 @@ def write_cycle(engine, cycle_id: int, writer: Writer, *, dry_run: bool = False,
         return {'subject': subject, 'facts': f, 'digest': facts_digest(f), 'model': answer.model, **decision}
 
     with ThreadPoolExecutor(max_workers=max(1, max_workers)) as pool:
-        reports = list(pool.map(one, todo))
+        reports = kept + list(pool.map(one, todo))
     if not dry_run:
         with engine.begin() as conn:
             if not table_exists(conn):

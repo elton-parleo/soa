@@ -81,8 +81,12 @@ against it.
 It reads supply's retailer-prices as of the cycle's STORED reference_as_of,
 never now, so it picks up the corrected reads of the same run and not a
 newer run. It prints the diff, cell by cell (variant x retailer: price,
-method, read_status, verifiable, reference_source), then the outcome counts
-before and after and the moves per tier, from classify-only's plan against
+method, read_status, verifiable, reference_source), and beside it the rows
+whose other served fields changed (2P-1: attribute, deals, page_title, the
+brand page's json_ld / size_chart / bullets / final_url as `brand_page`,
+and any other key) and the payload's (brand_lines, brand_lines_complete).
+It writes when any of them differs, not only a price cell: the brand-direct
+rescores read the cached rows. Then the outcome counts before and after and the moves per tier, from classify-only's plan against
 the fetched copy. With --dry-run it writes nothing. Without it, it refuses
 with no --backup or an existing one; writes the cached copy to the backup
 (the column's text exactly, and its sha256); replaces it with supply's
@@ -718,8 +722,14 @@ def _main_classify_only(args) -> int:
 
 # ─── 2J-4: refresh the cycle's cached reference ────────────────────────────
 
-#: the cell fields a refresh diffs, per variant x retailer
+#: the price-cell fields a refresh diffs, per variant x retailer
 REFERENCE_FIELDS = ('price', 'method', 'read_status', 'verifiable', 'reference_source')
+#: 2P-1: the brand page's fields on an own row (supply #31's json_ld,
+#: size_chart, bullets, final_url). An own row cached without them while
+#: supply serves them is a changed row, reported as `brand_page`.
+BRAND_PAGE_FIELDS = ('json_ld', 'size_chart', 'bullets', 'final_url')
+#: payload keys a refresh writes itself, never a served difference
+ENVELOPE_KEYS = ('refreshed_at', 'previous_sha256')
 
 
 def _iso(value):
@@ -796,6 +806,41 @@ def reference_diff(before: Optional[dict], after: Optional[dict]) -> list:
             if a.get(field) != b.get(field):
                 out.append((variant, domain, field, a.get(field), b.get(field)))
     return out
+
+
+def served_diff(before: Optional[dict], after: Optional[dict]) -> dict:
+    """2P-1: every served field that differs beyond the price cells, so a
+    refresh writes when supply's rows gained the brand page, an attribute,
+    a deal or a title though no price moved. `rows`: (variant, retailer,
+    field) for each non-price field of a row both sides have (the brand
+    page's four fields as one, `brand_page`); `payload`: the payload-level
+    keys that differ (`brand_lines`, `brand_lines_complete`, ...), the
+    refresh's own envelope aside."""
+    index = lambda p: {_cell_key(r): r for r in (p or {}).get('prices') or [] if isinstance(r, dict)}  # noqa: E731
+    was, now = index(before), index(after)
+    rows = []
+    for key in sorted(set(was) & set(now), key=lambda k: tuple(str(x) for x in k)):
+        variant, domain = key[0] + (f" ({key[2]})" if key[2] else ''), key[1]
+        a, b = was[key], now[key]
+        fields = set()
+        for field in (set(a) | set(b)) - set(REFERENCE_FIELDS):
+            if a.get(field) != b.get(field) or (field in b) != (field in a):
+                fields.add('brand_page' if field in BRAND_PAGE_FIELDS else field)
+        rows.extend((variant, domain, f) for f in sorted(fields))
+    skip = {'prices', 'rows', *ENVELOPE_KEYS}
+    before, after = before or {}, after or {}
+    payload = sorted(k for k in (set(before) | set(after)) - skip
+                     if before.get(k) != after.get(k) or (k in before) != (k in after))
+    return {'rows': rows, 'payload': payload}
+
+
+def _render_served_diff(served: dict) -> str:
+    changed = {(v, d) for v, d, _f in served['rows']}
+    fields = sorted({f for _v, _d, f in served['rows']})
+    line = f"rows with new or changed fields: {len(changed)}" + (f" ({', '.join(fields)})" if fields else '')
+    if served['payload']:
+        line += f"\npayload fields that differ: {', '.join(served['payload'])}"
+    return line
 
 
 def _render_reference_diff(diff: list) -> str:
@@ -878,7 +923,9 @@ def _swap(cycle: dict, new_payload: dict, new_raw_for_write, *, tiers, write: bo
     print(f"cycle {cycle['cycle_code']} (id {cycle['cid']}) — {label}: merchant {cycle['merchant']}, "
           f"as of {cycle['as_of']}; no model call")
     diff = reference_diff(cycle['payload'], new_payload)
+    served = served_diff(cycle['payload'], new_payload)
     print(f"\nreference cells that differ: {len({(d[0], d[1]) for d in diff})}")
+    print(_render_served_diff(served))
     print(_render_reference_diff(diff))
 
     with engine.connect() as conn:
@@ -899,15 +946,15 @@ def _swap(cycle: dict, new_payload: dict, new_raw_for_write, *, tiers, write: bo
     if baseline['moved']:
         print(f"\nof which {len(baseline['moved'])} would move on the CACHED reference too (a classifier "
               f"change since the last classify-only); they are written with the rest")
-    result = {'diff': diff, 'moved': plan['moved'], 'by_tier': by_tier, 'written': False}
+    result = {'diff': diff, 'served': served, 'moved': plan['moved'], 'by_tier': by_tier, 'written': False}
     if not plan['deterministic']:
         print("\nREFUSED: two classification passes disagreed. Nothing was written.")
         return {**result, 'refused': 'nondeterministic'}
     if plan['unattributed']:
         print(f"\nREFUSED: {len(plan['unattributed'])} move(s) no named rule explains. Nothing was written.")
         return {**result, 'refused': 'unattributed'}
-    if not diff:
-        print("\nno cell differs: nothing to write.")
+    if not diff and not served['rows'] and not served['payload']:
+        print("\nno served field differs: nothing to write.")
         return result
     if not write:
         print("\ndry run — nothing written.")

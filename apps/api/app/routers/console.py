@@ -149,7 +149,14 @@ async def get_visibility(cycle: str = Query(...), merchant: Optional[str] = Quer
     row = dict(cycle_in_scope(cycle, scope))
     facts, errors = await _routing_inputs(scope, row, merchant)
     with engine.connect() as conn:
-        return _visibility(conn, row, facts, errors)
+        body = _visibility(conn, row, facts, errors)
+        # 2P-1 (B3): first picks by brand, the routing table and the retired lines against
+        # the previous cycle, when the two compare
+        compared = _compared(conn, row, parity.load_overview_rows(conn, row), body, facts)
+    body['previous'] = _previous_block(compared)
+    if compared and compared['status'] == 'compared':
+        body['moved'] = rm.visibility_movement(body, compared['visibility'], compared['code'])
+    return body
 
 
 def _visibility(conn, row: dict, merchant: Optional[dict] = None, errors: Optional[dict] = None) -> dict:
@@ -159,6 +166,34 @@ def _visibility(conn, row: dict, merchant: Optional[dict] = None, errors: Option
         body['routing']['read_errors'] = errors or {}
     ours = next((r['name'] for r in (body.get('ranking') or {}).get('rows') or [] if r.get('you')), None)
     return parity.extend_visibility(body, ours)
+
+
+def _compared(conn, row: dict, rows: list, vis: dict, facts: Optional[dict] = None) -> Optional[dict]:
+    """2P-1 (B3): the newest earlier scored cycle and whether it compares with
+    this one, by the rule the Changes block reads (every agent together):
+    {code, row, rows, visibility, status, note, condition}, None on a first
+    cycle. Visibility, True Value, Prove and Impact read their deltas only
+    when `status` is 'compared'."""
+    prev, _n = parity.previous_scored_cycle(conn, row, cycle_customer_org_sql())
+    if prev is None:
+        return None
+    prev = {**prev, 'customer_org_id': row['customer_org_id']}
+    prev_rows = parity.load_overview_rows(conn, prev)
+    prev_vis = _visibility(conn, prev, facts)
+    now_m = {**parity.surface_metrics(rows, vis.get('byQuestion') or [], surfaces.ALL), **rm.study_identity(conn, row),
+             'scorer_version': score_svc.outcomes_version(rows)}
+    prev_m = {**parity.surface_metrics(prev_rows, prev_vis.get('byQuestion') or [], surfaces.ALL, tier=now_m['tier']),
+              **rm.study_identity(conn, prev), 'scorer_version': score_svc.outcomes_version(prev_rows)}
+    status, note, condition = parity.changes_check(now_m, prev_m, prev['cycle_code'], surfaces.ALL)
+    return {'code': prev['cycle_code'], 'row': prev, 'rows': prev_rows, 'visibility': prev_vis,
+            'status': status, 'note': note, 'condition': condition}
+
+
+def _previous_block(compared: Optional[dict]) -> Optional[dict]:
+    """What a read model serves of _compared: {cycle, status, note}."""
+    if compared is None:
+        return None
+    return {'cycle': compared['code'], 'status': compared['status'], 'note': compared['note']}
 
 
 async def _promo_inputs(scope: CustomerScope, row: dict, slug: Optional[str]) -> tuple:
@@ -240,9 +275,12 @@ async def get_overview(cycle: str = Query(...), merchant: Optional[str] = Query(
         if prev is not None:
             prev = {**prev, 'customer_org_id': row['customer_org_id']}
             # 2N-1: with the merchant's facts, so its routing (Retailer coverage) compares
-            previous = {'code': prev['cycle_code'], 'rows': parity.load_overview_rows(conn, prev, features),
-                        'visibility': _visibility(conn, prev, facts), 'study': rm.study_identity(conn, prev)}
-        study = rm.study_identity(conn, row)   # 2K-4 (B1): the study and its questions, compared first
+            prev_rows = parity.load_overview_rows(conn, prev, features)
+            # 2P-1 (B2): with the version its outcomes compare under, as the score's previous is
+            previous = {'code': prev['cycle_code'], 'rows': prev_rows, 'visibility': _visibility(conn, prev, facts),
+                        'study': {**rm.study_identity(conn, prev), 'scorer_version': score_svc.outcomes_version(prev_rows)}}
+        # 2K-4 (B1): the study and its questions, compared first; 2P-1: and the outcomes' version
+        study = {**rm.study_identity(conn, row), 'scorer_version': score_svc.outcomes_version(rows)}
         job = conn.execute(text("SELECT tier_config FROM soa_query_generation_jobs WHERE study_type = :st"),
                            {"st": row['study_type']}).fetchone()
         study_questions = conn.execute(text("SELECT COUNT(*) FROM soa_queries WHERE study_type = :st"),
@@ -301,7 +339,12 @@ async def get_overview(cycle: str = Query(...), merchant: Optional[str] = Query(
         body['attribute_accuracy'] = accuracy
     # 2M-1: "Size 4 weight range right" in Changes, per size an accuracy answer missed
     site = next((a['site'] for a in answers if a.get('site')), None) or own_domain or 'the brand site'
-    for s, block in (body.get('by_surface') or {}).items():
+    # 2P-1 (B2): against another study the lines read "new" (this study's first cycle
+    # that asked it); a previous cycle of the same study that is not comparable for
+    # another reason (its version, its agents) gets none, as the core lines get none
+    lined = {s: b for s, b in (body.get('by_surface') or {}).items()
+             if b.get('changes_status') != 'not_comparable' or b.get('changes_condition') == 'study'}
+    for s, block in lined.items():
         if answers:
             block['changes'] = list(block.get('changes') or []) + rm.attribute_changes(
                 answers, prev_answers, (previous or {}).get('code'), s,
@@ -309,7 +352,7 @@ async def get_overview(cycle: str = Query(...), merchant: Optional[str] = Query(
     # 2N-1: a brand's first-cycle Changes, after the weight range and before the deals:
     # Retired product named, First pick (category questions), Retailer coverage
     if (vis.get('ranking') or {}).get('default_tier') == rm.VIS_BRAND_CHOICE:
-        for s, block in (body.get('by_surface') or {}).items():
+        for s, block in lined.items():
             block['changes'] = list(block.get('changes') or []) + rm.brand_changes(
                 vis, (previous or {}).get('visibility'), (previous or {}).get('code'), s,
                 compared=block.get('changes_status') == 'compared', brand=brand)
@@ -324,7 +367,7 @@ async def get_overview(cycle: str = Query(...), merchant: Optional[str] = Query(
         prev_promo = None
         if prev is not None:
             prev_promo, _pd, _pa, _pe = await _promo_inputs(scope, prev, merchant)
-        for s, block in (body.get('by_surface') or {}).items():
+        for s, block in lined.items():
             block['changes'] = list(block.get('changes') or []) + rm.promo_changes(
                 promo, prev_promo, (previous or {}).get('code'), s,
                 compared=block.get('changes_status') == 'compared')
@@ -537,9 +580,24 @@ async def get_true_value(cycle: str = Query(...), merchant: Optional[str] = Quer
         own_domain, variants, scored = _true_value_inputs(conn, row)
         value_outcomes = _value_outcomes(conn, row) if merchant else []
         lines = narratives_svc.lines_for(conn, row['id'])   # 2L-3: each row's caption
+        # 2P-1 (B3): the previous cycle's grid, for the cells that changed verdict
+        rows = parity.load_overview_rows(conn, dict(row))
+        compared = _compared(conn, dict(row), rows, rm.load_visibility(conn, dict(row)))
+        prev_tv = None
+        if compared and compared['status'] == 'compared':
+            p_own, p_variants, p_scored = _true_value_inputs(conn, compared['row'])
+            prev_tv = rm.build_true_value(_json(compared['row'].get('reference_prices')), p_scored,
+                                          own_domain=p_own, record_variants=p_variants)
+
+    def with_drift(body):
+        body['previous'] = _previous_block(compared)
+        if prev_tv is not None:
+            body['drift'] = rm.true_value_drift(body, prev_tv, compared['code'])
+        return body
+
     if not merchant:
-        return narratives_svc.with_true_value(rm.build_true_value(_json(row.get('reference_prices')), scored,
-                                                                  own_domain=own_domain, record_variants=variants), lines)
+        return with_drift(narratives_svc.with_true_value(rm.build_true_value(
+            _json(row.get('reference_prices')), scored, own_domain=own_domain, record_variants=variants), lines))
     client = full_loop._client(scope)
     (_, owned, o_err), (_, incentives, i_err), (_, catalog, k_err), (_, reference, r_err), (history, h_err), \
         (f_status, feed, f_err) = \
@@ -570,7 +628,7 @@ async def get_true_value(cycle: str = Query(...), merchant: Optional[str] = Quer
         catalog if k_err is None else None, incentives if i_err is None else None, value_outcomes,
         reads=history if history is not None else ((reference or {}).get('rows') if r_err is None else None))
     body['read_errors'] = errors
-    return narratives_svc.with_true_value(body, lines)
+    return with_drift(narratives_svc.with_true_value(body, lines))
 
 
 #: 2C-2c: reads per variant x retailer a member price is looked for in.
@@ -1124,6 +1182,17 @@ async def get_prove(cycle: str = Query(...), merchant: Optional[str] = Query(Non
     body.update(cycle=row['cycle_code'], read_errors={'deals': p_err} if p_err else {})
     if promo is not None:
         body['promo_pass_through'] = {k: v for k, v in promo.items() if k != 'judged'}
+    # 2P-1 (B3): the deals that ended, the new ones and the pass-through's delta, against a compared cycle
+    with engine.connect() as conn:
+        rows = parity.load_overview_rows(conn, row)
+        compared = _compared(conn, row, rows, rm.load_visibility(conn, row))
+    body['previous'] = _previous_block(compared)
+    if compared and compared['status'] == 'compared' and deals is not None:
+        prev_promo, prev_deals, _pa, prev_err = await _promo_inputs(scope, compared['row'], merchant)
+        if prev_err is None and prev_deals is not None:
+            rm.prove_changes(body, deals, prev_deals, promo, prev_promo, compared['code'])
+        elif prev_err is not None:
+            body['read_errors']['previous_deals'] = prev_err
     return body
 
 
@@ -1149,36 +1218,57 @@ async def get_revenue(cycle: str = Query(...), merchant: Optional[str] = Query(N
     with engine.connect() as conn:
         inputs = revenue_svc.inputs_view(revenue_svc.load_inputs(conn, scope.org.id, ms.slug), ms.slug)
         body = _revenue_model(conn, row, inputs, _merchant_meta(ms), requests)
-    # 2M-2: Impact's baseline row for promo pass-through, absent when not measured
-    promo, _deals, _as_of, p_err = await _promo_inputs(scope, row, ms.slug)
-    if p_err is not None:
-        errors['deals'] = p_err
     meta = _merchant_meta(ms)
-    if meta['kind'] == 'brand':
-        # 2N-1: the demo's other three: Attribute accuracy, Retailer coverage, Category presence
-        facts, routing_errors = await _routing_inputs(scope, row, ms.slug)
-        errors.update(routing_errors)
-        with engine.connect() as conn:
-            vis = _visibility(conn, row, facts, routing_errors)
-            asks = rm.asks_attribute(conn, row)
-        reference = None
-        if asks:
-            _, reference, r_err = await full_loop._client(scope).get_reference(ms.slug)
-            if r_err is not None:
-                errors['reference'], reference = r_err, None
-        with engine.connect() as conn:
-            attribute = rm.load_attribute_accuracy(conn, row, reference) if asks else None
-        rows = rm.brand_baseline(attribute=attribute, vis=vis, promo=promo, brand=meta['name'],
-                                 day=parity._short_day(row.get('start_date')))
-        if rows:
-            body['baseline'] = list(body.get('baseline') or []) + rows
-    else:
-        baseline = rm.promo_baseline(promo)
-        if baseline is not None:
-            body['baseline'] = list(body.get('baseline') or []) + [baseline]
+    rows, vis = await _baseline_rows(scope, row, ms, meta, errors)
+    if rows:
+        body['baseline'] = list(body.get('baseline') or []) + rows
+    # 2P-1 (B3): the baseline is the first cycle of the run of compared cycles that ends
+    # here (this cycle on a first cycle, or after one that does not compare), and what
+    # moved since it
+    body['baseline_cycle'], body['since_baseline'] = row['cycle_code'], None
+    with engine.connect() as conn:
+        base, here, chain = None, row, []
+        while True:
+            here_rows = parity.load_overview_rows(conn, here)
+            compared = _compared(conn, here, here_rows, vis if here is row and vis else rm.load_visibility(conn, here))
+            if not compared or compared['status'] != 'compared' or compared['code'] in chain:
+                break
+            chain.append(compared['code'])
+            base = here = compared['row']
+    if base is not None:
+        base_rows, _vis = await _baseline_rows(scope, base, ms, meta, {})
+        body['baseline_cycle'] = base['cycle_code']
+        body['baseline_started'] = rm._iso(base.get('start_date'))
+        body['since_baseline'] = rm.since_baseline(rows, base_rows, base['cycle_code'])
     body['merchant'] = ms.slug
     body['read_errors'] = errors
     return body
+
+
+async def _baseline_rows(scope: CustomerScope, row: dict, ms: MerchantScope, meta: dict, errors: dict) -> tuple:
+    """(Impact's baseline rows for the cycle, its visibility or None). 2M-2: promo
+    pass-through, absent when not measured; 2N-1: for a brand, the demo's other
+    three: Attribute accuracy, Retailer coverage, Category presence."""
+    promo, _deals, _as_of, p_err = await _promo_inputs(scope, row, ms.slug)
+    if p_err is not None:
+        errors['deals'] = p_err
+    if meta['kind'] != 'brand':
+        baseline = rm.promo_baseline(promo)
+        return ([baseline] if baseline is not None else []), None
+    facts, routing_errors = await _routing_inputs(scope, row, ms.slug)
+    errors.update(routing_errors)
+    with engine.connect() as conn:
+        vis = _visibility(conn, row, facts, routing_errors)
+        asks = rm.asks_attribute(conn, row)
+    reference = None
+    if asks:
+        _, reference, r_err = await full_loop._client(scope).get_reference(ms.slug)
+        if r_err is not None:
+            errors['reference'], reference = r_err, None
+    with engine.connect() as conn:
+        attribute = rm.load_attribute_accuracy(conn, row, reference) if asks else None
+    return rm.brand_baseline(attribute=attribute, vis=vis, promo=promo, brand=meta['name'],
+                             day=parity._short_day(row.get('start_date'))), vis
 
 
 @router.get("/revenue/history")
@@ -1205,7 +1295,9 @@ async def get_revenue_history(merchant: Optional[str] = Query(None), scope: Cust
             vis_rows = rm.load_visibility(conn, c).get('byQuestion') or []
             m = _revenue_model(conn, c, inputs, meta, None, vis_rows)
             # every agent together, as the revenue model counts them
-            here = {**parity.surface_metrics([], vis_rows, surfaces.ALL), **rm.study_identity(conn, c)}
+            here = {**parity.surface_metrics([], vis_rows, surfaces.ALL), **rm.study_identity(conn, c),
+                    # 2P-1 (B2): the version its outcomes compare under, as the score's
+                    'scorer_version': score_svc.outcomes_version(parity.load_overview_rows(conn, c))}
             vs = None
             if before is not None:
                 ok, condition, reason = cycle_compare.cycles_comparable(

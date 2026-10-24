@@ -252,10 +252,10 @@ def test_the_week_in_short_and_the_changes():
     rows, vis = _metric_rows()
     m = parity.surface_metrics(rows, vis, 'grounded_api')
     head = parity.visibility_headline(vis, 'grounded_api', 'Wiggle & Snug')
-    assert head['text'] == 'Named in 0 of 300 unprompted answers. Pampers first in 38, Huggies in 24.'
+    assert head['text'] == 'Named in 0 of 300 brand-choice answers. Pampers first in 38, Huggies in 24.'
     summary = parity.build_summary(m, head, [{'title': 'Top signal.'}])
     assert summary['lines'] == [
-        'Named in 0 of 300 unprompted answers and first in 0. Pampers first in 38, Huggies in 24.',
+        'Named in 0 of 300 brand-choice answers and first in 0. Pampers first in 38, Huggies in 24.',
         "Prices right in 1 of 5 scored answers, 6 answered with another brand's price, 1 not checked.",
         'Top signal.']
     prev = copy.deepcopy(m)
@@ -272,7 +272,7 @@ def test_the_week_in_short_and_the_changes():
 def test_a_brand_with_the_lead_reads_first_in_n_of_m():
     vis = [{'surface': 'api', 'answered': True, 'tier': 'unprompted', 'agent': 'chatgpt',
             'named': [{'name': 'Us', 'you': True}], 'first': {'name': 'Us', 'you': True}} for _ in range(3)]
-    assert parity.visibility_headline(vis, 'api', 'Us')['text'] == 'First in 3 of 3 unprompted answers.'
+    assert parity.visibility_headline(vis, 'api', 'Us')['text'] == 'First in 3 of 3 brand-choice answers.'
 
 
 # ═══ 2. Visibility ════════════════════════════════════════════════════════

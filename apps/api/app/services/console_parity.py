@@ -211,13 +211,16 @@ def _in_tier(row: dict, tier: str) -> bool:
 
 
 def _tier_words(tier: str) -> str:
-    return {UNPROMPTED: 'unprompted', BRAND_CHOICE: 'brand-choice'}.get(tier, '')
+    # 2P-1: one name for the answers a first pick counts, whatever set they are
+    return {UNPROMPTED: 'brand-choice', BRAND_CHOICE: 'brand-choice'}.get(tier, '')
 
 
 def _answers(tier: str) -> str:
-    """'brand-choice answers' when the cycle asked comparison questions (2K-1),
-    else 'unprompted answers' when it asked any, else 'answers'."""
-    return {UNPROMPTED: 'unprompted answers', BRAND_CHOICE: 'brand-choice answers'}.get(tier, 'answers')
+    """'brand-choice answers' over the unprompted set or the brand-choice set
+    (2K-1: unprompted plus comparison), else 'answers'. 2P-1: the console's
+    copy names both the one way; with no comparison question asked the two
+    sets are the same answers."""
+    return {UNPROMPTED: 'brand-choice answers', BRAND_CHOICE: 'brand-choice answers'}.get(tier, 'answers')
 
 
 def _picks(rows: List[dict]) -> Dict[str, dict]:
@@ -836,19 +839,27 @@ def changes_status(now: dict, prev: Optional[dict], prev_code: Optional[str],
     for the score and the revenue history: first the study (a metrics dict
     carries `study` and `questions` when build_overview was given them),
     then the agents, then the set the first-pick numbers read."""
+    return changes_check(now, prev, prev_code, surface)[:2]
+
+
+def changes_check(now: dict, prev: Optional[dict], prev_code: Optional[str],
+                  surface: Optional[str] = None) -> tuple:
+    """changes_status with the condition that failed (cycle_compare's), or None."""
     if prev is None:
-        return 'first_cycle', TEMPLATES['changes.first_cycle']
-    ok, _condition, reason = cycle_compare.cycles_comparable(
+        return 'first_cycle', TEMPLATES['changes.first_cycle'], None
+    ok, condition, reason = cycle_compare.cycles_comparable(
         comparison_facts('this cycle', now), comparison_facts(prev_code, prev, measured=True),
         on='' if surface == ALL else ' on this surface', agent_name=_agent)
-    return ('compared', None) if ok else ('not_comparable', reason)
+    return ('compared', None, None) if ok else ('not_comparable', reason, condition)
 
 
 def comparison_facts(code: Optional[str], metrics: dict, *, measured: bool = False) -> dict:
     """2K-4: a surface_metrics dict as cycle_compare reads it: its study
-    and questions (when given), the agents that answered, the set it reads
+    and questions (when given), 2P-1: the version its outcomes compare under
+    (console_score.outcomes_version, when given), the agents that answered, the set it reads
     and, for the earlier cycle, how many answers it has in each set."""
     return cycle_compare.facts(code or 'the previous cycle', study=metrics.get('study'), questions=metrics.get('questions'),
+                               scorer_version=metrics.get('scorer_version'),
                                agents={'here': metrics['agent_set']}, reads=metrics['tier'],
                                measured={UNPROMPTED: metrics['total']['named_of'],
                                          'comparison': metrics.get('comparison_answers', 0)} if measured else None)
@@ -904,7 +915,7 @@ def build_overview(cycle: dict, *, rows: List[dict], visibility: dict, true_valu
         metrics.update(study or {})
         if prev_metrics is not None:
             prev_metrics.update(previous.get('study') or {})
-        status, note = changes_status(metrics, prev_metrics, (previous or {}).get('code'), s)
+        status, note, condition = changes_check(metrics, prev_metrics, (previous or {}).get('code'), s)
         if prev_metrics is not None:
             prev_metrics['code'] = previous.get('code')
         head = visibility_headline(vis_rows, s, next((r['name'] for r in (visibility.get('ranking') or {}).get('rows') or [] if r.get('you')), None))
@@ -919,6 +930,8 @@ def build_overview(cycle: dict, *, rows: List[dict], visibility: dict, true_valu
             'changes': build_changes(metrics, prev_metrics, (previous or {}).get('code'), s),
             'changes_status': status,
             'changes_note': note,
+            # 2P-1: the condition cycle_compare named, when not comparable
+            'changes_condition': condition,
             'totals': metrics['total'],
             'tier': metrics['tier'],
         }

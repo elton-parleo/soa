@@ -143,7 +143,8 @@ def test_the_fabricated_reason_names_the_fact_and_the_page(index):
     assert v['reason'] == "fabricated: '6-12 lbs' for Swaddlers Size 1 — pampers.com's chart says 8 to 14 lb"
     span = v['brand_claim']['spans'][v['brand_claim']['decided_by']]
     assert span['facts_missing'] == [{'type': 'weight', 'text': '6-12 lbs', 'slot': 'ranges', 'claimed': '6-12 lbs',
-                                      'published': '8 to 14 lb', 'line': 'Swaddlers', 'size': '1'}]
+                                      'published': '8 to 14 lb', 'line': 'Swaddlers', 'size': '1',
+                                      'evidence': "pampers.com's chart says 8 to 14 lb"}]
     v = bcv.decide(_one('You can buy Pampers Swaddlers at Target.'), EXPECTATION,
                    question='Where can I buy Pampers Swaddlers?', index=index, own_domains=OWN)
     assert v['reason'] == "'You can buy Pampers Swaddlers at Target.' — " + ea.UNVERIFIED_NOTE

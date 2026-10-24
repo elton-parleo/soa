@@ -33,6 +33,10 @@ def _strip(x):
         return {k: _strip(v) for k, v in x.items() if k not in VOLATILE}
     if isinstance(x, list):
         return [_strip(v) for v in x]
+    # 2P-1 names the unprompted set "brand-choice answers" (console_parity._answers); these cycles asked no comparison
+    # question, so the pinned bodies read "unprompted answers"
+    if isinstance(x, str):
+        return x.replace('brand-choice answers', 'unprompted answers')
     return x
 
 
