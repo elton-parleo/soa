@@ -7770,3 +7770,61 @@ claim sentences (total, per answer min / median / max, by kind), `no_checkable_f
 `fixtures/brand_claim/fl13_brand_direct_answers.json`, ten of them hand-counted; the 2O-3 FL14-shaped fixture),
 `apps/api/tests/test_console_2o4.py`. The 2O-1 and 2O-3 tests keep pinning a stored version-2 or version-3 record's
 decision over its calls.
+
+## 2O-5: "fabricated" means contradicted by what the brand publishes (console scorer 15)
+
+### B1: the verdict
+
+Under 2O-4, FL14 read fabricated 170 of 258, "by the fact missing: price 60, retailer 48, name 48, size 26, count
+21, attribute 58", against a 58-fact index of the 10-SKU pilot: a claim was fabricated whenever it named something
+the pilot did not. Now each fact is looked up against the index's slots (`brand_fact_index.check`): **found**,
+**contradicted** (the index holds a value for the fact's slot and the claim's differs) or **unverified** (absent,
+nothing contradicts it).
+
+* Slots: the weight ranges for (line, size); a line's weight with no size, against every size on its complete
+  chart; the sizes and pack counts a line comes in (complete only from the brand page's JSON-LD or chart, never
+  the feed's sample); a line's status (the feed's, a page redirect's); the attributes the line's own page or
+  variants state, negations included, against `OPPOSITES`; the brand's lines, only from a served line list
+  (`brand_lines`). A rival's line written as the brand's stays `misattributed`.
+* A price or unit price is always unverified here (the price tier judges prices), a store off the merchant's list
+  too (coverage judges it). A claim about a line the index does not hold is never grounded on another line's
+  sizes, and the line a sentence is about being real grounds nothing by itself.
+* Per answer, worst first: misattributed, fabricated, grounded, acknowledged_unknown, unverified, echoed, then
+  unscoreable no_checkable_fact. `unverified` is stored `unscoreable` with reason code `unverified` (no
+  migration, as `per_unit`), outside every count and the fabricated signal; `read_outcome` reads it `unverified`,
+  tone `neu`, and its summary ends "not on the pages read; nothing contradicts it".
+* A contradicted fact stores `slot`, `claimed`, `published`, `line`, `size` (and `source: record` for a feed range
+  alone) in `facts_missing`; `facts_unverified` beside it. The reason is the drawer line: "fabricated: '2 to 9 lbs'
+  for Swaddlers Newborn — pampers.com's chart says under 10 lb". Reason code `fact_contradicted`.
+
+Brand-claim coder version **5** (the selection is version 4's); console `SCORER_VERSION` **15**,
+`SCORER_CHANGES['15']` "brand-direct fabricated means contradicted by the brand; absent is unverified", which never
+explains a moved score. `CODER_SCORER_VERSIONS` gains 4 → "14" and 5 → "15".
+
+### B2: the index covers the line
+
+`FactIndex` version 2 adds a `Line` per line (`lines`), read from what the cycle already holds: the feed's variant
+ranges and status (`BrandFactsCache` now passes each variant's `line`, `status`, `successor`), a retailer row's
+brand truth (`attribute.truth`), and an own-page row's `json_ld` (the ProductGroup's `hasVariant` sizes, GTINs and
+per-variant ranges, its "Size Range" and "Pack Count" properties; never its positional "Baby Weight" list, which
+2M-1 found disagrees with the chart), `size_chart`, `bullets`, and `url` / `final_url` (a redirect to another
+line's page retires the line asked for). The stamp carries `slots`.
+
+**Supply ask.** Supply's retailer-prices rows do not carry these today (page title, weight range and attribute
+only). For B2 to read anything in production, an own-page row needs: `json_ld` (the page's ProductGroup node,
+with `hasVariant` and `additionalProperty`), `size_chart` (`[{size, min, max}]`, the chart 2M-1's reader finds),
+`bullets`, and `final_url`; and the payload `brand_lines` (the brand's own line list) for a line name to be
+contradicted. Until then B1 alone applies.
+
+The printout adds the index's slots (lines and statuses, sizes / counts per line and which are complete, ranges
+per size, attributes per line), the split with `unverified` apart from `unscoreable`, fabricated by the slot
+contradicted, and unverified by the fact type left unverified.
+
+### Tests
+
+`apps/pipeline/tests/test_brand_claim_2o5.py` (a contradiction per slot; absent → unverified; prices never
+fabricated; the index from supply's recorded pampers.com pages, `fixtures/brand_claim/pampers_brand_pages_2o5.json`
+built by `fixtures/build_brand_pages_2o5.py`; FL14's 170 fabricated shaped from the printout's breakdown,
+`fixtures/brand_claim/fl14_fabricated_2o5.json` built by `fixtures/build_fl14_fabricated_2o5.py` with each answer's
+2O-4 verdict recorded by running 2O-4's code), `apps/api/tests/test_console_2o5.py`. The 2O-3 and 2O-4 tests
+move to the new verdict where a fact was merely absent.

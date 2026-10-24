@@ -20,23 +20,32 @@ it named anything the pilot did not.
     chart (22-37 for Size 4) is the truth and its markup's "Baby Weight"
     list (15-34) is not, as 2M-1 asserts in supply;
   * two runs identical;
+  * FL14's 170 fabricated, shaped from the printout's breakdown (fixtures/
+    brand_claim/fl14_fabricated_2o5.json, built by fixtures/build_fl14_
+    fabricated_2o5.py, which recorded each answer's 2O-4 verdict by running
+    2O-4's code): what each bucket becomes, on the pilot alone and with the
+    three line pages;
+  * the printout's lines.
 
 Nothing here is read from production, and nothing calls a model.
 """
 import copy
 import json
 import os
+from collections import Counter
 
 import pytest
 
 from scoring import brand_claim_selector as sel
 from scoring import brand_fact_index as bfi
+from scripts import rescore_cycle
 from soa_shared import expected_answers as ea
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 FIXTURES = os.path.join(HERE, 'fixtures', 'brand_claim')
 FL13 = json.load(open(os.path.join(FIXTURES, 'fl13_record_pages.json')))
 PAGES = json.load(open(os.path.join(FIXTURES, 'pampers_brand_pages_2o5.json')))
+FL14 = json.load(open(os.path.join(FIXTURES, 'fl14_fabricated_2o5.json')))
 EXPECTATION = ea.brand_mention('Pampers', 'pampers.com')
 OWN = ['pampers.com']
 STUDY = {'terms': ['Pampers'], 'product_names': [], 'rivals': ['Huggies', 'Luvs']}
@@ -245,13 +254,10 @@ def test_the_index_size_by_source_and_its_slots():
 
 # ── two runs ──────────────────────────────────────────────────────────────
 
-ANSWERS = json.load(open(os.path.join(FIXTURES, 'fl13_brand_direct_answers.json')))
-
-
 def _fl14(idx):
     v = vocab()
     out = []
-    for a in ANSWERS['answers']:
+    for a in FL14['answers']:
         record = sel.select(a['answer'], question=a['question'], vocab=v, own_domains=OWN)
         out.append(sel.decide(record, EXPECTATION, index=idx, own_domains=OWN))
     return out
@@ -261,6 +267,68 @@ def test_two_runs_are_identical():
     assert index().digest() == index().digest() and index().as_dict() == index().as_dict()
     one, two = _fl14(index()), _fl14(index())
     assert json.dumps(one, sort_keys=True) == json.dumps(two, sort_keys=True)
+
+
+# ── FL14's 170 fabricated, from the printout's breakdown ──────────────────
+
+def test_the_fixture_is_the_printouts_fabricated_under_2o4():
+    assert FL14['printout'] == {'answers': 258, 'fabricated': 170,
+                                'missing': {'price': 60, 'retailer': 48, 'name': 48, 'size': 26, 'count': 21,
+                                            'attribute': 58}}
+    assert len(FL14['answers']) == 170 and {a['v14']['outcome'] for a in FL14['answers']} == {'fabricated'}
+    missing = Counter(kind for a in FL14['answers'] for kind in a['v14']['missing'])
+    assert missing == Counter(FL14['printout']['missing'])
+
+
+def _buckets(idx):
+    return Counter(('+'.join(a['kinds']), read(d)) for a, d in zip(FL14['answers'], _fl14(idx)))
+
+
+def test_what_each_fabricated_bucket_becomes_on_the_pilot_alone():
+    """B1 alone, on the pilot as supply serves it today: nothing in the
+    fixture is a value the brand states otherwise, and the pilot holds none
+    of it, so all 170 are unverified."""
+    assert Counter(read(d) for d in _fl14(index(pages=False))) == Counter({ea.UNVERIFIED: 170})
+
+
+def test_what_each_fabricated_bucket_becomes_with_the_line_pages():
+    """B1 and B2, with the three recorded line pages: what the pages state
+    (Swaddlers Size 7, a 148 count box, Zzz in Size 6) grounds; prices,
+    stores off the list, lines not read and attribute words the JSON-LD
+    does not state stay unverified. Nothing is fabricated: the fixture holds
+    no contradicted value (its builder's docstring); FL14's real answers may."""
+    assert _buckets(index()) == Counter({
+        ('price', ea.UNVERIFIED): 20, ('retailer', ea.UNVERIFIED): 18,
+        ('name', 'grounded'): 7, ('name', ea.UNVERIFIED): 13,                  # Zzz read; Ninjamas, Splashers not
+        ('size', 'grounded'): 6, ('count', 'grounded'): 5, ('attribute', ea.UNVERIFIED): 10,
+        ('price+retailer', ea.UNVERIFIED): 25, ('price+attribute', ea.UNVERIFIED): 15,
+        ('retailer+attribute', ea.UNVERIFIED): 5, ('name+attribute', ea.UNVERIFIED): 18,
+        ('name+size', 'grounded'): 4, ('name+size', ea.UNVERIFIED): 6,          # Zzz Size 6; Ninjamas Size 6
+        ('size+count', 'grounded'): 10, ('count+attribute', 'grounded'): 6,
+        ('attribute+attribute', ea.UNVERIFIED): 2})
+    assert Counter(read(d) for d in _fl14(index())) == Counter({ea.UNVERIFIED: 132, 'grounded': 38})
+
+
+def test_the_printout_on_the_fixture():
+    rows = []
+    for d in _fl14(index()):
+        rows.append(({'selector': {}, 'brand_claim': d['brand_claim']}, d['outcome'], d['reason_code']))
+    report = rescore_cycle.selection_report(rows)
+    text_ = rescore_cycle._render_selection(report, {'compared': 170, 'changed': 0})
+    assert '    fact index           195 facts (record 3, catalog 34, brand pages 158); v2 ' in text_
+    assert "    index slots          lines 9 (status known 3, retired: none; the brand's line list not served)" \
+        in text_
+    assert '      sizes per line     Cruisers 360 6, Swaddlers 10, Zzz 4  (complete: Cruisers 360, Swaddlers, Zzz)' \
+        in text_
+    assert ('      ranges per size    Preemie 1, Newborn 1, Size 1 1, Size 2 1, Size 3 4, Size 4 3, Size 5 5, '
+            'Size 6 3, Size 7 2, Size 8 2') in text_
+    assert '      counts per line    Cruisers 360 18, Swaddlers 25, Zzz 4  (complete: Cruisers 360, Swaddlers, Zzz)' \
+        in text_
+    assert '    split                grounded 38, unverified 132  (' in text_
+    assert '    fabricated, by the slot contradicted: none' in text_
+    # per answer, each fact type left unverified in the deciding sentence once
+    assert ('    unverified, by the fact left unverified: attribute 50, name 31, price 60, retailer 48, size 6'
+            in text_)
 
 
 def test_the_facts_cache_carries_each_variants_line_and_status():

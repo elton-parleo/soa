@@ -1,0 +1,2939 @@
+{
+ "_note": "2O-5: FL14's 170 fabricated brand-direct answers, SHAPED FROM THE PRINTOUT'S\nBREAKDOWN, not recorded.",
+ "answers": [
+  {
+   "agent": "perplexity",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers cost $38.49 a box.",
+   "id": 1,
+   "kinds": [
+    "price"
+   ],
+   "question": "Are Pampers diapers worth it?",
+   "v14": {
+    "missing": [
+     "price"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "gemini_grounded",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers cost $41.29 a box.",
+   "id": 2,
+   "kinds": [
+    "price"
+   ],
+   "question": "Is Pampers a good diaper brand?",
+   "v14": {
+    "missing": [
+     "price"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "copilot",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers cost $52.79 a box.",
+   "id": 3,
+   "kinds": [
+    "price"
+   ],
+   "question": "Tell me about Pampers diapers.",
+   "v14": {
+    "missing": [
+     "price"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "aimode",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers cost $33.19 a box.",
+   "id": 4,
+   "kinds": [
+    "price"
+   ],
+   "question": "Are Pampers diapers worth it?",
+   "v14": {
+    "missing": [
+     "price"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "claude",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers cost $47.63 a box.",
+   "id": 5,
+   "kinds": [
+    "price"
+   ],
+   "question": "Is Pampers a good diaper brand?",
+   "v14": {
+    "missing": [
+     "price"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "chatgpt",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers cost $38.49 a box.",
+   "id": 6,
+   "kinds": [
+    "price"
+   ],
+   "question": "Tell me about Pampers diapers.",
+   "v14": {
+    "missing": [
+     "price"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "perplexity",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers cost $41.29 a box.",
+   "id": 7,
+   "kinds": [
+    "price"
+   ],
+   "question": "Are Pampers diapers worth it?",
+   "v14": {
+    "missing": [
+     "price"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "gemini_grounded",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers cost $52.79 a box.",
+   "id": 8,
+   "kinds": [
+    "price"
+   ],
+   "question": "Is Pampers a good diaper brand?",
+   "v14": {
+    "missing": [
+     "price"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "copilot",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers cost $33.19 a box.",
+   "id": 9,
+   "kinds": [
+    "price"
+   ],
+   "question": "Tell me about Pampers diapers.",
+   "v14": {
+    "missing": [
+     "price"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "aimode",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers cost $47.63 a box.",
+   "id": 10,
+   "kinds": [
+    "price"
+   ],
+   "question": "Are Pampers diapers worth it?",
+   "v14": {
+    "missing": [
+     "price"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "claude",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers cost $38.49 a box.",
+   "id": 11,
+   "kinds": [
+    "price"
+   ],
+   "question": "Is Pampers a good diaper brand?",
+   "v14": {
+    "missing": [
+     "price"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "chatgpt",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers cost $41.29 a box.",
+   "id": 12,
+   "kinds": [
+    "price"
+   ],
+   "question": "Tell me about Pampers diapers.",
+   "v14": {
+    "missing": [
+     "price"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "perplexity",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers cost $52.79 a box.",
+   "id": 13,
+   "kinds": [
+    "price"
+   ],
+   "question": "Are Pampers diapers worth it?",
+   "v14": {
+    "missing": [
+     "price"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "gemini_grounded",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers cost $33.19 a box.",
+   "id": 14,
+   "kinds": [
+    "price"
+   ],
+   "question": "Is Pampers a good diaper brand?",
+   "v14": {
+    "missing": [
+     "price"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "copilot",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers cost $47.63 a box.",
+   "id": 15,
+   "kinds": [
+    "price"
+   ],
+   "question": "Tell me about Pampers diapers.",
+   "v14": {
+    "missing": [
+     "price"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "aimode",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers cost $38.49 a box.",
+   "id": 16,
+   "kinds": [
+    "price"
+   ],
+   "question": "Are Pampers diapers worth it?",
+   "v14": {
+    "missing": [
+     "price"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "claude",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers cost $41.29 a box.",
+   "id": 17,
+   "kinds": [
+    "price"
+   ],
+   "question": "Is Pampers a good diaper brand?",
+   "v14": {
+    "missing": [
+     "price"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "chatgpt",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers cost $52.79 a box.",
+   "id": 18,
+   "kinds": [
+    "price"
+   ],
+   "question": "Tell me about Pampers diapers.",
+   "v14": {
+    "missing": [
+     "price"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "perplexity",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers cost $33.19 a box.",
+   "id": 19,
+   "kinds": [
+    "price"
+   ],
+   "question": "Are Pampers diapers worth it?",
+   "v14": {
+    "missing": [
+     "price"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "gemini_grounded",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers cost $47.63 a box.",
+   "id": 20,
+   "kinds": [
+    "price"
+   ],
+   "question": "Is Pampers a good diaper brand?",
+   "v14": {
+    "missing": [
+     "price"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "copilot",
+   "answer": "Pampers is a well-known diaper brand. You can also buy Pampers Swaddlers at Walgreens.",
+   "id": 21,
+   "kinds": [
+    "retailer"
+   ],
+   "question": "Tell me about Pampers diapers.",
+   "v14": {
+    "missing": [
+     "retailer"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "aimode",
+   "answer": "Pampers is a well-known diaper brand. You can also buy Pampers Swaddlers at CVS.",
+   "id": 22,
+   "kinds": [
+    "retailer"
+   ],
+   "question": "Are Pampers diapers worth it?",
+   "v14": {
+    "missing": [
+     "retailer"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "claude",
+   "answer": "Pampers is a well-known diaper brand. You can also buy Pampers Swaddlers at Kroger.",
+   "id": 23,
+   "kinds": [
+    "retailer"
+   ],
+   "question": "Is Pampers a good diaper brand?",
+   "v14": {
+    "missing": [
+     "retailer"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "chatgpt",
+   "answer": "Pampers is a well-known diaper brand. You can also buy Pampers Swaddlers at Costco.",
+   "id": 24,
+   "kinds": [
+    "retailer"
+   ],
+   "question": "Tell me about Pampers diapers.",
+   "v14": {
+    "missing": [
+     "retailer"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "perplexity",
+   "answer": "Pampers is a well-known diaper brand. You can also buy Pampers Swaddlers at Sam's Club.",
+   "id": 25,
+   "kinds": [
+    "retailer"
+   ],
+   "question": "Are Pampers diapers worth it?",
+   "v14": {
+    "missing": [
+     "retailer"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "gemini_grounded",
+   "answer": "Pampers is a well-known diaper brand. You can also buy Pampers Swaddlers at Dollar General.",
+   "id": 26,
+   "kinds": [
+    "retailer"
+   ],
+   "question": "Is Pampers a good diaper brand?",
+   "v14": {
+    "missing": [
+     "retailer"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "copilot",
+   "answer": "Pampers is a well-known diaper brand. You can also buy Pampers Swaddlers at Walgreens.",
+   "id": 27,
+   "kinds": [
+    "retailer"
+   ],
+   "question": "Tell me about Pampers diapers.",
+   "v14": {
+    "missing": [
+     "retailer"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "aimode",
+   "answer": "Pampers is a well-known diaper brand. You can also buy Pampers Swaddlers at CVS.",
+   "id": 28,
+   "kinds": [
+    "retailer"
+   ],
+   "question": "Are Pampers diapers worth it?",
+   "v14": {
+    "missing": [
+     "retailer"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "claude",
+   "answer": "Pampers is a well-known diaper brand. You can also buy Pampers Swaddlers at Kroger.",
+   "id": 29,
+   "kinds": [
+    "retailer"
+   ],
+   "question": "Is Pampers a good diaper brand?",
+   "v14": {
+    "missing": [
+     "retailer"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "chatgpt",
+   "answer": "Pampers is a well-known diaper brand. You can also buy Pampers Swaddlers at Costco.",
+   "id": 30,
+   "kinds": [
+    "retailer"
+   ],
+   "question": "Tell me about Pampers diapers.",
+   "v14": {
+    "missing": [
+     "retailer"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "perplexity",
+   "answer": "Pampers is a well-known diaper brand. You can also buy Pampers Swaddlers at Sam's Club.",
+   "id": 31,
+   "kinds": [
+    "retailer"
+   ],
+   "question": "Are Pampers diapers worth it?",
+   "v14": {
+    "missing": [
+     "retailer"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "gemini_grounded",
+   "answer": "Pampers is a well-known diaper brand. You can also buy Pampers Swaddlers at Dollar General.",
+   "id": 32,
+   "kinds": [
+    "retailer"
+   ],
+   "question": "Is Pampers a good diaper brand?",
+   "v14": {
+    "missing": [
+     "retailer"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "copilot",
+   "answer": "Pampers is a well-known diaper brand. You can also buy Pampers Swaddlers at Walgreens.",
+   "id": 33,
+   "kinds": [
+    "retailer"
+   ],
+   "question": "Tell me about Pampers diapers.",
+   "v14": {
+    "missing": [
+     "retailer"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "aimode",
+   "answer": "Pampers is a well-known diaper brand. You can also buy Pampers Swaddlers at CVS.",
+   "id": 34,
+   "kinds": [
+    "retailer"
+   ],
+   "question": "Are Pampers diapers worth it?",
+   "v14": {
+    "missing": [
+     "retailer"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "claude",
+   "answer": "Pampers is a well-known diaper brand. You can also buy Pampers Swaddlers at Kroger.",
+   "id": 35,
+   "kinds": [
+    "retailer"
+   ],
+   "question": "Is Pampers a good diaper brand?",
+   "v14": {
+    "missing": [
+     "retailer"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "chatgpt",
+   "answer": "Pampers is a well-known diaper brand. You can also buy Pampers Swaddlers at Costco.",
+   "id": 36,
+   "kinds": [
+    "retailer"
+   ],
+   "question": "Tell me about Pampers diapers.",
+   "v14": {
+    "missing": [
+     "retailer"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "perplexity",
+   "answer": "Pampers is a well-known diaper brand. You can also buy Pampers Swaddlers at Sam's Club.",
+   "id": 37,
+   "kinds": [
+    "retailer"
+   ],
+   "question": "Are Pampers diapers worth it?",
+   "v14": {
+    "missing": [
+     "retailer"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "gemini_grounded",
+   "answer": "Pampers is a well-known diaper brand. You can also buy Pampers Swaddlers at Dollar General.",
+   "id": 38,
+   "kinds": [
+    "retailer"
+   ],
+   "question": "Is Pampers a good diaper brand?",
+   "v14": {
+    "missing": [
+     "retailer"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "copilot",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers and Pampers Zzz are both popular with parents.",
+   "id": 39,
+   "kinds": [
+    "name"
+   ],
+   "question": "Tell me about Pampers diapers.",
+   "v14": {
+    "missing": [
+     "name"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "aimode",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers and Pampers Ninjamas are both popular with parents.",
+   "id": 40,
+   "kinds": [
+    "name"
+   ],
+   "question": "Are Pampers diapers worth it?",
+   "v14": {
+    "missing": [
+     "name"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "claude",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers and Pampers Splashers are both popular with parents.",
+   "id": 41,
+   "kinds": [
+    "name"
+   ],
+   "question": "Is Pampers a good diaper brand?",
+   "v14": {
+    "missing": [
+     "name"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "chatgpt",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers and Pampers Zzz are both popular with parents.",
+   "id": 42,
+   "kinds": [
+    "name"
+   ],
+   "question": "Tell me about Pampers diapers.",
+   "v14": {
+    "missing": [
+     "name"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "perplexity",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers and Pampers Ninjamas are both popular with parents.",
+   "id": 43,
+   "kinds": [
+    "name"
+   ],
+   "question": "Are Pampers diapers worth it?",
+   "v14": {
+    "missing": [
+     "name"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "gemini_grounded",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers and Pampers Splashers are both popular with parents.",
+   "id": 44,
+   "kinds": [
+    "name"
+   ],
+   "question": "Is Pampers a good diaper brand?",
+   "v14": {
+    "missing": [
+     "name"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "copilot",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers and Pampers Zzz are both popular with parents.",
+   "id": 45,
+   "kinds": [
+    "name"
+   ],
+   "question": "Tell me about Pampers diapers.",
+   "v14": {
+    "missing": [
+     "name"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "aimode",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers and Pampers Ninjamas are both popular with parents.",
+   "id": 46,
+   "kinds": [
+    "name"
+   ],
+   "question": "Are Pampers diapers worth it?",
+   "v14": {
+    "missing": [
+     "name"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "claude",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers and Pampers Splashers are both popular with parents.",
+   "id": 47,
+   "kinds": [
+    "name"
+   ],
+   "question": "Is Pampers a good diaper brand?",
+   "v14": {
+    "missing": [
+     "name"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "chatgpt",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers and Pampers Zzz are both popular with parents.",
+   "id": 48,
+   "kinds": [
+    "name"
+   ],
+   "question": "Tell me about Pampers diapers.",
+   "v14": {
+    "missing": [
+     "name"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "perplexity",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers and Pampers Ninjamas are both popular with parents.",
+   "id": 49,
+   "kinds": [
+    "name"
+   ],
+   "question": "Are Pampers diapers worth it?",
+   "v14": {
+    "missing": [
+     "name"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "gemini_grounded",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers and Pampers Splashers are both popular with parents.",
+   "id": 50,
+   "kinds": [
+    "name"
+   ],
+   "question": "Is Pampers a good diaper brand?",
+   "v14": {
+    "missing": [
+     "name"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "copilot",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers and Pampers Zzz are both popular with parents.",
+   "id": 51,
+   "kinds": [
+    "name"
+   ],
+   "question": "Tell me about Pampers diapers.",
+   "v14": {
+    "missing": [
+     "name"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "aimode",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers and Pampers Ninjamas are both popular with parents.",
+   "id": 52,
+   "kinds": [
+    "name"
+   ],
+   "question": "Are Pampers diapers worth it?",
+   "v14": {
+    "missing": [
+     "name"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "claude",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers and Pampers Splashers are both popular with parents.",
+   "id": 53,
+   "kinds": [
+    "name"
+   ],
+   "question": "Is Pampers a good diaper brand?",
+   "v14": {
+    "missing": [
+     "name"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "chatgpt",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers and Pampers Zzz are both popular with parents.",
+   "id": 54,
+   "kinds": [
+    "name"
+   ],
+   "question": "Tell me about Pampers diapers.",
+   "v14": {
+    "missing": [
+     "name"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "perplexity",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers and Pampers Ninjamas are both popular with parents.",
+   "id": 55,
+   "kinds": [
+    "name"
+   ],
+   "question": "Are Pampers diapers worth it?",
+   "v14": {
+    "missing": [
+     "name"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "gemini_grounded",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers and Pampers Splashers are both popular with parents.",
+   "id": 56,
+   "kinds": [
+    "name"
+   ],
+   "question": "Is Pampers a good diaper brand?",
+   "v14": {
+    "missing": [
+     "name"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "copilot",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers and Pampers Zzz are both popular with parents.",
+   "id": 57,
+   "kinds": [
+    "name"
+   ],
+   "question": "Tell me about Pampers diapers.",
+   "v14": {
+    "missing": [
+     "name"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "aimode",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers and Pampers Ninjamas are both popular with parents.",
+   "id": 58,
+   "kinds": [
+    "name"
+   ],
+   "question": "Are Pampers diapers worth it?",
+   "v14": {
+    "missing": [
+     "name"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "claude",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers also come in Size 7.",
+   "id": 59,
+   "kinds": [
+    "size"
+   ],
+   "question": "Is Pampers a good diaper brand?",
+   "v14": {
+    "missing": [
+     "size"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "chatgpt",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers also come in Size 8.",
+   "id": 60,
+   "kinds": [
+    "size"
+   ],
+   "question": "Tell me about Pampers diapers.",
+   "v14": {
+    "missing": [
+     "size"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "perplexity",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers also come in Preemie size.",
+   "id": 61,
+   "kinds": [
+    "size"
+   ],
+   "question": "Are Pampers diapers worth it?",
+   "v14": {
+    "missing": [
+     "size"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "gemini_grounded",
+   "answer": "Pampers is a well-known diaper brand. Pampers Cruisers 360 also come in Size 7.",
+   "id": 62,
+   "kinds": [
+    "size"
+   ],
+   "question": "Is Pampers a good diaper brand?",
+   "v14": {
+    "missing": [
+     "size"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "copilot",
+   "answer": "Pampers is a well-known diaper brand. Pampers Cruisers 360 also come in Size 6.",
+   "id": 63,
+   "kinds": [
+    "size"
+   ],
+   "question": "Tell me about Pampers diapers.",
+   "v14": {
+    "missing": [
+     "size"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "aimode",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers also come in Size 7.",
+   "id": 64,
+   "kinds": [
+    "size"
+   ],
+   "question": "Are Pampers diapers worth it?",
+   "v14": {
+    "missing": [
+     "size"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "claude",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers come in a 148 count box.",
+   "id": 65,
+   "kinds": [
+    "count"
+   ],
+   "question": "Is Pampers a good diaper brand?",
+   "v14": {
+    "missing": [
+     "count"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "chatgpt",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers come in a 120 count box.",
+   "id": 66,
+   "kinds": [
+    "count"
+   ],
+   "question": "Tell me about Pampers diapers.",
+   "v14": {
+    "missing": [
+     "count"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "perplexity",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers come in a 186 count box.",
+   "id": 67,
+   "kinds": [
+    "count"
+   ],
+   "question": "Are Pampers diapers worth it?",
+   "v14": {
+    "missing": [
+     "count"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "gemini_grounded",
+   "answer": "Pampers is a well-known diaper brand. Pampers Cruisers 360 come in a 116 count box.",
+   "id": 68,
+   "kinds": [
+    "count"
+   ],
+   "question": "Is Pampers a good diaper brand?",
+   "v14": {
+    "missing": [
+     "count"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "copilot",
+   "answer": "Pampers is a well-known diaper brand. Pampers Cruisers 360 come in a 88 count box.",
+   "id": 69,
+   "kinds": [
+    "count"
+   ],
+   "question": "Tell me about Pampers diapers.",
+   "v14": {
+    "missing": [
+     "count"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "aimode",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers are breathable.",
+   "id": 70,
+   "kinds": [
+    "attribute"
+   ],
+   "question": "Are Pampers diapers worth it?",
+   "v14": {
+    "missing": [
+     "attribute"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "claude",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers are dermatologist tested.",
+   "id": 71,
+   "kinds": [
+    "attribute"
+   ],
+   "question": "Is Pampers a good diaper brand?",
+   "v14": {
+    "missing": [
+     "attribute"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "chatgpt",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers are pediatrician recommended.",
+   "id": 72,
+   "kinds": [
+    "attribute"
+   ],
+   "question": "Tell me about Pampers diapers.",
+   "v14": {
+    "missing": [
+     "attribute"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "perplexity",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers are chlorine free.",
+   "id": 73,
+   "kinds": [
+    "attribute"
+   ],
+   "question": "Are Pampers diapers worth it?",
+   "v14": {
+    "missing": [
+     "attribute"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "gemini_grounded",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers are aloe.",
+   "id": 74,
+   "kinds": [
+    "attribute"
+   ],
+   "question": "Is Pampers a good diaper brand?",
+   "v14": {
+    "missing": [
+     "attribute"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "copilot",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers are extra absorb channels.",
+   "id": 75,
+   "kinds": [
+    "attribute"
+   ],
+   "question": "Tell me about Pampers diapers.",
+   "v14": {
+    "missing": [
+     "attribute"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "aimode",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers are blowout barrier.",
+   "id": 76,
+   "kinds": [
+    "attribute"
+   ],
+   "question": "Are Pampers diapers worth it?",
+   "v14": {
+    "missing": [
+     "attribute"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "claude",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers are heart quilts.",
+   "id": 77,
+   "kinds": [
+    "attribute"
+   ],
+   "question": "Is Pampers a good diaper brand?",
+   "v14": {
+    "missing": [
+     "attribute"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "chatgpt",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers are breathable.",
+   "id": 78,
+   "kinds": [
+    "attribute"
+   ],
+   "question": "Tell me about Pampers diapers.",
+   "v14": {
+    "missing": [
+     "attribute"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "perplexity",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers are dermatologist tested.",
+   "id": 79,
+   "kinds": [
+    "attribute"
+   ],
+   "question": "Are Pampers diapers worth it?",
+   "v14": {
+    "missing": [
+     "attribute"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "gemini_grounded",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers cost $38.49 at Walgreens.",
+   "id": 80,
+   "kinds": [
+    "price",
+    "retailer"
+   ],
+   "question": "Is Pampers a good diaper brand?",
+   "v14": {
+    "missing": [
+     "price",
+     "retailer"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "copilot",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers cost $41.29 at CVS.",
+   "id": 81,
+   "kinds": [
+    "price",
+    "retailer"
+   ],
+   "question": "Tell me about Pampers diapers.",
+   "v14": {
+    "missing": [
+     "price",
+     "retailer"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "aimode",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers cost $52.79 at Kroger.",
+   "id": 82,
+   "kinds": [
+    "price",
+    "retailer"
+   ],
+   "question": "Are Pampers diapers worth it?",
+   "v14": {
+    "missing": [
+     "price",
+     "retailer"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "claude",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers cost $33.19 at Costco.",
+   "id": 83,
+   "kinds": [
+    "price",
+    "retailer"
+   ],
+   "question": "Is Pampers a good diaper brand?",
+   "v14": {
+    "missing": [
+     "price",
+     "retailer"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "chatgpt",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers cost $47.63 at Sam's Club.",
+   "id": 84,
+   "kinds": [
+    "price",
+    "retailer"
+   ],
+   "question": "Tell me about Pampers diapers.",
+   "v14": {
+    "missing": [
+     "price",
+     "retailer"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "perplexity",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers cost $38.49 at Dollar General.",
+   "id": 85,
+   "kinds": [
+    "price",
+    "retailer"
+   ],
+   "question": "Are Pampers diapers worth it?",
+   "v14": {
+    "missing": [
+     "price",
+     "retailer"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "gemini_grounded",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers cost $41.29 at Walgreens.",
+   "id": 86,
+   "kinds": [
+    "price",
+    "retailer"
+   ],
+   "question": "Is Pampers a good diaper brand?",
+   "v14": {
+    "missing": [
+     "price",
+     "retailer"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "copilot",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers cost $52.79 at CVS.",
+   "id": 87,
+   "kinds": [
+    "price",
+    "retailer"
+   ],
+   "question": "Tell me about Pampers diapers.",
+   "v14": {
+    "missing": [
+     "price",
+     "retailer"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "aimode",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers cost $33.19 at Kroger.",
+   "id": 88,
+   "kinds": [
+    "price",
+    "retailer"
+   ],
+   "question": "Are Pampers diapers worth it?",
+   "v14": {
+    "missing": [
+     "price",
+     "retailer"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "claude",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers cost $47.63 at Costco.",
+   "id": 89,
+   "kinds": [
+    "price",
+    "retailer"
+   ],
+   "question": "Is Pampers a good diaper brand?",
+   "v14": {
+    "missing": [
+     "price",
+     "retailer"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "chatgpt",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers cost $38.49 at Sam's Club.",
+   "id": 90,
+   "kinds": [
+    "price",
+    "retailer"
+   ],
+   "question": "Tell me about Pampers diapers.",
+   "v14": {
+    "missing": [
+     "price",
+     "retailer"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "perplexity",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers cost $41.29 at Dollar General.",
+   "id": 91,
+   "kinds": [
+    "price",
+    "retailer"
+   ],
+   "question": "Are Pampers diapers worth it?",
+   "v14": {
+    "missing": [
+     "price",
+     "retailer"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "gemini_grounded",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers cost $52.79 at Walgreens.",
+   "id": 92,
+   "kinds": [
+    "price",
+    "retailer"
+   ],
+   "question": "Is Pampers a good diaper brand?",
+   "v14": {
+    "missing": [
+     "price",
+     "retailer"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "copilot",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers cost $33.19 at CVS.",
+   "id": 93,
+   "kinds": [
+    "price",
+    "retailer"
+   ],
+   "question": "Tell me about Pampers diapers.",
+   "v14": {
+    "missing": [
+     "price",
+     "retailer"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "aimode",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers cost $47.63 at Kroger.",
+   "id": 94,
+   "kinds": [
+    "price",
+    "retailer"
+   ],
+   "question": "Are Pampers diapers worth it?",
+   "v14": {
+    "missing": [
+     "price",
+     "retailer"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "claude",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers cost $38.49 at Costco.",
+   "id": 95,
+   "kinds": [
+    "price",
+    "retailer"
+   ],
+   "question": "Is Pampers a good diaper brand?",
+   "v14": {
+    "missing": [
+     "price",
+     "retailer"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "chatgpt",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers cost $41.29 at Sam's Club.",
+   "id": 96,
+   "kinds": [
+    "price",
+    "retailer"
+   ],
+   "question": "Tell me about Pampers diapers.",
+   "v14": {
+    "missing": [
+     "price",
+     "retailer"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "perplexity",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers cost $52.79 at Dollar General.",
+   "id": 97,
+   "kinds": [
+    "price",
+    "retailer"
+   ],
+   "question": "Are Pampers diapers worth it?",
+   "v14": {
+    "missing": [
+     "price",
+     "retailer"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "gemini_grounded",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers cost $33.19 at Walgreens.",
+   "id": 98,
+   "kinds": [
+    "price",
+    "retailer"
+   ],
+   "question": "Is Pampers a good diaper brand?",
+   "v14": {
+    "missing": [
+     "price",
+     "retailer"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "copilot",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers cost $47.63 at CVS.",
+   "id": 99,
+   "kinds": [
+    "price",
+    "retailer"
+   ],
+   "question": "Tell me about Pampers diapers.",
+   "v14": {
+    "missing": [
+     "price",
+     "retailer"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "aimode",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers cost $38.49 at Kroger.",
+   "id": 100,
+   "kinds": [
+    "price",
+    "retailer"
+   ],
+   "question": "Are Pampers diapers worth it?",
+   "v14": {
+    "missing": [
+     "price",
+     "retailer"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "claude",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers cost $41.29 at Costco.",
+   "id": 101,
+   "kinds": [
+    "price",
+    "retailer"
+   ],
+   "question": "Is Pampers a good diaper brand?",
+   "v14": {
+    "missing": [
+     "price",
+     "retailer"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "chatgpt",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers cost $52.79 at Sam's Club.",
+   "id": 102,
+   "kinds": [
+    "price",
+    "retailer"
+   ],
+   "question": "Tell me about Pampers diapers.",
+   "v14": {
+    "missing": [
+     "price",
+     "retailer"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "perplexity",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers cost $33.19 at Dollar General.",
+   "id": 103,
+   "kinds": [
+    "price",
+    "retailer"
+   ],
+   "question": "Are Pampers diapers worth it?",
+   "v14": {
+    "missing": [
+     "price",
+     "retailer"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "gemini_grounded",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers cost $47.63 at Walgreens.",
+   "id": 104,
+   "kinds": [
+    "price",
+    "retailer"
+   ],
+   "question": "Is Pampers a good diaper brand?",
+   "v14": {
+    "missing": [
+     "price",
+     "retailer"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "copilot",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers are breathable and cost $38.49.",
+   "id": 105,
+   "kinds": [
+    "price",
+    "attribute"
+   ],
+   "question": "Tell me about Pampers diapers.",
+   "v14": {
+    "missing": [
+     "price",
+     "attribute"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "aimode",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers are dermatologist tested and cost $41.29.",
+   "id": 106,
+   "kinds": [
+    "price",
+    "attribute"
+   ],
+   "question": "Are Pampers diapers worth it?",
+   "v14": {
+    "missing": [
+     "price",
+     "attribute"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "claude",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers are pediatrician recommended and cost $52.79.",
+   "id": 107,
+   "kinds": [
+    "price",
+    "attribute"
+   ],
+   "question": "Is Pampers a good diaper brand?",
+   "v14": {
+    "missing": [
+     "price",
+     "attribute"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "chatgpt",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers are chlorine free and cost $33.19.",
+   "id": 108,
+   "kinds": [
+    "price",
+    "attribute"
+   ],
+   "question": "Tell me about Pampers diapers.",
+   "v14": {
+    "missing": [
+     "price",
+     "attribute"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "perplexity",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers are aloe and cost $47.63.",
+   "id": 109,
+   "kinds": [
+    "price",
+    "attribute"
+   ],
+   "question": "Are Pampers diapers worth it?",
+   "v14": {
+    "missing": [
+     "price",
+     "attribute"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "gemini_grounded",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers are extra absorb channels and cost $38.49.",
+   "id": 110,
+   "kinds": [
+    "price",
+    "attribute"
+   ],
+   "question": "Is Pampers a good diaper brand?",
+   "v14": {
+    "missing": [
+     "price",
+     "attribute"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "copilot",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers are blowout barrier and cost $41.29.",
+   "id": 111,
+   "kinds": [
+    "price",
+    "attribute"
+   ],
+   "question": "Tell me about Pampers diapers.",
+   "v14": {
+    "missing": [
+     "price",
+     "attribute"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "aimode",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers are heart quilts and cost $52.79.",
+   "id": 112,
+   "kinds": [
+    "price",
+    "attribute"
+   ],
+   "question": "Are Pampers diapers worth it?",
+   "v14": {
+    "missing": [
+     "price",
+     "attribute"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "claude",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers are breathable and cost $33.19.",
+   "id": 113,
+   "kinds": [
+    "price",
+    "attribute"
+   ],
+   "question": "Is Pampers a good diaper brand?",
+   "v14": {
+    "missing": [
+     "price",
+     "attribute"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "chatgpt",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers are dermatologist tested and cost $47.63.",
+   "id": 114,
+   "kinds": [
+    "price",
+    "attribute"
+   ],
+   "question": "Tell me about Pampers diapers.",
+   "v14": {
+    "missing": [
+     "price",
+     "attribute"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "perplexity",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers are pediatrician recommended and cost $38.49.",
+   "id": 115,
+   "kinds": [
+    "price",
+    "attribute"
+   ],
+   "question": "Are Pampers diapers worth it?",
+   "v14": {
+    "missing": [
+     "price",
+     "attribute"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "gemini_grounded",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers are chlorine free and cost $41.29.",
+   "id": 116,
+   "kinds": [
+    "price",
+    "attribute"
+   ],
+   "question": "Is Pampers a good diaper brand?",
+   "v14": {
+    "missing": [
+     "price",
+     "attribute"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "copilot",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers are aloe and cost $52.79.",
+   "id": 117,
+   "kinds": [
+    "price",
+    "attribute"
+   ],
+   "question": "Tell me about Pampers diapers.",
+   "v14": {
+    "missing": [
+     "price",
+     "attribute"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "aimode",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers are extra absorb channels and cost $33.19.",
+   "id": 118,
+   "kinds": [
+    "price",
+    "attribute"
+   ],
+   "question": "Are Pampers diapers worth it?",
+   "v14": {
+    "missing": [
+     "price",
+     "attribute"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "claude",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers are blowout barrier and cost $47.63.",
+   "id": 119,
+   "kinds": [
+    "price",
+    "attribute"
+   ],
+   "question": "Is Pampers a good diaper brand?",
+   "v14": {
+    "missing": [
+     "price",
+     "attribute"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "chatgpt",
+   "answer": "Pampers is a well-known diaper brand. Walgreens carries Pampers Swaddlers, which are breathable.",
+   "id": 120,
+   "kinds": [
+    "retailer",
+    "attribute"
+   ],
+   "question": "Tell me about Pampers diapers.",
+   "v14": {
+    "missing": [
+     "retailer",
+     "attribute"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "perplexity",
+   "answer": "Pampers is a well-known diaper brand. CVS carries Pampers Swaddlers, which are dermatologist tested.",
+   "id": 121,
+   "kinds": [
+    "retailer",
+    "attribute"
+   ],
+   "question": "Are Pampers diapers worth it?",
+   "v14": {
+    "missing": [
+     "retailer",
+     "attribute"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "gemini_grounded",
+   "answer": "Pampers is a well-known diaper brand. Kroger carries Pampers Swaddlers, which are pediatrician recommended.",
+   "id": 122,
+   "kinds": [
+    "retailer",
+    "attribute"
+   ],
+   "question": "Is Pampers a good diaper brand?",
+   "v14": {
+    "missing": [
+     "retailer",
+     "attribute"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "copilot",
+   "answer": "Pampers is a well-known diaper brand. Costco carries Pampers Swaddlers, which are chlorine free.",
+   "id": 123,
+   "kinds": [
+    "retailer",
+    "attribute"
+   ],
+   "question": "Tell me about Pampers diapers.",
+   "v14": {
+    "missing": [
+     "retailer",
+     "attribute"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "aimode",
+   "answer": "Pampers is a well-known diaper brand. Sam's Club carries Pampers Swaddlers, which are aloe.",
+   "id": 124,
+   "kinds": [
+    "retailer",
+    "attribute"
+   ],
+   "question": "Are Pampers diapers worth it?",
+   "v14": {
+    "missing": [
+     "retailer",
+     "attribute"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "claude",
+   "answer": "Pampers is a well-known diaper brand. Pampers Zzz are breathable.",
+   "id": 125,
+   "kinds": [
+    "name",
+    "attribute"
+   ],
+   "question": "Is Pampers a good diaper brand?",
+   "v14": {
+    "missing": [
+     "name",
+     "attribute"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "chatgpt",
+   "answer": "Pampers is a well-known diaper brand. Pampers Ninjamas are dermatologist tested.",
+   "id": 126,
+   "kinds": [
+    "name",
+    "attribute"
+   ],
+   "question": "Tell me about Pampers diapers.",
+   "v14": {
+    "missing": [
+     "name",
+     "attribute"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "perplexity",
+   "answer": "Pampers is a well-known diaper brand. Pampers Splashers are pediatrician recommended.",
+   "id": 127,
+   "kinds": [
+    "name",
+    "attribute"
+   ],
+   "question": "Are Pampers diapers worth it?",
+   "v14": {
+    "missing": [
+     "name",
+     "attribute"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "gemini_grounded",
+   "answer": "Pampers is a well-known diaper brand. Pampers Zzz are chlorine free.",
+   "id": 128,
+   "kinds": [
+    "name",
+    "attribute"
+   ],
+   "question": "Is Pampers a good diaper brand?",
+   "v14": {
+    "missing": [
+     "name",
+     "attribute"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "copilot",
+   "answer": "Pampers is a well-known diaper brand. Pampers Ninjamas are aloe.",
+   "id": 129,
+   "kinds": [
+    "name",
+    "attribute"
+   ],
+   "question": "Tell me about Pampers diapers.",
+   "v14": {
+    "missing": [
+     "name",
+     "attribute"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "aimode",
+   "answer": "Pampers is a well-known diaper brand. Pampers Splashers are extra absorb channels.",
+   "id": 130,
+   "kinds": [
+    "name",
+    "attribute"
+   ],
+   "question": "Are Pampers diapers worth it?",
+   "v14": {
+    "missing": [
+     "name",
+     "attribute"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "claude",
+   "answer": "Pampers is a well-known diaper brand. Pampers Zzz are blowout barrier.",
+   "id": 131,
+   "kinds": [
+    "name",
+    "attribute"
+   ],
+   "question": "Is Pampers a good diaper brand?",
+   "v14": {
+    "missing": [
+     "name",
+     "attribute"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "chatgpt",
+   "answer": "Pampers is a well-known diaper brand. Pampers Ninjamas are heart quilts.",
+   "id": 132,
+   "kinds": [
+    "name",
+    "attribute"
+   ],
+   "question": "Tell me about Pampers diapers.",
+   "v14": {
+    "missing": [
+     "name",
+     "attribute"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "perplexity",
+   "answer": "Pampers is a well-known diaper brand. Pampers Splashers are breathable.",
+   "id": 133,
+   "kinds": [
+    "name",
+    "attribute"
+   ],
+   "question": "Are Pampers diapers worth it?",
+   "v14": {
+    "missing": [
+     "name",
+     "attribute"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "gemini_grounded",
+   "answer": "Pampers is a well-known diaper brand. Pampers Zzz are dermatologist tested.",
+   "id": 134,
+   "kinds": [
+    "name",
+    "attribute"
+   ],
+   "question": "Is Pampers a good diaper brand?",
+   "v14": {
+    "missing": [
+     "name",
+     "attribute"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "copilot",
+   "answer": "Pampers is a well-known diaper brand. Pampers Ninjamas are pediatrician recommended.",
+   "id": 135,
+   "kinds": [
+    "name",
+    "attribute"
+   ],
+   "question": "Tell me about Pampers diapers.",
+   "v14": {
+    "missing": [
+     "name",
+     "attribute"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "aimode",
+   "answer": "Pampers is a well-known diaper brand. Pampers Splashers are chlorine free.",
+   "id": 136,
+   "kinds": [
+    "name",
+    "attribute"
+   ],
+   "question": "Are Pampers diapers worth it?",
+   "v14": {
+    "missing": [
+     "name",
+     "attribute"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "claude",
+   "answer": "Pampers is a well-known diaper brand. Pampers Zzz are aloe.",
+   "id": 137,
+   "kinds": [
+    "name",
+    "attribute"
+   ],
+   "question": "Is Pampers a good diaper brand?",
+   "v14": {
+    "missing": [
+     "name",
+     "attribute"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "chatgpt",
+   "answer": "Pampers is a well-known diaper brand. Pampers Ninjamas are extra absorb channels.",
+   "id": 138,
+   "kinds": [
+    "name",
+    "attribute"
+   ],
+   "question": "Tell me about Pampers diapers.",
+   "v14": {
+    "missing": [
+     "name",
+     "attribute"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "perplexity",
+   "answer": "Pampers is a well-known diaper brand. Pampers Splashers are blowout barrier.",
+   "id": 139,
+   "kinds": [
+    "name",
+    "attribute"
+   ],
+   "question": "Are Pampers diapers worth it?",
+   "v14": {
+    "missing": [
+     "name",
+     "attribute"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "gemini_grounded",
+   "answer": "Pampers is a well-known diaper brand. Pampers Zzz are heart quilts.",
+   "id": 140,
+   "kinds": [
+    "name",
+    "attribute"
+   ],
+   "question": "Is Pampers a good diaper brand?",
+   "v14": {
+    "missing": [
+     "name",
+     "attribute"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "copilot",
+   "answer": "Pampers is a well-known diaper brand. Pampers Ninjamas are breathable.",
+   "id": 141,
+   "kinds": [
+    "name",
+    "attribute"
+   ],
+   "question": "Tell me about Pampers diapers.",
+   "v14": {
+    "missing": [
+     "name",
+     "attribute"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "aimode",
+   "answer": "Pampers is a well-known diaper brand. Pampers Splashers are dermatologist tested.",
+   "id": 142,
+   "kinds": [
+    "name",
+    "attribute"
+   ],
+   "question": "Are Pampers diapers worth it?",
+   "v14": {
+    "missing": [
+     "name",
+     "attribute"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "claude",
+   "answer": "Pampers is a well-known diaper brand. Pampers Zzz also come in Size 6.",
+   "id": 143,
+   "kinds": [
+    "name",
+    "size"
+   ],
+   "question": "Is Pampers a good diaper brand?",
+   "v14": {
+    "missing": [
+     "size",
+     "name"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "chatgpt",
+   "answer": "Pampers is a well-known diaper brand. Pampers Ninjamas also come in Size 6.",
+   "id": 144,
+   "kinds": [
+    "name",
+    "size"
+   ],
+   "question": "Tell me about Pampers diapers.",
+   "v14": {
+    "missing": [
+     "size",
+     "name"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "perplexity",
+   "answer": "Pampers is a well-known diaper brand. Pampers Splashers also come in Size 6.",
+   "id": 145,
+   "kinds": [
+    "name",
+    "size"
+   ],
+   "question": "Are Pampers diapers worth it?",
+   "v14": {
+    "missing": [
+     "size",
+     "name"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "gemini_grounded",
+   "answer": "Pampers is a well-known diaper brand. Pampers Zzz also come in Size 6.",
+   "id": 146,
+   "kinds": [
+    "name",
+    "size"
+   ],
+   "question": "Is Pampers a good diaper brand?",
+   "v14": {
+    "missing": [
+     "size",
+     "name"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "copilot",
+   "answer": "Pampers is a well-known diaper brand. Pampers Ninjamas also come in Size 6.",
+   "id": 147,
+   "kinds": [
+    "name",
+    "size"
+   ],
+   "question": "Tell me about Pampers diapers.",
+   "v14": {
+    "missing": [
+     "size",
+     "name"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "aimode",
+   "answer": "Pampers is a well-known diaper brand. Pampers Splashers also come in Size 6.",
+   "id": 148,
+   "kinds": [
+    "name",
+    "size"
+   ],
+   "question": "Are Pampers diapers worth it?",
+   "v14": {
+    "missing": [
+     "size",
+     "name"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "claude",
+   "answer": "Pampers is a well-known diaper brand. Pampers Zzz also come in Size 6.",
+   "id": 149,
+   "kinds": [
+    "name",
+    "size"
+   ],
+   "question": "Is Pampers a good diaper brand?",
+   "v14": {
+    "missing": [
+     "size",
+     "name"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "chatgpt",
+   "answer": "Pampers is a well-known diaper brand. Pampers Ninjamas also come in Size 6.",
+   "id": 150,
+   "kinds": [
+    "name",
+    "size"
+   ],
+   "question": "Tell me about Pampers diapers.",
+   "v14": {
+    "missing": [
+     "size",
+     "name"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "perplexity",
+   "answer": "Pampers is a well-known diaper brand. Pampers Splashers also come in Size 6.",
+   "id": 151,
+   "kinds": [
+    "name",
+    "size"
+   ],
+   "question": "Are Pampers diapers worth it?",
+   "v14": {
+    "missing": [
+     "size",
+     "name"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "gemini_grounded",
+   "answer": "Pampers is a well-known diaper brand. Pampers Zzz also come in Size 6.",
+   "id": 152,
+   "kinds": [
+    "name",
+    "size"
+   ],
+   "question": "Is Pampers a good diaper brand?",
+   "v14": {
+    "missing": [
+     "size",
+     "name"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "copilot",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers Size 7 come in a 120 count box.",
+   "id": 153,
+   "kinds": [
+    "size",
+    "count"
+   ],
+   "question": "Tell me about Pampers diapers.",
+   "v14": {
+    "missing": [
+     "count",
+     "size"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "aimode",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers Size 8 come in a 120 count box.",
+   "id": 154,
+   "kinds": [
+    "size",
+    "count"
+   ],
+   "question": "Are Pampers diapers worth it?",
+   "v14": {
+    "missing": [
+     "count",
+     "size"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "claude",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers Preemie size come in a 120 count box.",
+   "id": 155,
+   "kinds": [
+    "size",
+    "count"
+   ],
+   "question": "Is Pampers a good diaper brand?",
+   "v14": {
+    "missing": [
+     "count",
+     "size"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "chatgpt",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers Size 7 come in a 120 count box.",
+   "id": 156,
+   "kinds": [
+    "size",
+    "count"
+   ],
+   "question": "Tell me about Pampers diapers.",
+   "v14": {
+    "missing": [
+     "count",
+     "size"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "perplexity",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers Size 7 come in a 120 count box.",
+   "id": 157,
+   "kinds": [
+    "size",
+    "count"
+   ],
+   "question": "Are Pampers diapers worth it?",
+   "v14": {
+    "missing": [
+     "count",
+     "size"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "gemini_grounded",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers Size 7 come in a 120 count box.",
+   "id": 158,
+   "kinds": [
+    "size",
+    "count"
+   ],
+   "question": "Is Pampers a good diaper brand?",
+   "v14": {
+    "missing": [
+     "count",
+     "size"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "copilot",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers Size 8 come in a 120 count box.",
+   "id": 159,
+   "kinds": [
+    "size",
+    "count"
+   ],
+   "question": "Tell me about Pampers diapers.",
+   "v14": {
+    "missing": [
+     "count",
+     "size"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "aimode",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers Preemie size come in a 120 count box.",
+   "id": 160,
+   "kinds": [
+    "size",
+    "count"
+   ],
+   "question": "Are Pampers diapers worth it?",
+   "v14": {
+    "missing": [
+     "count",
+     "size"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "claude",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers Size 7 come in a 120 count box.",
+   "id": 161,
+   "kinds": [
+    "size",
+    "count"
+   ],
+   "question": "Is Pampers a good diaper brand?",
+   "v14": {
+    "missing": [
+     "count",
+     "size"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "chatgpt",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers Size 7 come in a 120 count box.",
+   "id": 162,
+   "kinds": [
+    "size",
+    "count"
+   ],
+   "question": "Tell me about Pampers diapers.",
+   "v14": {
+    "missing": [
+     "count",
+     "size"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "perplexity",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers come in a 148 count box and are breathable.",
+   "id": 163,
+   "kinds": [
+    "count",
+    "attribute"
+   ],
+   "question": "Are Pampers diapers worth it?",
+   "v14": {
+    "missing": [
+     "count",
+     "attribute"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "gemini_grounded",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers come in a 148 count box and are dermatologist tested.",
+   "id": 164,
+   "kinds": [
+    "count",
+    "attribute"
+   ],
+   "question": "Is Pampers a good diaper brand?",
+   "v14": {
+    "missing": [
+     "count",
+     "attribute"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "copilot",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers come in a 148 count box and are pediatrician recommended.",
+   "id": 165,
+   "kinds": [
+    "count",
+    "attribute"
+   ],
+   "question": "Tell me about Pampers diapers.",
+   "v14": {
+    "missing": [
+     "count",
+     "attribute"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "aimode",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers come in a 148 count box and are chlorine free.",
+   "id": 166,
+   "kinds": [
+    "count",
+    "attribute"
+   ],
+   "question": "Are Pampers diapers worth it?",
+   "v14": {
+    "missing": [
+     "count",
+     "attribute"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "claude",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers come in a 148 count box and are aloe.",
+   "id": 167,
+   "kinds": [
+    "count",
+    "attribute"
+   ],
+   "question": "Is Pampers a good diaper brand?",
+   "v14": {
+    "missing": [
+     "count",
+     "attribute"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "chatgpt",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers come in a 148 count box and are extra absorb channels.",
+   "id": 168,
+   "kinds": [
+    "count",
+    "attribute"
+   ],
+   "question": "Tell me about Pampers diapers.",
+   "v14": {
+    "missing": [
+     "count",
+     "attribute"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "perplexity",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers are breathable and chlorine free.",
+   "id": 169,
+   "kinds": [
+    "attribute",
+    "attribute"
+   ],
+   "question": "Are Pampers diapers worth it?",
+   "v14": {
+    "missing": [
+     "attribute",
+     "attribute"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  },
+  {
+   "agent": "gemini_grounded",
+   "answer": "Pampers is a well-known diaper brand. Pampers Swaddlers are dermatologist tested and aloe.",
+   "id": 170,
+   "kinds": [
+    "attribute",
+    "attribute"
+   ],
+   "question": "Is Pampers a good diaper brand?",
+   "v14": {
+    "missing": [
+     "attribute",
+     "attribute"
+    ],
+    "outcome": "fabricated",
+    "reason_code": "fact_not_published"
+   }
+  }
+ ],
+ "printout": {
+  "answers": 258,
+  "fabricated": 170,
+  "missing": {
+   "attribute": 58,
+   "count": 21,
+   "name": 48,
+   "price": 60,
+   "retailer": 48,
+   "size": 26
+  }
+ },
+ "v14_index": {
+  "by_source": {
+   "brand_pages": 51,
+   "catalog": 27,
+   "record": 3
+  },
+  "digest": "59d7f07666ae",
+  "size": 81,
+  "types_read": [
+   "price",
+   "unit_price",
+   "count",
+   "size",
+   "weight",
+   "name",
+   "retailer",
+   "attribute"
+  ],
+  "version": 1
+ }
+}
