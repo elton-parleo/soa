@@ -1,0 +1,51 @@
+{
+ "calls": [
+  {
+   "response": "{\"line\":\"Gemini said \\\"2 to 9 lbs\\\" for Swaddlers Newborn. pampers.com's chart says under 10 lb.\"}",
+   "usage": {
+    "input_tokens": 943,
+    "output_tokens": 40,
+    "total_tokens": 983
+   }
+  },
+  {
+   "response": "{\"line\":\"Gemini said \\\"2 to 9 lbs\\\" for Swaddlers Newborn. pampers.com's chart says under 10 lb.\"}",
+   "usage": {
+    "input_tokens": 943,
+    "output_tokens": 40,
+    "total_tokens": 983
+   }
+  }
+ ],
+ "facts": {
+  "agent": "Gemini",
+  "brand": "Pampers",
+  "brand_verdict": "fabricated",
+  "claim_facts": {
+   "said": "Pampers Swaddlers Newborn fits babies from 2 to 9 lbs.",
+   "stated_otherwise": [
+    "2 to 9 lbs"
+   ]
+  },
+  "contradicted": {
+   "claimed": "2 to 9 lbs",
+   "for": "Swaddlers Newborn",
+   "says": "under 10 lb",
+   "source": "pampers.com's chart"
+  },
+  "kind": "answer",
+  "meaning": [
+   "The answer stated something about the brand that the brand's own pages or record state otherwise."
+  ],
+  "question": "question 1051",
+  "reason_code": "fact_contradicted",
+  "surface": "API with search grounding",
+  "why": [
+   "brand_fabricated"
+  ]
+ },
+ "facts_digest": "a980cc501549299151be099203a3912b274c3e3144be8cdb9860d5aec8801c89",
+ "model": "gpt-5.4-nano-2026-03-17",
+ "request_digest": "fc1957a7c614c737238e9571590c88c5dfaa1b9ef1072b631b2c9c7d3f7e9709",
+ "subject": "answer:run-70302"
+}

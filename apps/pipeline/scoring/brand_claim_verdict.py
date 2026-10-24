@@ -322,8 +322,11 @@ def judge_span(text, *, question, brand, index, others=(), own_domains=(), facts
         if checked['status'] == bfi.FOUND:
             found.append(entry)
         elif checked['status'] == bfi.CONTRADICTED:
-            missing.append({**entry, **{k: checked[k] for k in ('slot', 'claimed', 'published', 'line', 'size',
-                                                                 'source') if k in checked}})
+            fact = {**entry, **{k: checked[k] for k in ('slot', 'claimed', 'published', 'line', 'size',
+                                                         'source') if k in checked}}
+            # 2P-1 (B4): what the brand states instead, in the reason's words, for every judged sentence
+            fact['evidence'] = stated_instead(fact, index, brand)
+            missing.append(fact)
         else:
             unverified.append(entry)
     out.update(facts_found=found, facts_missing=missing, facts_unverified=unverified, facts_unchecked=[],
@@ -370,6 +373,14 @@ def contradiction(fact: dict, index, brand) -> str:
         return f"fabricated: {claimed!r} for {subject} — {possessive(brand)} record says {fact.get('published')}"
     source = bfi.SLOT_SOURCE.get(fact['type'], 'page')
     return f"fabricated: {claimed!r} for {subject} — {domain}'s {source} says {fact.get('published')}"
+
+
+def stated_instead(fact: dict, index, brand) -> str:
+    """2P-1 (B4): the half of contradiction() after the dash, as a sentence:
+    "pampers.com's chart says under 10 lb". The drawer shows it beside each
+    contradicted fact of every judged sentence, not only the one that decided."""
+    said = contradiction(fact, index, brand).partition(' — ')[2].strip()
+    return '. '.join(part[:1].upper() + part[1:] if n else part for n, part in enumerate(said.split('; ')))
 
 
 def unknown_sentence(record) -> Optional[str]:

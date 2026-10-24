@@ -79,7 +79,9 @@ def test_the_drawer_shows_the_claim_and_the_fact_missing():
                                 'sentences': [{'text': 'Pampers Swaddlers fit babies 2-9 lbs.', 'kind': 'attribute',
                                                'verdict': 'fabricated', 'facts_found': [],
                                                'facts_missing': [{'type': 'weight', 'text': '2-9 lbs'}],
-                                               'facts_unchecked': [], 'decided': True}]}
+                                               'facts_unchecked': [], 'decided': True,
+                                               # 2P-1: none, a coder-3 fact carries no evidence line
+                                               'evidence': []}]}
 
 
 def test_a_row_before_the_new_verdict_carries_no_claim_evidence():

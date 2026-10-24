@@ -1,0 +1,51 @@
+{
+ "calls": [
+  {
+   "response": "{\"line\":\"Claude said \\\"6 to 12 lbs\\\" for Swaddlers Size 1. Pampers' record says \\\"8 to 14 lb\\\".\"}",
+   "usage": {
+    "input_tokens": 942,
+    "output_tokens": 43,
+    "total_tokens": 985
+   }
+  },
+  {
+   "response": "{\"line\":\"Claude said \\\"6 to 12 lbs\\\" for Swaddlers Size 1. Pampers' record says 8 to 14 lb.\"}",
+   "usage": {
+    "input_tokens": 942,
+    "output_tokens": 42,
+    "total_tokens": 984
+   }
+  }
+ ],
+ "facts": {
+  "agent": "Claude",
+  "brand": "Pampers",
+  "brand_verdict": "fabricated",
+  "claim_facts": {
+   "said": "Swaddlers Size 1 is for babies 6 to 12 lbs.",
+   "stated_otherwise": [
+    "6 to 12 lbs"
+   ]
+  },
+  "contradicted": {
+   "claimed": "6 to 12 lbs",
+   "for": "Swaddlers Size 1",
+   "says": "8 to 14 lb",
+   "source": "Pampers' record"
+  },
+  "kind": "answer",
+  "meaning": [
+   "The answer stated something about the brand that the brand's own pages or record state otherwise."
+  ],
+  "question": "question 1051",
+  "reason_code": "fact_contradicted",
+  "surface": "API with search grounding",
+  "why": [
+   "brand_fabricated"
+  ]
+ },
+ "facts_digest": "a9e0294b2030fe223a2f6b52d10943125641a9ff6d98f2ce12f2cbca7cfabc72",
+ "model": "gpt-5.4-nano-2026-03-17",
+ "request_digest": "78d590ef48d7660678621040f8afb2749066fbe7b6c06a792a1fc3ef0b2f1169",
+ "subject": "answer:run-70306"
+}

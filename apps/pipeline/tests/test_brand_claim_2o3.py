@@ -94,7 +94,9 @@ def test_a_fact_not_on_the_index_is_fabricated_and_the_reason_names_it():
     span = v.brand_claim['spans'][v.brand_claim['decided_by']]
     assert span['facts_missing'] == [{'type': 'weight', 'text': '2-9 lbs', 'slot': 'ranges', 'claimed': '2-9 lbs',
                                       'published': '8 to 14 lb', 'line': 'Swaddlers', 'size': '1',
-                                      'source': 'record'}]
+                                      'source': 'record',
+                                      # 2P-1 (B4): the reason's half after the dash, for the drawer
+                                      'evidence': "Pampers' record says 8 to 14 lb"}]
     # Swaddlers is the question's, so not a fact the span adds; it names the page
     assert span['facts_found'] == [{'type': 'size', 'text': 'Size 1'}] and span['line'] == 'Swaddlers'
     assert v.brand_claim['index']['version'] == bfi.INDEX_VERSION and v.brand_claim['index']['digest']

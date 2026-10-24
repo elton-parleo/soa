@@ -77,8 +77,55 @@ def fl13_shapes(e) -> None:
                   {'c': json.dumps(claims), 'x': json.dumps(extraction), 'r': rid})
 
 
-def engine():
-    """A fresh sqlite engine holding the console schema and the 2J-2 fixture."""
+# 2P-1 (B4): FL14's brand-claim verdicts (2O-5, coder 6) on three of 2I-8's brand-direct rows, for
+# fl14_claims(): a claim the brand's chart contradicts, one its record contradicts, one no page states.
+NEWBORN = 'Pampers Swaddlers Newborn fits babies from 2 to 9 lbs.'
+SOFT = 'They are softer than any other diaper.'
+SIZES = 'Swaddlers come in Newborn through Size 7.'
+SIZE_1 = 'Swaddlers Size 1 is for babies 6 to 12 lbs.'
+HYPO = 'They are hypoallergenic.'
+#: (run, outcome, reason_code, reason, the judged sentences: (text, verdict, facts_missing, facts_found,
+#: facts_unverified), the one that decided)
+FL14_CLAIMS = (
+    (70302, 'fabricated', 'fact_contradicted',
+     "fabricated: '2 to 9 lbs' for Swaddlers Newborn — pampers.com's chart says under 10 lb",
+     [(SIZES, 'grounded', [], [{'type': 'size', 'text': 'Newborn'}], []),
+      (NEWBORN, 'fabricated', [{'type': 'weight', 'text': '2 to 9 lbs', 'slot': 'ranges', 'claimed': '2 to 9 lbs',
+                                'published': 'under 10 lb', 'line': 'Swaddlers', 'size': '0',
+                                'evidence': "pampers.com's chart says under 10 lb"}], [], []),
+      (SOFT, 'unverified', [], [], [{'type': 'attribute', 'text': 'softer'}])], 1),
+    (70306, 'fabricated', 'fact_contradicted',
+     "fabricated: '6 to 12 lbs' for Swaddlers Size 1 — Pampers' record says 8 to 14 lb",
+     [(SIZE_1, 'fabricated', [{'type': 'weight', 'text': '6 to 12 lbs', 'slot': 'ranges', 'claimed': '6 to 12 lbs',
+                               'published': '8 to 14 lb', 'line': 'Swaddlers', 'size': '1', 'source': 'record',
+                               'evidence': "Pampers' record says 8 to 14 lb"}], [], [])], 0),
+    (70304, 'unscoreable', 'unverified', f"'{HYPO}' — not on the pages read; nothing contradicts it",
+     [(HYPO, 'unverified', [], [], [{'type': 'attribute', 'text': 'hypoallergenic'}])], 0),
+)
+
+
+def fl14_claims(e) -> None:
+    """FL14_CLAIMS on the loaded fixture: each run's answer, its outcome and its brand_claim."""
+    from sqlalchemy import text
+    with e.begin() as c:
+        for run_id, outcome, code, reason, sentences, decided in FL14_CLAIMS:
+            spans = [{'text': t, 'kind': 'attribute', 'verdict': v, 'facts_missing': m, 'facts_found': f,
+                      'facts_unverified': u, 'facts_unchecked': []} for t, v, m, f, u in sentences]
+            extraction = {'brand_mentioned': True, 'extraction_confident': True,
+                          'spans': [{'id': i + 1, 'text': t} for i, (t, *_rest) in enumerate(sentences)],
+                          'coder': {'version': 6, 'calls': []},
+                          'brand_claim': {'version': 6, 'spans': spans, 'decided_by': decided,
+                                          'index': {'version': 3, 'digest': 'fl14', 'size': 72}}}
+            c.execute(text("UPDATE soa_runs SET raw_response = :t WHERE id = :r"),
+                      {'t': ' '.join(t for t, *_rest in sentences), 'r': run_id})
+            c.execute(text("UPDATE soa_expectation_outcomes SET outcome = :o, reason_code = :c, outcome_reason = :w, "
+                           "extraction = :x WHERE run_id = :r"),
+                      {'o': outcome, 'c': code, 'w': reason, 'x': json.dumps(extraction), 'r': run_id})
+
+
+def engine(cycle: str = NAME):
+    """A fresh sqlite engine holding the console schema and the 2J-2 fixture
+    (with 2P-1's FL14 claims for cycle 'fl14')."""
     root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
     testing = os.path.join(root, 'packages', 'testing')
     if testing not in sys.path:
@@ -96,4 +143,6 @@ def engine():
     seed_console_db(e)
     f2j2.load(e, _encode)
     fl13_shapes(e)
+    if cycle == 'fl14':
+        fl14_claims(e)
     return e
