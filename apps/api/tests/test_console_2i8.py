@@ -134,9 +134,16 @@ def per_surface_view(endpoint, body):
         body = before_2l4(body)
         # 2O-1 adds the brand-direct coder count beside the score; no value it served moved
         body = {k: v for k, v in body.items() if k != 'brand_coder'}
+        # 2P-1 adds the pillars' deltas beside the dimensions' against a compared cycle
+        if isinstance(body.get('previous'), dict):
+            body['previous'] = {k: v for k, v in body['previous'].items() if k != 'pillar_deltas'}
     body = _strip_volatile(_strip_all(copy.deepcopy(body)))
     for k in DEFAULT_READERS.get(endpoint, ()):
         body.pop(k, None)
+    if endpoint in ('visibility', 'true-value'):
+        # 2P-1 adds the previous cycle and what moved since it (moved, drift) when the two compare
+        for k in ('previous', 'moved', 'drift'):
+            body.pop(k, None)
     if endpoint == 'visibility':
         # 2K-1 adds `brand_choice` beside each row (unprompted or comparison); no value it served moved
         for row in body.get('byQuestion') or []:
@@ -160,8 +167,9 @@ def per_surface_view(endpoint, body):
         # 2K-3 adds the start day in the merchant's zone beside `started`; 2K-4 the cycle's study
         for k in ('start_date_local', 'created_at_local', 'timezone', 'study'):
             body.pop(k, None)
-        # 2L-3 adds each product's and each signal's narrative
+        # 2L-3 adds each product's and each signal's narrative; 2P-1 the condition that failed
         for block in (body.get('by_surface') or {}).values():
+            block.pop('changes_condition', None)
             for item in (block.get('products') or []) + (block.get('signals') or []):
                 item.pop('narrative', None)
         for item in (body.get('products') or []) + (body.get('signals') or []):

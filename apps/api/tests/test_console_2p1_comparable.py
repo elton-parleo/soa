@@ -79,7 +79,7 @@ def _stored(db, cycle_id):
 
 def test_fl14_s_sequence_leaves_the_score_on_the_current_versions(http, db, upstream):
     _scored_at_column(db)
-    _pair(db, http, upstream)
+    _pair(db, http, upstream, changes=False)
     # the score stored before the rescores: brand-direct rows on coder 5 (2O-5)
     n = _coded(db, f2p1.ID_1, 5)
     first = _get(http, 'score', cycle=f2p1.CYCLE_1, merchant=WS)
@@ -119,7 +119,7 @@ def _history(http):
 
 def test_a_new_cycle_on_the_same_versions_is_comparable_everywhere(http, db, upstream):
     _scored_at_column(db)
-    _pair(db, http, upstream)
+    _pair(db, http, upstream, changes=False)
     _both_on(db, http, ea.BRAND_CODER_VERSION)
     score = _get(http, 'score', merchant=WS)
     assert score['previous']['comparable'] is True and score['previous']['cycle'] == f2p1.CYCLE_1
@@ -132,7 +132,7 @@ def test_a_new_cycle_on_the_same_versions_is_comparable_everywhere(http, db, ups
 
 def test_a_previous_cycle_on_an_older_coder_is_never_compared(http, db, upstream):
     _scored_at_column(db)
-    _pair(db, http, upstream)
+    _pair(db, http, upstream, changes=False)
     # cycle 1 rescored on all but its first ten brand-direct rows, which stay on coder 5
     _both_on(db, http, ea.BRAND_CODER_VERSION)
     _coded(db, f2p1.ID_1, 5, only=10)

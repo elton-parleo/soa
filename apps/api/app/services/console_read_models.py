@@ -546,7 +546,8 @@ def brand_claim_evidence(extraction: Optional[dict]) -> Optional[dict]:
     2O-4: and `sentences`, every claim sentence judged, in answer order, each
     {text, kind, verdict, facts_found, facts_missing, facts_unchecked,
     decided}, so the drawer lists them all, not only the one that decided.
-    2O-5: and `facts_unverified` beside each, on a row coder 5 decided."""
+    2O-5: and `facts_unverified` beside each, on a row coder 5 decided. 2P-1 (B4): and `evidence`,
+    what the brand states instead of each contradicted fact."""
     claim = (extraction or {}).get('brand_claim') if isinstance(extraction, dict) else None
     if not isinstance(claim, dict):
         return None
@@ -560,6 +561,10 @@ def brand_claim_evidence(extraction: Optional[dict]) -> Optional[dict]:
            'sentences': [{'text': s.get('text'), 'kind': s.get('kind'), 'verdict': s.get('verdict'),
                           'facts_found': s.get('facts_found') or [], 'facts_missing': s.get('facts_missing') or [],
                           'facts_unchecked': s.get('facts_unchecked') or [], 'decided': i == at,
+                          # 2P-1 (B4): what the brand states instead of each contradicted fact
+                          # ("pampers.com's chart says under 10 lb"), the scorer's words since coder 6
+                          'evidence': [f['evidence'] for f in s.get('facts_missing') or []
+                                       if isinstance(f, dict) and f.get('evidence')],
                           **({'facts_unverified': s['facts_unverified']} if 'facts_unverified' in s else {})}
                          for i, s in enumerate(spans)]}
     if 'facts_unverified' in span:
@@ -3844,4 +3849,177 @@ def brand_baseline(*, attribute: Optional[dict], vis: Optional[dict], promo: Opt
         mine, n, _rivals, named = first
         out.append({'key': 'category', 'label': t['baseline.category'], 'value': f"{named} of {n}",
                     'note': t['baseline.category.note'].format(brand=brand, first=mine), 'n': n, 'k': named})
+    return out
+
+
+# ─── 2P-1 (B3): what moved since a compared previous cycle ─────────────────
+#
+# Four reads that only a second cycle has, each against the previous scored
+# cycle and only when the shared rule (soa_shared/cycle_compare, as the
+# Changes block reads it) says the two compare. Not compared, each is absent
+# and the reason rides beside it, never a delta.
+
+MOVED_TEMPLATES = {
+    'prove.new': 'New since {code}.',
+    'prove.ended': 'Ended since {code}. {retailer} was read on {date} and no longer ran it.',
+    'prove.not_read': 'Not read on {date}: {retailer} walled every read. Live in {code}.',
+    'prove.delta': '{k} of {n} this cycle against {b} of {m} in {code}.',
+    'tv.drift': '{product} at {column}: {was} in {code}, {now} this cycle.',
+    'vis.first': '{name} first in {now} of {n} brand-choice answers, {then} in {code}.',
+    'baseline.moved': '{label}: {then} in {code}, {now} this cycle.',
+}
+
+
+def _signed(d: int) -> str:
+    return f"+{d}" if d > 0 else str(d)
+
+
+def _dir(d: int) -> str:
+    return 'up' if d > 0 else 'down' if d < 0 else 'flat'
+
+
+def prove_changes(body: dict, deals: Optional[dict], prev_deals: Optional[dict], promo: Optional[dict],
+                  prev_promo: Optional[dict], prev_code: str) -> dict:
+    """
+    /prove against a compared previous cycle: each row's `change` ('new' when
+    the deal was not live in the previous cycle's read, 'kept' otherwise),
+    `ended` (the previous cycle's deals no longer live, each 'ended' when its
+    retailer was read this cycle, 'not_read' when it was walled: a deal on a
+    shelf nobody read never ended), and `aside.delta` against the previous
+    pass-through. Changes `body` in place and returns it.
+    """
+    from soa_shared import retailers as af
+    t = MOVED_TEMPLATES
+    day = _read_day(deals, None) or 'the read date'
+    before = {ppt.deal_id(d): d for d in (prev_deals or {}).get('deals') or []}
+    now = {ppt.deal_id(d) for d in (deals or {}).get('deals') or []}
+    titles = {ppt.title(d): ppt.deal_id(d) for d in (deals or {}).get('deals') or []}
+    for row in body.get('rows') or []:
+        new = titles.get(row['title']) not in before
+        row['change'] = 'new' if new else 'kept'
+        if new:
+            row['change_note'] = t['prove.new'].format(code=prev_code)
+    walled = set((deals or {}).get('walled') or [])
+    ended = []
+    for key, deal in before.items():
+        if key in now:
+            continue
+        domain = deal.get('retailer_domain')
+        state = 'not_read' if domain in walled else 'ended'
+        retailer = af.retailer_name(domain)
+        ended.append({'retailer': retailer, 'retailer_domain': domain, 'title': ppt.title(deal),
+                      'kind': deal.get('kind'), 'kind_label': ppt.kind_words(deal), 'change': state,
+                      'note': t[f'prove.{state}'].format(code=prev_code, retailer=retailer, date=day)})
+    body['ended'] = ended
+    if body.get('aside') and promo is not None and prev_promo is not None and prev_promo.get('n'):
+        d = promo['k'] - prev_promo['k']
+        body['aside']['delta'] = {'delta': _signed(d), 'dir': _dir(d), 'prev': prev_promo['k'], 'of_prev': prev_promo['n'],
+                                  'detail': t['prove.delta'].format(k=promo['k'], n=promo['n'], b=prev_promo['k'],
+                                                                   m=prev_promo['n'], code=prev_code)}
+    return body
+
+
+#: a True Value cell's verdict, as the drift compares it (a stale quote is its own)
+def _verdict(cell: dict) -> Optional[str]:
+    return cell.get('outcome') if cell.get('outcome') == 'stale' else cell.get('status')
+
+
+def true_value_drift(now: dict, prev: dict, prev_code: str) -> List[dict]:
+    """
+    The cells that changed verdict since a compared previous cycle: one per
+    product x column both cycles quoted, whose verdict (exact, wrong, stale,
+    partial, unverifiable) differs, on the cycle's `surface`. Each {product,
+    variant_id, column, was, now, was_quoted, now_quoted, was_live, now_live,
+    dir, detail}; `dir` 'better' when it moved to exact, 'worse' when it moved
+    from exact, else 'changed'.
+    """
+    t = MOVED_TEMPLATES
+    names = {c['id']: c.get('name') or c['id'] for c in (now.get('columns') or []) + (prev.get('columns') or [])}
+    then = {(r.get('variant_id') or r.get('product'), col): cell for r in prev.get('rows') or []
+            for col, cell in (r.get('cells') or {}).items() if cell.get('runs')}
+    out = []
+    for row in now.get('rows') or []:
+        for col, cell in (row.get('cells') or {}).items():
+            was = then.get((row.get('variant_id') or row.get('product'), col))
+            if not cell.get('runs') or was is None or _verdict(was) == _verdict(cell):
+                continue
+            a, b = _verdict(was), _verdict(cell)
+            out.append({'product': row.get('product'), 'variant_id': row.get('variant_id'), 'column': col,
+                        'column_name': names.get(col, col), 'was': a, 'now': b,
+                        'was_quoted': was.get('quoted'), 'now_quoted': cell.get('quoted'),
+                        'was_live': was.get('live'), 'now_live': cell.get('live'),
+                        'dir': 'better' if b == 'exact' else 'worse' if a == 'exact' else 'changed',
+                        'detail': t['tv.drift'].format(product=row.get('product'), column=names.get(col, col),
+                                                      was=a, now=b, code=prev_code)})
+    return out
+
+
+def visibility_movement(vis: dict, prev_vis: dict, prev_code: str) -> Dict[str, dict]:
+    """
+    Visibility against a compared previous cycle, per surface: each brand's
+    first picks on the brand-choice answers (the ranking's set) now and then,
+    with the delta; the routing table's coverage and each retailer's first
+    named; the retired lines' counts. {surface: {brands, coverage, routing,
+    retired}}; a block this cycle did not measure is absent.
+    """
+    t = MOVED_TEMPLATES
+    ranking, before = vis.get('ranking') or {}, prev_vis.get('ranking') or {}
+    use = 'brand_choice' if ranking.get('default_tier') == VIS_BRAND_CHOICE and ranking.get('brand_choice') else None
+    rows_now = ((ranking.get(use) or {}) if use else ranking).get('rows') or []
+    rows_then = ((before.get(use) or {}) if use else before).get('rows') or []
+    out = {}
+    for s in [x for x in (vis.get('surfaces') or [{'surface': surfaces.ALL}])]:
+        s = s['surface'] if isinstance(s, dict) else s
+        then = {r['name']: ((r.get('surfaces') or {}).get(s) or {}) for r in rows_then}
+        n = ((ranking.get(use) or {}) if use else ranking).get('denoms', {}).get(s)
+        brands = []
+        for r in rows_now:
+            here = (r.get('surfaces') or {}).get(s) or {}
+            if not here and s != surfaces.ALL:
+                continue
+            first = here.get('first', r.get('first') if s == surfaces.ALL else 0) or 0
+            was = (then.get(r['name']) or {}).get('first')
+            if was is None and r['name'] not in then:
+                was = 0
+            d = first - (was or 0)
+            brands.append({'name': r['name'], 'you': bool(r.get('you')), 'first': first, 'prev_first': was,
+                           'delta': _signed(d), 'dir': _dir(d),
+                           'detail': t['vis.first'].format(name=r['name'], now=first, n=n or 'the', then=was,
+                                                          code=prev_code)})
+        block = {'brands': sorted(brands, key=lambda b: (b['dir'] == 'flat', -abs(int(b['delta'])), b['name']))}
+        cov_now, cov_then = _coverage_counts(vis, s), _coverage_counts(prev_vis, s)
+        if cov_now and cov_then:
+            d = cov_now[0] - cov_then[0]
+            block['coverage'] = {'now': cov_now[0], 'of_now': cov_now[1], 'prev': cov_then[0], 'of_prev': cov_then[1],
+                                 'delta': _signed(d), 'dir': _dir(d)}
+            first_then = {r.get('name'): (r.get('surfaces') or {}).get(s, 0)
+                          for r in ((prev_vis.get('routing') or {}).get('rows') or [])}
+            block['routing'] = [{'name': r.get('name'), 'domain': r.get('domain'),
+                                 'first': (r.get('surfaces') or {}).get(s, 0),
+                                 'prev_first': first_then.get(r.get('name'), 0),
+                                 'delta': _signed((r.get('surfaces') or {}).get(s, 0) - first_then.get(r.get('name'), 0))}
+                                for r in (vis.get('routing') or {}).get('rows') or []]
+        ret_now, ret_then = _retired_counts(vis, s), _retired_counts(prev_vis, s)
+        if ret_now and ret_then:
+            d = ret_now[0] - ret_then[0]
+            block['retired'] = {'now': ret_now[0], 'of_now': ret_now[1], 'prev': ret_then[0], 'of_prev': ret_then[1],
+                                'delta': _signed(d), 'dir': _dir(d)}
+        out[s] = block
+    return out
+
+
+def since_baseline(now_rows: List[dict], base_rows: List[dict], base_code: str) -> List[dict]:
+    """Impact's "What moved since the baseline": each baseline measure both
+    cycles took, {key, label, then, now, delta, dir, detail}, k of n each."""
+    t = MOVED_TEMPLATES
+    then = {r['key']: r for r in base_rows or []}
+    out = []
+    for r in now_rows or []:
+        b = then.get(r['key'])
+        if b is None or r.get('k') is None or b.get('k') is None:
+            continue
+        d = r['k'] - b['k']
+        out.append({'key': r['key'], 'label': r['label'], 'then': b['value'], 'now': r['value'],
+                    'delta': _signed(d), 'dir': _dir(d),
+                    'detail': t['baseline.moved'].format(label=r['label'], then=b['value'], now=r['value'], code=base_code)})
     return out
