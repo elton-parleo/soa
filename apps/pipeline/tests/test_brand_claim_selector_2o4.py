@@ -221,12 +221,12 @@ def test_what_is_a_claim(answer, question, outcome, code):
 def test_the_record_stores_every_judged_sentence_and_how_it_was_chosen():
     one = next(a for a in ANSWERS['answers'] if a['id'] == 8)
     record, decided = judge(one['answer'], one['question'])
-    assert record['coder'] == {'version': 5, 'question': one['question'], 'calls': []}
+    assert record['coder'] == {'version': 6, 'question': one['question'], 'calls': []}
     assert record['selector']['units'] == 5 and record['selector']['about_brand'] == 4
     assert [c['via'] for c in record['selector']['claims']] == ['named', 'lead_in', 'lead_in', 'lead_in']
     assert record['selector']['vocabulary']['lines'][:2] == ['Swaddlers', 'Baby Dry']
     claim = decided['brand_claim']
-    assert claim['version'] == 5 and len(claim['spans']) == 4
+    assert claim['version'] == 6 and len(claim['spans']) == 4
     # 2O-5: under a lead-in naming no line, Size 7 is unverified (the chart is Swaddlers', Baby Dry's ...)
     assert claim['spans'][3]['facts_unverified'][0] == {'type': 'size', 'text': 'Size 7'}
     assert claim['index']['by_source'] == {'record': 3, 'catalog': 34, 'brand_pages': 154}
@@ -415,7 +415,7 @@ def test_the_rescore_twice_and_dry_run_print_the_same_brand_direct_lines(db, cap
     assert ('brand-direct claims (2O-4: selected by rule, no model call; 2O-5: fabricated is contradicted by the '
             'fact index, absent is unverified):') in second
     digest = index().digest()
-    assert f'    fact index           191 facts (record 3, catalog 34, brand pages 154); v2 {digest}' in second
+    assert f'    fact index           191 facts (record 3, catalog 34, brand pages 154); v3 {digest}' in second
     # 2O-5: the slots, and the split with unverified apart from unscoreable
     assert "    index slots          lines 10 (status known 6, retired: none; the brand's line list not served)" in second
     assert '      ranges per size    Newborn 6, Size 1 6, Size 2 6, Size 3 6, Size 4 6, Size 5 8, Size 6 6' in second

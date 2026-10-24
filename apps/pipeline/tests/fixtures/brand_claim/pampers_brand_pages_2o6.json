@@ -1,0 +1,517 @@
+{
+ "_note": "2O-6: the brand-page rows and the payload's line list as supply serves them\nafter 2O-6 (parleo-supply-app truesync/fullloop/brand_page.py and\nprices.line_list), from supply's RECORDED pampers.com pages (tests/fixtures/\nreads/pampers-2026-10-20, honest fetches made by supply's reader in reference\nrun 11, 2026-10-20).",
+ "brand_line_sources": {
+  "Pampers AMORE": [
+   "feed"
+  ],
+  "Pampers Baby-Dry": [
+   "feed"
+  ],
+  "Pampers Cruisers 360": [
+   "feed",
+   "page"
+  ],
+  "Pampers Easy Ups": [
+   "page_link"
+  ],
+  "Pampers Pure Protection": [
+   "feed"
+  ],
+  "Pampers Sensitive": [
+   "page_link"
+  ],
+  "Pampers Swaddlers": [
+   "feed",
+   "page",
+   "page_link"
+  ],
+  "Pampers Swaddlers 360": [
+   "page_link"
+  ],
+  "Pampers Swaddlers Ultra Day + Night": [
+   "feed"
+  ],
+  "Pampers Zzz": [
+   "feed",
+   "page",
+   "page_link"
+  ]
+ },
+ "brand_lines": [
+  "Pampers Swaddlers",
+  "Pampers Swaddlers Ultra Day + Night",
+  "Pampers Pure Protection",
+  "Pampers AMORE",
+  "Pampers Baby-Dry",
+  "Pampers Cruisers 360",
+  "Pampers Zzz",
+  "Pampers Swaddlers 360",
+  "Pampers Sensitive",
+  "Pampers Easy Ups"
+ ],
+ "brand_lines_complete": false,
+ "feed_product_names": [
+  "Pampers Swaddlers",
+  "Pampers Swaddlers Ultra Day + Night",
+  "Pampers Pure Protection",
+  "Pampers AMORE",
+  "Pampers Baby-Dry",
+  "Pampers Cruisers 360",
+  "Pampers Zzz"
+ ],
+ "prices": [
+  {
+   "bullets": [
+    "Perfect for Newborn",
+    "Fragrance Free",
+    "#1 Brand.* For Sleep",
+    "Wetness Indicator",
+    "Diapers",
+    "Dryness & Comfort",
+    "OEKO-TEX® STANDARD 100 Certification",
+    "Gentle on Delicate Skin",
+    "Babylist’s Best Diaper for Sensitive Skin in 2024",
+    "Accredited as skin safe by the Skin Health Alliance",
+    "Pampers Swaddlers are designed to keep baby’s skin dry and comfortable.",
+    "Pampers Swaddlers are designed to help create a snug, secure fit for newborns, reducing gaps that can lead to leaks. Soft leg cuffs gently seal around the legs, while the contoured shape hugs your baby’s body for added protection. In sizes 1 and up, the Blowout Barrier helps stop messes from traveling up the back. When sized and fastened correctly, these features work together to provide up to 100% blowout and leak protection .",
+    "These hypoallergenic baby diapers feature an absorbent KeepDry™ liner that locks away wetness and help keep your baby drier than the luxury diaper brand.",
+    "Free of fragrance, parabens and latex (no natural rubber), Pampers Swaddlers are trusted by experts and parents alike and are recognized by Best of Babylist and Newsweek Brandspark Most Trusted by American Shoppers 2024.",
+    "Pair Pampers Swaddlers with Pampers Sensitive Baby Wipes for clinically proven protection.",
+    "Pampers Swaddlers diapers were named Best Overall for Newborns by Parents in 2026.",
+    "Pampers Swaddlers were named Overall Best Diapers Available in Stores by The Bump in 2026.",
+    "Pampers Swaddlers were named a Babylist Pick for Best Disposable Diapers in 2026."
+   ],
+   "final_url": "https://www.pampers.com/en-us/products/pampers-swaddlers-diapers",
+   "json_ld": {
+    "@type": "ProductGroup",
+    "additionalProperty": [
+     {
+      "@type": "PropertyValue",
+      "name": "Size Range",
+      "value": "Preemie, Newborn, 1, 2, 3, 4, 5, 6, 7, 8"
+     },
+     {
+      "@type": "PropertyValue",
+      "name": "Age Range",
+      "value": "Newborn, Baby"
+     },
+     {
+      "@type": "PropertyValue",
+      "name": "Baby Weight",
+      "value": "<6 lbs, <10 lbs, 8 - 14 lbs, 10 - 22 lbs, 13 - 26 lbs, 15 - 34 lbs, 27+ lbs, 35+ lbs, 41+ lbs, 46+ lbs"
+     },
+     {
+      "@type": "PropertyValue",
+      "name": "Pack Count",
+      "value": "19, 27, 29, 38, 44, 58, 60, 70, 72, 84, 88, 100, 104, 108, 112, 120, 132, 136, 140, 148, 150, 164, 168, 186, 198"
+     }
+    ],
+    "category": "Taped Diapers",
+    "description": "Pampers Swaddlers™ for babies and newborns offer gentle care for sensitive skin and stop blowouts with trusted leak protection. Find out and shop now!",
+    "hasVariant": [
+     {
+      "@type": "Product",
+      "description": "<6 lb",
+      "gtin13": "037000863403",
+      "name": "Preemie",
+      "size": "Preemie",
+      "sku": "037000863403"
+     },
+     {
+      "@type": "Product",
+      "description": "<10 lbs",
+      "gtin13": "037000772552",
+      "name": "Newborn",
+      "size": "Newborn",
+      "sku": "037000772552"
+     },
+     {
+      "@type": "Product",
+      "description": "8 - 14 lbs",
+      "gtin13": "037000799788",
+      "name": "1",
+      "size": "1",
+      "sku": "037000799788"
+     },
+     {
+      "@type": "Product",
+      "description": "10-22 lbs",
+      "gtin13": "037000833109",
+      "name": "2",
+      "size": "2",
+      "sku": "037000833109"
+     },
+     {
+      "@type": "Product",
+      "description": "13-26 lbs",
+      "gtin13": "037000833178",
+      "name": "3",
+      "size": "3",
+      "sku": "037000833178"
+     },
+     {
+      "@type": "Product",
+      "description": "15-34 lbs",
+      "gtin13": "037000799818",
+      "name": "4",
+      "size": "4",
+      "sku": "037000799818"
+     },
+     {
+      "@type": "Product",
+      "description": "20-37 lbs",
+      "gtin13": "037000799825",
+      "name": "5",
+      "size": "5",
+      "sku": "037000799825"
+     },
+     {
+      "@type": "Product",
+      "description": "23-44 lbs",
+      "gtin13": "037000833086",
+      "name": "6",
+      "size": "6",
+      "sku": "037000833086"
+     },
+     {
+      "@type": "Product",
+      "description": "26-50 lbs",
+      "gtin13": "030772098141",
+      "name": "7",
+      "size": "7",
+      "sku": "030772098141"
+     },
+     {
+      "@type": "Product",
+      "description": "30+ lbs",
+      "gtin13": "030772098639",
+      "name": "8",
+      "size": "8",
+      "sku": "030772098639"
+     }
+    ],
+    "name": "Pampers® Swaddlers™ Diapers for Babies and Newborns",
+    "url": "https://www.pampers.com/en-us/products/pampers-swaddlers-diapers"
+   },
+   "page_title": "Pampers® Swaddlers™ Diapers for Babies and Newborns",
+   "price": null,
+   "recording": "parleo-supply-app tests/fixtures/reads/pampers-2026-10-20/pampers.com_037000749622__fetch__read72.html.gz",
+   "retailer_domain": "pampers.com",
+   "role": "own",
+   "size_chart": [
+    {
+     "evidence": "Preemie <6 lb",
+     "max": 6.0,
+     "min": null,
+     "size": "preemie"
+    },
+    {
+     "evidence": "Newborn <10 lbs",
+     "max": 10.0,
+     "min": null,
+     "size": "newborn"
+    },
+    {
+     "evidence": "1 8 - 14 lbs",
+     "max": 14.0,
+     "min": 8.0,
+     "size": "1"
+    },
+    {
+     "evidence": "2 10-22 lbs",
+     "max": 22.0,
+     "min": 10.0,
+     "size": "2"
+    },
+    {
+     "evidence": "3 13-26 lbs",
+     "max": 26.0,
+     "min": 13.0,
+     "size": "3"
+    },
+    {
+     "evidence": "4 15-34 lbs",
+     "max": 34.0,
+     "min": 15.0,
+     "size": "4"
+    },
+    {
+     "evidence": "5 20-37 lbs",
+     "max": 37.0,
+     "min": 20.0,
+     "size": "5"
+    },
+    {
+     "evidence": "6 23-44 lbs",
+     "max": 44.0,
+     "min": 23.0,
+     "size": "6"
+    },
+    {
+     "evidence": "7 26-50 lbs",
+     "max": 50.0,
+     "min": 26.0,
+     "size": "7"
+    },
+    {
+     "evidence": "8 30+ lbs",
+     "max": null,
+     "min": 30.0,
+     "size": "8"
+    }
+   ],
+   "url": "https://www.pampers.com/en-us/products/pampers-swaddlers-diapers",
+   "variant_ref": null
+  },
+  {
+   "bullets": [
+    "#1 Brand. For Sleep.",
+    "Peaceful Nights",
+    "All-Around LeakGuard",
+    "More Absorbent",
+    "Overnight Diapers",
+    "OEKO-TEX® STANDARD 100 Certification",
+    "Gentle on Delicate Skin",
+    "Accredited by the Skin Health Alliance",
+    "Experience the peace of mind that comes with Pampers ZZZ overnight diapers, designed with your baby's comfort in mind.",
+    "With 50% more absorbent zones vs. everyday-of-the-year brand, these diapers gently cradle your little one, ensuring that wetness is distributed evenly to keep their delicate skin dry. The Blowout Barrier and soft, gentle leg protection create a secure fit that shields your baby from leaks at every angle, allowing them to dream peacefully.",
+    "Recognized as the Best Overall Overnight Diaper in 2025 by What to Expect and proudly recommended by pediatricians, Pampers ZZZ is here to support your family’s journey through the night, so you can focus on what truly matters—creating beautiful memories with your baby."
+   ],
+   "final_url": "https://www.pampers.com/en-us/products/pampers-zzz",
+   "json_ld": {
+    "@type": "ProductGroup",
+    "additionalProperty": [
+     {
+      "@type": "PropertyValue",
+      "name": "Size Range",
+      "value": "3, 4, 5, 6"
+     },
+     {
+      "@type": "PropertyValue",
+      "name": "Baby Weight",
+      "value": "13 - 26 lbs, 15 - 34 lbs, 27+ lbs, 35+ lbs"
+     },
+     {
+      "@type": "PropertyValue",
+      "name": "Pack Count",
+      "value": "72, 88, 104, 116"
+     }
+    ],
+    "category": "Taped Diapers",
+    "description": "Say goodnight to overnight wakeups and hello to Pampers ZZZ, the overnight diaper designed with extra absorbency for more peaceful nights. ",
+    "hasVariant": [
+     {
+      "@type": "Product",
+      "description": "16 - 28 lbs",
+      "gtin13": "037000833963",
+      "name": "3",
+      "size": "3",
+      "sku": "037000833963"
+     },
+     {
+      "@type": "Product",
+      "description": "22-37 lbs",
+      "gtin13": "037000833970",
+      "name": "4",
+      "size": "4",
+      "sku": "037000833970"
+     },
+     {
+      "@type": "Product",
+      "description": "27+ lbs",
+      "gtin13": "037000833987",
+      "name": "5",
+      "size": "5",
+      "sku": "037000833987"
+     },
+     {
+      "@type": "Product",
+      "description": "35+ lbs",
+      "gtin13": "037000834021",
+      "name": "6",
+      "size": "6",
+      "sku": "037000834021"
+     }
+    ],
+    "name": "Pampers® Zzz | Pampers",
+    "url": "https://www.pampers.com/en-us/products/pampers-zzz"
+   },
+   "page_title": "Pampers® Zzz | Pampers",
+   "price": null,
+   "recording": "parleo-supply-app tests/fixtures/reads/pampers-2026-10-20/pampers.com_037000833970__fetch__read135.html.gz",
+   "retailer_domain": "pampers.com",
+   "role": "own",
+   "size_chart": [
+    {
+     "evidence": "3 16 - 28 lbs",
+     "max": 28.0,
+     "min": 16.0,
+     "size": "3"
+    },
+    {
+     "evidence": "4 22-37 lbs",
+     "max": 37.0,
+     "min": 22.0,
+     "size": "4"
+    },
+    {
+     "evidence": "5 27+ lbs",
+     "max": null,
+     "min": 27.0,
+     "size": "5"
+    },
+    {
+     "evidence": "6 35+ lbs",
+     "max": null,
+     "min": 35.0,
+     "size": "6"
+    }
+   ],
+   "url": "https://www.pampers.com/en-us/products/pampers-zzz",
+   "variant_ref": null
+  },
+  {
+   "bullets": [
+    "Active Fit",
+    "Worry-free Play",
+    "New EZ Off Tabs",
+    "Easy On",
+    "Pull-On Diapers",
+    "Active fit",
+    "Pediatrician Recommended",
+    "Gentle on Delicate Skin",
+    "Accredited by the Skin Health Alliance",
+    "Pampers Cruisers 360 Pull-On Diapers provide your baby with up to 100% leakproof fit, so they can play worry-free",
+    "Unlike ordinary diapers, Pampers Cruisers 360 pull-on diapers stretch comfortably around your baby's waist and adapt to their every move.",
+    "Pampers Cruisers 360 has a 360-degree stretchy waistband designed to quickly and easily pull up onto your wiggly baby.",
+    "New EZ-Off tabs help make changes quick & easy. Just pull-on the diaper like normal, pull off the new EZ-Off tabs completely on both sides, and wrap up the diaper using the tabs for secure and quick disposal.",
+    "Pampers Cruisers 360 are made for active babies, even bigger, fuller babies. Their 360° Stretchy Waistband adapts to your baby’s shape and movement, delivering a secure, stay-put fit without ordinary diaper tape. The flexible design helps reduce gaps and prevent leaks, even during busy playtimes."
+   ],
+   "final_url": "https://www.pampers.com/en-us/products/pampers-cruisers-360",
+   "json_ld": {
+    "@type": "ProductGroup",
+    "additionalProperty": [
+     {
+      "@type": "PropertyValue",
+      "name": "Size Range",
+      "value": "3, 4, 5, 6, 7, 8"
+     },
+     {
+      "@type": "PropertyValue",
+      "name": "Age Range",
+      "value": "Toddler"
+     },
+     {
+      "@type": "PropertyValue",
+      "name": "Baby Weight",
+      "value": "13 - 26 lbs, 15 - 34 lbs, 27+ lbs, 35+ lbs, 41+ lbs, 46+ lbs"
+     },
+     {
+      "@type": "PropertyValue",
+      "name": "Pack Count",
+      "value": "21, 26, 56, 58, 60, 66, 70, 74, 76, 80, 88, 96, 100, 104, 108, 116, 132, 136"
+     }
+    ],
+    "category": "Pull-On Diapers",
+    "description": "Pull-on diapers made for active babies who crawl, stand, or walk, with a flexible fit and leak-proof protection. Shop Pampers Cruisers 360.",
+    "hasVariant": [
+     {
+      "@type": "Product",
+      "description": "16 - 28 lbs",
+      "gtin13": "037000716556",
+      "name": "3",
+      "size": "3",
+      "sku": "037000716556"
+     },
+     {
+      "@type": "Product",
+      "description": "22 - 37 lbs",
+      "gtin13": "037000716679",
+      "name": "4",
+      "size": "4",
+      "sku": "037000716679"
+     },
+     {
+      "@type": "Product",
+      "description": "27+ lbs",
+      "gtin13": "037000716549",
+      "name": "5",
+      "size": "5",
+      "sku": "037000716549"
+     },
+     {
+      "@type": "Product",
+      "description": "35+ lbs",
+      "gtin13": "030772046074",
+      "name": "6",
+      "size": "6",
+      "sku": "030772046074"
+     },
+     {
+      "@type": "Product",
+      "description": "41+ lbs",
+      "gtin13": "037000717072",
+      "name": "7",
+      "size": "7",
+      "sku": "037000717072"
+     },
+     {
+      "@type": "Product",
+      "description": "46+ lbs",
+      "gtin13": "80847562",
+      "name": "8",
+      "size": "8",
+      "sku": "80847562"
+     }
+    ],
+    "name": "Pampers® Cruisers 360° Pull-on Diapers | Pampers",
+    "url": "https://www.pampers.com/en-us/products/pampers-cruisers-360"
+   },
+   "page_title": "Pampers® Cruisers 360° Pull-on Diapers | Pampers",
+   "price": null,
+   "recording": "parleo-supply-app tests/fixtures/reads/pampers-2026-10-20/pampers.com_037000717379__fetch__read124.html.gz",
+   "retailer_domain": "pampers.com",
+   "role": "own",
+   "size_chart": [
+    {
+     "evidence": "3 16 - 28 lbs",
+     "max": 28.0,
+     "min": 16.0,
+     "size": "3"
+    },
+    {
+     "evidence": "4 22 - 37 lbs",
+     "max": 37.0,
+     "min": 22.0,
+     "size": "4"
+    },
+    {
+     "evidence": "5 27+ lbs",
+     "max": null,
+     "min": 27.0,
+     "size": "5"
+    },
+    {
+     "evidence": "6 35+ lbs",
+     "max": null,
+     "min": 35.0,
+     "size": "6"
+    },
+    {
+     "evidence": "7 41+ lbs",
+     "max": null,
+     "min": 41.0,
+     "size": "7"
+    },
+    {
+     "evidence": "8 46+ lbs",
+     "max": null,
+     "min": 46.0,
+     "size": "8"
+    }
+   ],
+   "url": "https://www.pampers.com/en-us/products/pampers-cruisers-360",
+   "variant_ref": null
+  }
+ ]
+}

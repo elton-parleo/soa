@@ -157,7 +157,11 @@ BRAND_OUTCOMES = BRAND_ASSESSMENTS + ['absent', 'unscoreable']
 # `unverified`. A price is always unverified in a brand-direct answer (the
 # price tier judges prices), a store off the merchant's list too (coverage
 # judges it).
-BRAND_CODER_VERSION = 5
+# 2O-6: version 6. Pack counts are an open set: a count the line's page does
+# not list is UNVERIFIED (a club-only pack), never contradicted; the brand's
+# line list contradicts only when the payload says it is complete; a line's
+# page bullets are read for its attributes.
+BRAND_CODER_VERSION = 6
 UNVERIFIED = 'unverified'
 UNVERIFIED_NOTE = 'not on the pages read; nothing contradicts it'
 CODER_DISAGREED = 'coder_disagreed'

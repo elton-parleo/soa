@@ -102,13 +102,16 @@ from clients import truesync_client as supply_fields
 #: state it otherwise (brand-claim coder version 5); one the index does not
 #: hold is unverified, outside every count. No dimension reads it;
 #: comparability as 2O-3 made it.
-SCORER_VERSION = "15"
+#: 2O-6: "16", pack counts an open set (a count off the line's page is
+#: unverified, never fabricated) and the line list closed only when complete
+#: (brand-claim coder version 6). No dimension reads it.
+SCORER_VERSION = "16"
 #: The version a cycle whose brand-direct outcomes predate 2O-1 compares as.
 SINGLE_CALL_CODER_VERSION = "11"
 #: 2O-3: the scorer version each brand-claim coder version's outcomes compare as
 #: (None: one call, before 2O-1).
 CODER_SCORER_VERSIONS = {None: SINGLE_CALL_CODER_VERSION, 1: SINGLE_CALL_CODER_VERSION, 2: "12", 3: "13", 4: "14",
-                         BRAND_CODER_VERSION: SCORER_VERSION}
+                         5: "15", BRAND_CODER_VERSION: SCORER_VERSION}
 #: The adapter's own revision, beside the scorer's: a change to how loop
 #: counts become scorer inputs re-scores stored cycles too. Not a scorer
 #: version and never shown as one.
@@ -1081,10 +1084,10 @@ def comparable_version(body: Optional[dict]) -> Optional[str]:
     coder = body.get('brand_coder')
     if not isinstance(coder, dict) or coder.get('coded', 0) >= coder.get('of', 0):
         return version
-    if str(version) in ("13", "14", SCORER_VERSION):
+    if str(version) in ("13", "14", "15", SCORER_VERSION):
         # 2O-3: the version the oldest outcome was coded under (2O-4: a score
         # stored under 13 too, its block counting version-3 rows; 2O-5: and
-        # one under 14, version-4 rows)
+        # one under 14, version-4 rows; 2O-6: under 15, version-5 rows)
         return CODER_SCORER_VERSIONS.get(coder.get('oldest'), SINGLE_CALL_CODER_VERSION)
     if str(version) == "12":
         # a score stored under 2O-1, which counted version-2 rows only
@@ -1294,7 +1297,8 @@ SCORER_CHANGES = {'7': 'ungrounded surfaces excluded from pooling',
                   '12': 'brand-direct answers coded by two agreeing calls',
                   '13': "brand-direct verdict decided from the claim's facts",
                   '14': 'brand-direct claims selected by rule, no model call',
-                  '15': 'brand-direct fabricated means contradicted by the brand; absent is unverified'}
+                  '15': 'brand-direct fabricated means contradicted by the brand; absent is unverified',
+                  '16': 'brand-direct pack counts an open set; a count off the page is unverified'}
 
 
 def _no_rivals(body: dict) -> bool:
@@ -1326,7 +1330,9 @@ SCORER_CHANGE_APPLIES = {'7': lambda new: bool((new.get('coverage') or {}).get('
                          # 2O-4 never moves a score either
                          '14': lambda _new: False,
                          # nor 2O-5
-                         '15': lambda _new: False}
+                         '15': lambda _new: False,
+                         # nor 2O-6
+                         '16': lambda _new: False}
 
 
 _NOT_CARRIED = object()

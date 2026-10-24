@@ -7828,3 +7828,47 @@ built by `fixtures/build_brand_pages_2o5.py`; FL14's 170 fabricated shaped from 
 `fixtures/brand_claim/fl14_fabricated_2o5.json` built by `fixtures/build_fl14_fabricated_2o5.py` with each answer's
 2O-4 verdict recorded by running 2O-4's code), `apps/api/tests/test_console_2o5.py`. The 2O-3 and 2O-4 tests
 move to the new verdict where a fact was merely absent.
+
+## 2O-6: counts are an open set (console scorer 16)
+
+2O-5 checked pack counts per line against the brand page and flagged the risk itself: a club-only pack (Swaddlers
+210 ct at Sam's Club) is on no pampers.com page and would read as fabricated. Now:
+
+* **Counts are an open set.** A count the line's page lists is found; one it does not is `unverified` (slot
+  `counts`, the page's list as `published`), never contradicted. Another line's count grounds nothing about this
+  one. `counts_complete` on a line now says only that its page stated its counts; the printout reads "(the page's
+  list: …; open: a count off it is unverified)".
+* **The closed sets still contradict:** a line's sizes (its chart and `hasVariant`), a (line, size)'s weight range,
+  a line's status, and the brand's lines, only when the payload says the list is complete
+  (`brand_lines_complete: true`). Supply serves `brand_lines` from the feed's product names and the lines the
+  brand pages read name (their own and the product pages they link), always with `brand_lines_complete: false`:
+  on the three pampers.com pages read, Easy Ups and Swaddlers 360 are linked, Ninjamas and Splashers are not. So
+  a line on the served list is grounded and a line off it is unverified; the index stamps `brand_lines_complete`
+  in its slots, and the printout reads "the brand's line list N lines, open: a line off it is unverified".
+* **Attributes from the bullets.** An own-page row's `bullets` (supply 2O-6: the hero's feature tags, the product
+  text block, the badges) are the line's attribute words: "Fragrance Free" on the Swaddlers page contradicts
+  "lightly scented" (or "contains fragrance") about Swaddlers; an attribute no page states stays unverified, and
+  another line's page says nothing about this one. A word the text negates is never on the line ("Free of
+  fragrance, parabens and latex" states fragrance free, paraben free and latex free, not fragrance:
+  `stated_terms`, the reading `facts_in` already gave a claim).
+
+`FactIndex` version **3** (`brand_lines_complete` on the index and its digest). Brand-claim coder version **6**;
+console `SCORER_VERSION` **16**, `SCORER_CHANGES['16']` "brand-direct pack counts an open set; a count off the page
+is unverified", which never explains a moved score. `CODER_SCORER_VERSIONS` gains 5 → "15" and 6 → "16"; a score
+stored under 15 compares as its oldest outcome's version, as 13 and 14 do.
+
+**Supply.** parleo-supply-app 2O-6 serves what 2O-5 asked for: on an own-page row `json_ld` (the ProductGroup,
+trimmed), `size_chart` (`[{size, min, max, evidence}]`), `bullets`, and on every row with a read `final_url`; once
+per payload `brand_lines`, `brand_lines_complete`, `brand_line_sources`. Its reader extracts the same variants and
+charts from the recorded pages as `fixtures/build_brand_pages_2o5.py` did.
+
+### Tests
+
+`apps/pipeline/tests/test_brand_claim_2o6.py` (a count off the page unverified, on the 2O-5 and the 2O-6 index; on
+it grounded; the closed sets still contradict; the served line list open, a complete one closed; the attribute
+check on the served bullets; the served rows match 2O-5's fixture; FL14's fixture split before and after; two runs
+identical), on `fixtures/brand_claim/pampers_brand_pages_2o6.json` built by `fixtures/build_brand_pages_2o6.py`
+(supply's reader and line list on its recorded pages, the feed's product names from Pampers' brand feed v3);
+`apps/api/tests/test_console_2o6.py`. FL14's fixture: before (2O-5's served shape) grounded 38, unverified 132;
+after (2O-6's) grounded 46, unverified 124, the bullets grounding eight attribute answers; fabricated 0 either way
+(its 21 count answers all name a count a page lists, and it holds no contradicted value).

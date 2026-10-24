@@ -96,9 +96,8 @@ def read(decided):
     ('Is Pampers good?', 'Pampers Swaddlers come in Size 9.',
      "fabricated: 'Size 9' for Swaddlers — pampers.com's size list says Preemie, Newborn, Size 1, Size 2, "
      "Size 3, Size 4, Size 5, Size 6, Size 7, Size 8"),
-    # a line's counts: the Zzz page's Pack Count property
-    ('Is Pampers good?', 'Pampers Zzz come in a 99 count pack.',
-     "fabricated: '99 count' for Zzz — pampers.com's pack counts says 72, 88, 104, 116"),
+    # (a line's counts were here: 2O-6 made them an open set, a count off the page unverified;
+    # test_brand_claim_2o6)
     # a line's status: the feed says current
     ('Is Pampers good?', 'Pampers Swaddlers were discontinued last year.',
      "fabricated: 'discontinued' for Swaddlers — pampers.com's line status says current"),
@@ -109,7 +108,7 @@ def test_a_contradicted_fact_is_fabricated_and_the_drawer_line_names_both_values
                                                                                 reason)
     span = decided['brand_claim']['spans'][decided['brand_claim']['decided_by']]
     fact = span['facts_missing'][0]
-    assert fact['slot'] in ('ranges', 'sizes', 'counts', 'status') and fact['claimed'] and fact['published']
+    assert fact['slot'] in ('ranges', 'sizes', 'status') and fact['claimed'] and fact['published']
 
 
 def test_a_weight_for_a_line_with_no_size_is_checked_against_its_complete_chart():
@@ -166,7 +165,7 @@ def test_an_attribute_the_lines_own_page_states_the_opposite_of():
 def test_a_line_off_the_brands_served_line_list():
     lines = ['Pampers Swaddlers', 'Pampers Zzz', 'Pampers Cruisers 360', 'Pampers Baby Dry', 'Pampers Pure Protection',
              'Pampers Ninjamas', 'Pampers Easy Ups', 'Pampers Splashers', 'Pampers AMORE']
-    idx = index(brand_lines=lines)
+    idx = index(brand_lines=lines, brand_lines_complete=True)   # 2O-6: closed only when complete
     answer = 'Pampers Swaddlers and Pampers Little Movers are both popular.'
     decided = judge(answer, idx=idx)
     assert decided['outcome'] == 'fabricated'
@@ -315,14 +314,15 @@ def test_the_printout_on_the_fixture():
         rows.append(({'selector': {}, 'brand_claim': d['brand_claim']}, d['outcome'], d['reason_code']))
     report = rescore_cycle.selection_report(rows)
     text_ = rescore_cycle._render_selection(report, {'compared': 170, 'changed': 0})
-    assert '    fact index           195 facts (record 3, catalog 34, brand pages 158); v2 ' in text_
+    assert '    fact index           195 facts (record 3, catalog 34, brand pages 158); v3 ' in text_
     assert "    index slots          lines 9 (status known 3, retired: none; the brand's line list not served)" \
         in text_
     assert '      sizes per line     Cruisers 360 6, Swaddlers 10, Zzz 4  (complete: Cruisers 360, Swaddlers, Zzz)' \
         in text_
     assert ('      ranges per size    Preemie 1, Newborn 1, Size 1 1, Size 2 1, Size 3 4, Size 4 3, Size 5 5, '
             'Size 6 3, Size 7 2, Size 8 2') in text_
-    assert '      counts per line    Cruisers 360 18, Swaddlers 25, Zzz 4  (complete: Cruisers 360, Swaddlers, Zzz)' \
+    assert ("      counts per line    Cruisers 360 18, Swaddlers 25, Zzz 4  (the page's list: Cruisers 360, "
+            "Swaddlers, Zzz; open: a count off it is unverified)") \
         in text_
     assert '    split                grounded 38, unverified 132  (' in text_
     assert '    fabricated, by the slot contradicted: none' in text_

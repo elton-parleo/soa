@@ -371,14 +371,17 @@ def _render_slots(slots: Optional[dict]) -> list:
     """2O-5: the index's slots, as the printout's lines."""
     if not slots:
         return ['    index slots          none stamped (an index before 2O-5)']
-    served = 'not served' if slots.get('brand_lines') is None else f"{slots['brand_lines']} lines"
+    served = 'not served' if slots.get('brand_lines') is None else (
+        f"{slots['brand_lines']} lines, " + ('complete' if slots.get('brand_lines_complete') else
+                                             'open: a line off it is unverified'))
     retired = ', '.join(slots.get('retired') or []) or 'none'
     complete = lambda key: ', '.join(slots.get(key) or []) or 'none'  # noqa: E731
     return [
         f"    index slots          lines {slots['lines']} (status known {slots['status']}, retired: {retired}; "
         f"the brand's line list {served})",
         f"      sizes per line     {_pairs(slots.get('sizes') or {})}  (complete: {complete('sizes_complete')})",
-        f"      counts per line    {_pairs(slots.get('counts') or {})}  (complete: {complete('counts_complete')})",
+        f"      counts per line    {_pairs(slots.get('counts') or {})}  (the page's list: "
+        f"{complete('counts_complete')}; open: a count off it is unverified)",
         f"      ranges per size    {_pairs(slots.get('ranges_per_size') or {})}  (lines with a range for the size)",
         f"      attributes / line  {_pairs(slots.get('attributes') or {})}",
     ]

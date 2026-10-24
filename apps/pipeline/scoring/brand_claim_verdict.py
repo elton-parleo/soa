@@ -54,8 +54,10 @@ Now the record gives only spans, and the verdict is a lookup:
 2O-5: a fact is looked up against the index's slots (brand_fact_index.
 check): `fabricated` now means contradicted, the index holding a value for
 the fact's slot and the claim's differing (a (line, size) weight range, a
-line's sizes, counts or status, an attribute the page states the opposite
-of, a line off the brand's served line list). A fact the index does not
+line's sizes or status, an attribute the page states the opposite of, a
+line off the brand's served line list; 2O-6: a pack count never, a count off
+the page being unverified, and a line off the list only when the list is
+complete). A fact the index does not
 hold, and nothing contradicts, is `unverified`: per span, and per answer
 when no span is grounded or contradicted, stored `unscoreable` with reason
 code `unverified` (outside every count and the fabricated signal, as 2N-1's

@@ -57,14 +57,15 @@ of 258, "by the fact missing: price 60, retailer 48, name 48, size 26, count
 21, attribute 58". Version 2 adds SLOTS, each with the value the brand states:
 
   lines      the brand's lines, complete only when the payload serves the
-             brand's own line list (`brand_lines`); the pilot's titles are
-             never all of them
+             brand's own line list (`brand_lines`; 2O-6: and says it is
+             complete, `brand_lines_complete`); the pilot's titles are never
+             all of them
   sizes      per line, the sizes it comes in: complete from a brand page's
              JSON-LD (`hasVariant` sizes, the "Size Range" property) or its
              size chart; the feed's variants are a sample, never complete
-  counts     per line, the pack counts: complete from the page's hasVariant
+  counts     per line, the pack counts the page lists: its hasVariant
              counts or its "Pack Count" property (pampers.com states counts
-             per line, not per size)
+             per line, not per size); 2O-6: an open set, never complete
   ranges     per (line, size), every weight range the brand states for it:
              the feed's variant range, the page's chart, the hasVariant
              variant's own description, and a retailer row's brand truth
@@ -85,6 +86,20 @@ check() looks a fact up against them: found, contradicted (the slot holds a
 value and the claim's differs), or unverified (absent, nothing contradicts
 it). A price or unit price is always unverified here (the price tier judges
 prices); a store off the merchant's list is unverified (coverage judges it).
+
+2O-6: counts are an open set. A brand page lists the packs it sells, not
+every pack its retailers do: a club-only pack (Swaddlers 210 ct at Sam's
+Club) is on no pampers.com page, so a count absent from the line's counts is
+unverified, never contradicted (`counts_complete` now says only that the
+page stated the line's counts). The closed sets, which do contradict: a
+line's sizes (its chart and hasVariant), a (line, size)'s weight range, a
+line's status, and the brand's lines, only when the payload says its line
+list is complete (`brand_lines_complete`). Supply serves `brand_lines` from
+the feed and the pages read, never complete (the pages link Easy Ups and
+Swaddlers 360, not Ninjamas or Splashers), so a line off it is unverified
+and a line on it is found. The attribute check reads the line's own page's
+`bullets` (supply 2O-6): "Fragrance Free" on the Swaddlers page contradicts
+"scented" about Swaddlers; an attribute no page states stays unverified.
 """
 import hashlib
 import json
@@ -97,7 +112,7 @@ from soa_shared.retailers import retailers_named
 
 #: The index's own version. Bumped when what goes into it, or how a fact is
 #: looked up, changes; stored on every outcome beside the index's digest.
-INDEX_VERSION = 2
+INDEX_VERSION = 3
 
 FACT_TYPES = ('price', 'unit_price', 'count', 'size', 'weight', 'name', 'retailer', 'attribute', 'status')
 
@@ -203,6 +218,15 @@ def attribute_terms(text) -> List[str]:
 
 # ─── The index ─────────────────────────────────────────────────────────────
 
+def stated_terms(text) -> List[str]:
+    """2O-6: the attribute words a page's text states, as facts_in reads a
+    claim: its ATTRIBUTE_TERMS and its negations, a word the text negates
+    left out ("Free of fragrance, parabens and latex" states fragrance free,
+    paraben free and latex free, never fragrance)."""
+    negated = negated_terms(text)
+    return [t for t in attribute_terms(text) if f"{stem(t)} free" not in negated] + negated
+
+
 #: 2O-5: an attribute word and the words a page states for its opposite.
 #: A claim of the key is contradicted when the index holds one of its
 #: opposites and not the key itself ("lightly scented" against a page that
@@ -305,8 +329,7 @@ class Line:
         self.sources: set = set()
 
     def add_text(self, text) -> None:
-        self.attributes.update(attribute_terms(text))
-        self.attributes.update(negated_terms(text))
+        self.attributes.update(stated_terms(text))
 
     def add_range(self, size, rng, source='chart') -> None:
         rng = _range(rng)
@@ -348,6 +371,8 @@ class FactIndex:
         #: 2O-5: the slots (module docstring): per line, and the brand's line list when served
         self.lines: dict = {}                # line_key -> Line
         self.brand_lines: Optional[List[str]] = None
+        #: 2O-6: the payload's word that brand_lines is every line the brand makes
+        self.brand_lines_complete = False
         #: 2O-4: the facts each source put on the index first (build's three passes)
         self.by_source = {'record': 0, 'catalog': 0, 'brand_pages': 0}
 
@@ -369,6 +394,7 @@ class FactIndex:
         status), and per line its sizes, counts and ranges (by size)."""
         lines = sorted(self.lines.values(), key=lambda l: l.key)
         return {'lines': len(lines), 'brand_lines': len(self.brand_lines) if self.brand_lines is not None else None,
+                'brand_lines_complete': self.brand_lines_complete,
                 'status': sum(1 for l in lines if l.status),
                 'retired': sorted(l.name for l in lines if l.status == 'retired'),
                 'sizes': {l.name: len(l.sizes) for l in lines if l.sizes},
@@ -387,7 +413,8 @@ class FactIndex:
                 'titles': sorted(self.titles), 'retailers': sorted(self.retailers),
                 'attributes': sorted(self.attributes), 'page_text': self.page_text,
                 'lines': {k: self.lines[k].as_dict() for k in sorted(self.lines)},
-                'brand_lines': sorted(self.brand_lines) if self.brand_lines is not None else None}
+                'brand_lines': sorted(self.brand_lines) if self.brand_lines is not None else None,
+                'brand_lines_complete': self.brand_lines_complete}
 
     def digest(self) -> str:
         return hashlib.sha256(json.dumps(self.as_dict(), sort_keys=True).encode()).hexdigest()[:12]
@@ -414,8 +441,7 @@ class FactIndex:
         if not text or not str(text).strip():
             return
         self.text.append(norm(text))
-        self.attributes.update(attribute_terms(text))
-        self.attributes.update(negated_terms(text))
+        self.attributes.update(stated_terms(text))
         for rng, _s, _e in aa.parse_ranges(text):
             if rng not in self.weights:
                 self.weights.append(rng)
@@ -689,6 +715,7 @@ def build(facts: Optional[dict], reference: Optional[dict] = None) -> FactIndex:
     served = (reference or {}).get('brand_lines')
     if isinstance(served, list):
         index.brand_lines = []
+        index.brand_lines_complete = (reference or {}).get('brand_lines_complete') is True
         for name in served:
             if isinstance(name, str) and name.strip() and name not in index.brand_lines:
                 index.brand_lines.append(name)
@@ -929,7 +956,8 @@ def check(fact: dict, index: FactIndex, *, line: Optional[str] = None, size: Opt
     if kind == 'name':
         if _found(fact, index) or index.find_line(fact.get('text')) is not None:
             out['status'] = FOUND
-        elif index.brand_lines is not None:
+        elif index.brand_lines is not None and index.brand_lines_complete:
+            # 2O-6: only a line list the payload says is complete is a closed set
             return contradicted('lines', _published('name', index.brand_lines))
         return out
     if kind == 'status':
@@ -950,11 +978,13 @@ def check(fact: dict, index: FactIndex, *, line: Optional[str] = None, size: Opt
         out['status'] = FOUND if _found(fact, index) else UNVERIFIED
         return out
     if kind == 'count':
-        if bound is not None and bound.counts_complete:
-            if value in bound.counts:
-                out['status'] = FOUND
-                return out
-            return contradicted('counts', _published('count', bound.counts))
+        # 2O-6: an open set. A count the line's page lists is found; one it
+        # does not is unverified (a club-only pack), never contradicted.
+        if bound is not None and bound.counts:
+            out.update(slot='counts', status=FOUND if value in bound.counts else UNVERIFIED)
+            if out['status'] == UNVERIFIED:
+                out['published'] = _published('count', bound.counts)
+            return out
         out['status'] = FOUND if _found(fact, index) else UNVERIFIED
         return out
     if kind == 'weight':
