@@ -1,0 +1,1994 @@
+{
+ "_note": "FL14-SHAPED, NOT RECORDED. Built by tests/fixtures/build_brand_coder_fl14_2o1.py from the FL14 rescore printout of Oct 23 (258 brand-direct answers, 55 moved). Calls 1 and 2 are the printout's before and after; call 3, for the 55, is written to reach every branch of the rule (see the builder). Nothing was read from production.",
+ "cycle_code": "FL14-pampers-20261023",
+ "before": {
+  "absent": 6,
+  "acknowledged_unknown": 7,
+  "echoed": 47,
+  "fabricated": 123,
+  "grounded": 72,
+  "unscoreable": 3
+ },
+ "after_one_call_rescore": {
+  "absent": 6,
+  "acknowledged_unknown": 10,
+  "echoed": 59,
+  "fabricated": 106,
+  "grounded": 71,
+  "misattributed": 4,
+  "unscoreable": 2
+ },
+ "answers": [
+  {
+   "run_id": 14959,
+   "query_code": "PAM_210",
+   "platform": "perplexity",
+   "calls": [
+    "fabricated",
+    "acknowledged_unknown",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": 14962,
+   "query_code": "PAM_209",
+   "platform": "perplexity",
+   "calls": [
+    "fabricated",
+    "grounded",
+    "grounded"
+   ]
+  },
+  {
+   "run_id": 14975,
+   "query_code": "PAM_216",
+   "platform": "perplexity",
+   "calls": [
+    "fabricated",
+    "grounded",
+    "echoed"
+   ]
+  },
+  {
+   "run_id": 14980,
+   "query_code": "PAM_219",
+   "platform": "perplexity",
+   "calls": [
+    "grounded",
+    "fabricated",
+    "grounded"
+   ]
+  },
+  {
+   "run_id": 14982,
+   "query_code": "PAM_217",
+   "platform": "perplexity",
+   "calls": [
+    "fabricated",
+    "echoed",
+    "echoed"
+   ]
+  },
+  {
+   "run_id": 14992,
+   "query_code": "PAM_225",
+   "platform": "perplexity",
+   "calls": [
+    "echoed",
+    "fabricated",
+    "grounded"
+   ]
+  },
+  {
+   "run_id": 15008,
+   "query_code": "PAM_230",
+   "platform": "perplexity",
+   "calls": [
+    "fabricated",
+    "echoed",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": 15021,
+   "query_code": "PAM_240",
+   "platform": "perplexity",
+   "calls": [
+    "fabricated",
+    "echoed",
+    "echoed"
+   ]
+  },
+  {
+   "run_id": 15023,
+   "query_code": "PAM_241",
+   "platform": "perplexity",
+   "calls": [
+    "fabricated",
+    "echoed",
+    "grounded"
+   ]
+  },
+  {
+   "run_id": 15024,
+   "query_code": "PAM_242",
+   "platform": "perplexity",
+   "calls": [
+    "fabricated",
+    "grounded",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": 15025,
+   "query_code": "PAM_239",
+   "platform": "perplexity",
+   "calls": [
+    "grounded",
+    "echoed",
+    "echoed"
+   ]
+  },
+  {
+   "run_id": 15033,
+   "query_code": "PAM_245",
+   "platform": "perplexity",
+   "calls": [
+    "grounded",
+    "fabricated",
+    "echoed"
+   ]
+  },
+  {
+   "run_id": 15035,
+   "query_code": "PAM_248",
+   "platform": "perplexity",
+   "calls": [
+    "fabricated",
+    "grounded",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": 15051,
+   "query_code": "PAM_213",
+   "platform": "gemini_grounded",
+   "calls": [
+    "echoed",
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": 15078,
+   "query_code": "PAM_221",
+   "platform": "gemini_grounded",
+   "calls": [
+    "fabricated",
+    "echoed",
+    "grounded"
+   ]
+  },
+  {
+   "run_id": 15111,
+   "query_code": "PAM_230",
+   "platform": "gemini_grounded",
+   "calls": [
+    "fabricated",
+    "echoed",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": 15126,
+   "query_code": "PAM_243",
+   "platform": "gemini_grounded",
+   "calls": [
+    "grounded",
+    "echoed",
+    "echoed"
+   ]
+  },
+  {
+   "run_id": 15133,
+   "query_code": "PAM_248",
+   "platform": "gemini_grounded",
+   "calls": [
+    "grounded",
+    "echoed",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": 15138,
+   "query_code": "PAM_246",
+   "platform": "gemini_grounded",
+   "calls": [
+    "echoed",
+    "grounded",
+    "echoed"
+   ]
+  },
+  {
+   "run_id": 15202,
+   "query_code": "PAM_223",
+   "platform": "aimode",
+   "calls": [
+    "fabricated",
+    "misattributed",
+    "misattributed"
+   ]
+  },
+  {
+   "run_id": 15221,
+   "query_code": "PAM_231",
+   "platform": "aimode",
+   "calls": [
+    "fabricated",
+    "echoed",
+    "grounded"
+   ]
+  },
+  {
+   "run_id": 15232,
+   "query_code": "PAM_232",
+   "platform": "aimode",
+   "calls": [
+    "fabricated",
+    "echoed",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": 15237,
+   "query_code": "PAM_208",
+   "platform": "copilot",
+   "calls": [
+    "fabricated",
+    "grounded",
+    "grounded"
+   ]
+  },
+  {
+   "run_id": 15238,
+   "query_code": "PAM_234",
+   "platform": "aimode",
+   "calls": [
+    "acknowledged_unknown",
+    "echoed",
+    "grounded"
+   ]
+  },
+  {
+   "run_id": 15241,
+   "query_code": "PAM_209",
+   "platform": "copilot",
+   "calls": [
+    "grounded",
+    "fabricated",
+    "grounded"
+   ]
+  },
+  {
+   "run_id": 15244,
+   "query_code": "PAM_219",
+   "platform": "chatgpt",
+   "calls": [
+    "grounded",
+    "misattributed",
+    "misattributed"
+   ]
+  },
+  {
+   "run_id": 15245,
+   "query_code": "PAM_210",
+   "platform": "copilot",
+   "calls": [
+    "fabricated",
+    "acknowledged_unknown",
+    "echoed"
+   ]
+  },
+  {
+   "run_id": 15249,
+   "query_code": "PAM_237",
+   "platform": "aimode",
+   "calls": [
+    "echoed",
+    "fabricated",
+    "echoed"
+   ]
+  },
+  {
+   "run_id": 15250,
+   "query_code": "PAM_236",
+   "platform": "aimode",
+   "calls": [
+    "echoed",
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": 15260,
+   "query_code": "PAM_214",
+   "platform": "copilot",
+   "calls": [
+    "grounded",
+    "acknowledged_unknown",
+    "echoed"
+   ]
+  },
+  {
+   "run_id": 15265,
+   "query_code": "PAM_228",
+   "platform": "chatgpt",
+   "calls": [
+    "echoed",
+    "grounded",
+    "echoed"
+   ]
+  },
+  {
+   "run_id": 15266,
+   "query_code": "PAM_215",
+   "platform": "copilot",
+   "calls": [
+    "fabricated",
+    "grounded",
+    "grounded"
+   ]
+  },
+  {
+   "run_id": 15268,
+   "query_code": "PAM_216",
+   "platform": "copilot",
+   "calls": [
+    "grounded",
+    "acknowledged_unknown",
+    "echoed"
+   ]
+  },
+  {
+   "run_id": 15274,
+   "query_code": "PAM_246",
+   "platform": "aimode",
+   "calls": [
+    "fabricated",
+    "grounded",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": 15281,
+   "query_code": "PAM_232",
+   "platform": "chatgpt",
+   "calls": [
+    "grounded",
+    "echoed",
+    "echoed"
+   ]
+  },
+  {
+   "run_id": 15287,
+   "query_code": "PAM_221",
+   "platform": "copilot",
+   "calls": [
+    "grounded",
+    "acknowledged_unknown",
+    "echoed"
+   ]
+  },
+  {
+   "run_id": 15303,
+   "query_code": "PAM_225",
+   "platform": "copilot",
+   "calls": [
+    "fabricated",
+    "acknowledged_unknown",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": 15306,
+   "query_code": "PAM_235",
+   "platform": "chatgpt",
+   "calls": [
+    "acknowledged_unknown",
+    "misattributed",
+    "misattributed"
+   ]
+  },
+  {
+   "run_id": 15309,
+   "query_code": "PAM_227",
+   "platform": "copilot",
+   "calls": [
+    "fabricated",
+    "echoed",
+    "grounded"
+   ]
+  },
+  {
+   "run_id": 15310,
+   "query_code": "PAM_228",
+   "platform": "copilot",
+   "calls": [
+    "fabricated",
+    "grounded",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": 15315,
+   "query_code": "PAM_238",
+   "platform": "chatgpt",
+   "calls": [
+    "acknowledged_unknown",
+    "grounded",
+    "grounded"
+   ]
+  },
+  {
+   "run_id": 15332,
+   "query_code": "PAM_245",
+   "platform": "chatgpt",
+   "calls": [
+    "echoed",
+    "grounded",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": 15334,
+   "query_code": "PAM_233",
+   "platform": "copilot",
+   "calls": [
+    "grounded",
+    "acknowledged_unknown",
+    "grounded"
+   ]
+  },
+  {
+   "run_id": 15341,
+   "query_code": "PAM_234",
+   "platform": "copilot",
+   "calls": [
+    "acknowledged_unknown",
+    "grounded",
+    "grounded"
+   ]
+  },
+  {
+   "run_id": 15342,
+   "query_code": "PAM_235",
+   "platform": "copilot",
+   "calls": [
+    "fabricated",
+    "grounded",
+    "echoed"
+   ]
+  },
+  {
+   "run_id": 15350,
+   "query_code": "PAM_236",
+   "platform": "copilot",
+   "calls": [
+    "fabricated",
+    "grounded",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": 15359,
+   "query_code": "PAM_239",
+   "platform": "copilot",
+   "calls": [
+    "grounded",
+    "acknowledged_unknown",
+    "acknowledged_unknown"
+   ]
+  },
+  {
+   "run_id": 15364,
+   "query_code": "PAM_241",
+   "platform": "copilot",
+   "calls": [
+    "fabricated",
+    "echoed",
+    "grounded"
+   ]
+  },
+  {
+   "run_id": 15368,
+   "query_code": "PAM_242",
+   "platform": "copilot",
+   "calls": [
+    "grounded",
+    "fabricated",
+    "grounded"
+   ]
+  },
+  {
+   "run_id": 15377,
+   "query_code": "PAM_245",
+   "platform": "copilot",
+   "calls": [
+    "grounded",
+    "echoed",
+    "echoed"
+   ]
+  },
+  {
+   "run_id": 15384,
+   "query_code": "PAM_246",
+   "platform": "copilot",
+   "calls": [
+    "grounded",
+    "echoed",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": 15410,
+   "query_code": "PAM_211",
+   "platform": "claude",
+   "calls": [
+    "fabricated",
+    "echoed",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": 15414,
+   "query_code": "PAM_212",
+   "platform": "claude",
+   "calls": [
+    "unscoreable",
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": 15425,
+   "query_code": "PAM_216",
+   "platform": "claude",
+   "calls": [
+    "acknowledged_unknown",
+    "echoed",
+    "grounded"
+   ]
+  },
+  {
+   "run_id": 15443,
+   "query_code": "PAM_232",
+   "platform": "claude",
+   "calls": [
+    "fabricated",
+    "misattributed",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "absent",
+    "absent"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "absent",
+    "absent"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "absent",
+    "absent"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "absent",
+    "absent"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "absent",
+    "absent"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "absent",
+    "absent"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "acknowledged_unknown",
+    "acknowledged_unknown"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "acknowledged_unknown",
+    "acknowledged_unknown"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "echoed",
+    "echoed"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "echoed",
+    "echoed"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "echoed",
+    "echoed"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "echoed",
+    "echoed"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "echoed",
+    "echoed"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "echoed",
+    "echoed"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "echoed",
+    "echoed"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "echoed",
+    "echoed"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "echoed",
+    "echoed"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "echoed",
+    "echoed"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "echoed",
+    "echoed"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "echoed",
+    "echoed"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "echoed",
+    "echoed"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "echoed",
+    "echoed"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "echoed",
+    "echoed"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "echoed",
+    "echoed"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "echoed",
+    "echoed"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "echoed",
+    "echoed"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "echoed",
+    "echoed"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "echoed",
+    "echoed"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "echoed",
+    "echoed"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "echoed",
+    "echoed"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "echoed",
+    "echoed"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "echoed",
+    "echoed"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "echoed",
+    "echoed"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "echoed",
+    "echoed"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "echoed",
+    "echoed"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "echoed",
+    "echoed"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "echoed",
+    "echoed"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "echoed",
+    "echoed"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "echoed",
+    "echoed"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "echoed",
+    "echoed"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "echoed",
+    "echoed"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "echoed",
+    "echoed"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "echoed",
+    "echoed"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "echoed",
+    "echoed"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "echoed",
+    "echoed"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "echoed",
+    "echoed"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "echoed",
+    "echoed"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "echoed",
+    "echoed"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "fabricated",
+    "fabricated"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "grounded",
+    "grounded"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "grounded",
+    "grounded"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "grounded",
+    "grounded"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "grounded",
+    "grounded"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "grounded",
+    "grounded"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "grounded",
+    "grounded"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "grounded",
+    "grounded"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "grounded",
+    "grounded"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "grounded",
+    "grounded"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "grounded",
+    "grounded"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "grounded",
+    "grounded"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "grounded",
+    "grounded"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "grounded",
+    "grounded"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "grounded",
+    "grounded"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "grounded",
+    "grounded"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "grounded",
+    "grounded"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "grounded",
+    "grounded"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "grounded",
+    "grounded"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "grounded",
+    "grounded"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "grounded",
+    "grounded"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "grounded",
+    "grounded"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "grounded",
+    "grounded"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "grounded",
+    "grounded"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "grounded",
+    "grounded"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "grounded",
+    "grounded"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "grounded",
+    "grounded"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "grounded",
+    "grounded"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "grounded",
+    "grounded"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "grounded",
+    "grounded"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "grounded",
+    "grounded"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "grounded",
+    "grounded"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "grounded",
+    "grounded"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "grounded",
+    "grounded"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "grounded",
+    "grounded"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "grounded",
+    "grounded"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "grounded",
+    "grounded"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "grounded",
+    "grounded"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "grounded",
+    "grounded"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "grounded",
+    "grounded"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "grounded",
+    "grounded"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "grounded",
+    "grounded"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "grounded",
+    "grounded"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "grounded",
+    "grounded"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "grounded",
+    "grounded"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "grounded",
+    "grounded"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "grounded",
+    "grounded"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "grounded",
+    "grounded"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "grounded",
+    "grounded"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "grounded",
+    "grounded"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "grounded",
+    "grounded"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "grounded",
+    "grounded"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "grounded",
+    "grounded"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "grounded",
+    "grounded"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "grounded",
+    "grounded"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "grounded",
+    "grounded"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "grounded",
+    "grounded"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "unscoreable",
+    "unscoreable"
+   ]
+  },
+  {
+   "run_id": null,
+   "calls": [
+    "unscoreable",
+    "unscoreable"
+   ]
+  }
+ ]
+}

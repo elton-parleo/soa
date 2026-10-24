@@ -173,7 +173,9 @@ def test_the_dry_run_makes_no_model_call_and_no_write(db, capsys, monkeypatch):
 
     assert code == 0
     assert "runs to score:    66" in out
-    assert "66 extraction calls" in out
+    # 2O-1: every one of the 66 is brand-direct, two coder calls each
+    assert "0 extraction calls for the other tiers" in out
+    assert "for the 66 brand-direct answer(s), two coder calls each" in out
     with db.connect() as conn:
         assert rc.outcome_counts(conn, 1)["brand_direct"] == {"exact": 66}
 

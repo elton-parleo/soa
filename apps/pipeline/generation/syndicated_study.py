@@ -43,6 +43,19 @@ checked with soa_shared/unprompted.is_comparison. One naming no rival is
 regenerated once, then dropped and counted (keep_comparisons), as 2I-7 does
 for category control.
 
+2O-1 (H29): category control asks for a product. On FL14, 7 of the 20
+category questions drew no brand from any agent on any surface: "How do
+parents decide between disposable diapers and other baby care options?",
+"What are the main differences in baby diaper materials and absorbency?". A
+question that asks how parents decide, what factors matter or how often to
+restock is not a moment where an agent names a brand. The writer is told
+every category question asks which product or brand to buy for a stated need,
+and every one it returns is checked with asks_for_product (which, best,
+recommend, should I buy/get, what diaper(s) followed by a verb, what's the
+...est); one that asks for none is regenerated, at most PRODUCT_ASK_ROUNDS
+times, then dropped and counted (keep_product_asks). Existing studies are not
+touched: this is generation only.
+
 Degradation is the other thing worth reading. A study whose brand cannot
 be read still gets generated — as the ungrounded study it would have been
 with the toggle off — because failing a job that holds fifty good
@@ -52,6 +65,7 @@ silence: an unavailable catalog is recorded on tier_config where the
 report and the study page can both say so.
 """
 import logging
+import re
 from collections import Counter
 from typing import Optional
 
@@ -172,13 +186,17 @@ def control_terms(snapshot) -> tuple:
     return brand, names, unprompted.brand_terms(brand, (), names)
 
 
-def control_line(count: int, dropped: int, checked: bool) -> str:
-    """The tier's one line, as the preview and the generation status show it."""
+def control_line(count: int, dropped: int, checked: bool, not_asks: int = 0) -> str:
+    """The tier's one line, as the preview and the generation status show it.
+    2O-1: `not_asks`, the questions dropped for asking for no product."""
     if not checked:
-        return f"{count} question{'' if count == 1 else 's'}, not checked: no brand to check against"
-    line = f"{count} question{'' if count == 1 else 's'}, none naming the brand"
-    if dropped:
-        line += f" ({dropped} dropped for naming it)"
+        line = f"{count} question{'' if count == 1 else 's'}, not checked: no brand to check against"
+    else:
+        line = f"{count} question{'' if count == 1 else 's'}, none naming the brand"
+        if dropped:
+            line += f" ({dropped} dropped for naming it)"
+    if not_asks:
+        line += f", {not_asks} dropped for asking for no product"
     return line
 
 
@@ -253,6 +271,79 @@ def keep_brand_out(rows: list, terms: list, regenerate) -> tuple:
         {'query_text': r.get('query_text'), 'stage': r.get('stage'),
          'names': unprompted.names_any(r.get('query_text'), terms)} for r in still]
     return out, report
+
+
+#: 2O-1 (H29): what a category question that asks for a product says. "what
+#: diaper(s)" counts only before a verb ("what diapers hold up overnight"),
+#: not before a noun ("What diaper features matter most", FL14's). "What's
+#: the ...est" is the demo's own "what's the safest diaper for a newborn".
+_PRODUCT_ASK = re.compile(
+    r"\bwhich\b|\bbest\b|\brecommend\w*|\bshould i (?:buy|get)\b"
+    r"|\bwhat diapers?\s+(?:is|are|should|would|will|do|does|can|to|for|work|works|fit|fits|keep|keeps"
+    r"|hold|holds|stop|stops|prevent|prevents|help|helps)\b"
+    r"|\bwhat(?:['\u2019]s| is| are) the \w+est\b", re.I)
+#: Regeneration rounds for a category question that asks for no product.
+PRODUCT_ASK_ROUNDS = 2
+
+
+def asks_for_product(text) -> bool:
+    """2O-1: the question asks which product or brand to buy for a need."""
+    return bool(_PRODUCT_ASK.search(str(text or '')))
+
+
+def keep_product_asks(rows: list, terms: list, regenerate, rounds: int = PRODUCT_ASK_ROUNDS) -> tuple:
+    """
+    The product-ask check, after keep_brand_out. Returns (kept rows, report).
+
+    A row that asks for no product (asks_for_product) is handed to
+    `regenerate(stage_counts, avoid_texts)`, at most `rounds` times; a
+    replacement must ask for a product, name no brand (unprompted's rule,
+    with `terms`) and repeat no kept question. What is still not a product
+    ask after the last round is dropped and counted, so the tier comes in
+    short rather than carry a question no agent answers with a brand.
+    """
+    def ok(row):
+        return asks_for_product(row.get('query_text')) and (not terms or unprompted.is_unprompted(row, terms))
+
+    failed = [r for r in rows if not asks_for_product(r.get('query_text'))]
+    report = {'not_a_product_ask_found': [{'query_text': r.get('query_text'), 'stage': r.get('stage')}
+                                          for r in failed],
+              'product_ask_rounds': 0, 'product_ask_replaced': 0, 'not_a_product_ask_dropped': []}
+    if not failed:
+        return list(rows), report
+    out = list(rows)
+    for _ in range(rounds):
+        pending = [r for r in out if not asks_for_product(r.get('query_text'))]
+        if not pending:
+            break
+        report['product_ask_rounds'] += 1
+        stages = dict(Counter(r.get('stage') for r in pending))
+        try:
+            fresh = regenerate(stages, [r.get('query_text') for r in out]) or []
+        except Exception as exc:  # noqa: BLE001 - a failed regeneration drops the rows, never the study
+            logger.warning("[generation] product-ask regeneration failed: %s", exc)
+            report['regeneration_error'] = type(exc).__name__
+            break
+        seen = {normalize_query_text(r.get('query_text')) for r in out}
+        by_stage = {}
+        for row in fresh:
+            key = normalize_query_text(row.get('query_text'))
+            if key in seen or not ok(row):
+                continue
+            seen.add(key)
+            by_stage.setdefault(row.get('stage'), []).append(row)
+        nxt = []
+        for r in out:
+            if not asks_for_product(r.get('query_text')) and by_stage.get(r.get('stage')):
+                nxt.append(by_stage[r.get('stage')].pop(0))
+                report['product_ask_replaced'] += 1
+            else:
+                nxt.append(r)
+        out = nxt
+    dropped = [r for r in out if not asks_for_product(r.get('query_text'))]
+    report['not_a_product_ask_dropped'] = [{'query_text': r.get('query_text'), 'stage': r.get('stage')}
+                                           for r in dropped]
+    return [r for r in out if asks_for_product(r.get('query_text'))], report
 
 
 def comparison_line(count: int, dropped: int) -> str:
@@ -476,6 +567,11 @@ def build_syndicated_study(
         rows = [r for r in rows if not (comparison_on and r.get('stage') == COMPARISON_STAGE)]
         requested = len(rows)
         rows, check = keep_brand_out(rows, terms, regenerate)
+        # 2O-1: and asks which product to buy, when the writer was told so (a brand to state it for)
+        rows, asks = keep_product_asks(rows, terms, regenerate) if control else (rows, {
+            'not_a_product_ask_found': [], 'product_ask_rounds': 0, 'product_ask_replaced': 0,
+            'not_a_product_ask_dropped': []})
+        check.update(asks)
         for row in rows:
             row['tier'] = 'category_control'
             row['provenance'] = 'ai'
@@ -512,7 +608,7 @@ def build_syndicated_study(
             'count': controls,
             'generated': requested,
             'dropped': dropped,
-            'line': control_line(controls, dropped, bool(terms)),
+            'line': control_line(controls, dropped, bool(terms), len(check['not_a_product_ask_dropped'])),
         })
         provenance['category_control_check'] = {k: check[k] for k in check if k != 'checked_against'}
     else:

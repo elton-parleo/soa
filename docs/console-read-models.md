@@ -7670,3 +7670,56 @@ read none, wrong and another brand's price wrong, right the cells' exact or part
 `test_console_2m1_attribute.py` (a study generated with no truth, judged against supply's reference: 37 of 45; two
 cycles' references, each its own), `apps/pipeline/tests/test_price_names_2n1.py` (each quoted string against its
 reference) and `test_attribute_2m1.py` (the truth the scorer stores).
+
+## 2O-1: the brand-claim coder agrees with itself, category questions ask for a product (console scorer 12)
+
+### B1: two calls per brand-direct answer (H27)
+
+Rescoring FL14 on Oct 23 with no rule change for the tier moved 55 of its 258 brand-direct answers between
+categories. The category is decided by the deterministic classifier over a model's transcription and labels, and
+one call was not repeatable. The coder (`ExpectationScorer._code_brand_direct`) now makes two calls per answer,
+each transcribed, labelled and classified on its own, and keeps a category only when they agree
+(`brand_direct_classifier.agree`): the same category and, for `fabricated` or `grounded`, an overlapping claim
+(`spans_overlap`: one contains the other, or they share half the shorter's words, stop words aside; a cited domain
+is its own span). A disagreement makes a third call; two of three decides (`settle`, the earliest agreeing pair).
+With no majority the answer is `unscoreable`, `reason_code` **`coder_disagreed`**, `outcome_reason` "the coder could
+not settle this answer", which is the Answers row's summary. `unscoreable` is outside every brand count
+(`brand_scored`, fabricated, the accuracy rates).
+
+The decision is re-taken by the comparator over the calls stored on the record (`extraction.coder`: `version`
+`BRAND_CODER_VERSION` 2, `settings`, `calls`, `outcomes`, `pair`, `usage`), so `rescore_cycle --classify-only`
+makes it again with no model call. A record one call wrote carries no `coder` and is classified as before. The
+coder's calls send the 2A-5 extractor's settings, reasoning effort `none` and verbosity `low`; no temperature is
+sent. Every other tier's call is unchanged.
+
+Console `SCORER_VERSION` **12**, `SCORER_CHANGES['12']` "brand-direct answers coded by two agreeing calls". No
+dimension reads the brand-direct outcome, so it never explains a moved score. The score carries `brand_coder`
+`{version, coded, of}` (the cycle's scored brand-direct runs, and how many the two-call coder coded, from
+`load_overview_rows`' `coder_version`). `comparable_version()` is the version 2K-4's predicate compares: a v12 score
+whose brand-direct outcomes are not all two-call compares as **"11"**, so a cycle re-scored with
+`rescore_cycle.py --cycle <code>` is not comparable to one still on the old coder ("Scored under v11, re-score to
+compare.") until that one is re-scored too.
+
+### B2: category-control questions ask for a product (H29)
+
+The stage writer's category-control rule (read by the first call and by every regeneration) adds: every question
+asks which product or brand to buy for a need the shopper states; never how parents decide, what factors matter,
+what to compare, how products differ, how often to buy. The Comparison stage is exempt. After generation,
+`syndicated_study.asks_for_product` (which, best, recommend, should I buy/get, "what diaper(s)" before a verb,
+"what's the ...est") checks each; one that fails is regenerated at most `PRODUCT_ASK_ROUNDS` (2) times, then dropped
+and counted (`tier_config.category_control.not_a_product_ask_dropped`). Stored studies are not touched.
+
+### B3: two narrative nits
+
+* A missed deal: "[<Agent> quoted $<price> at <retailer>. ]<Agent> sent the shopper to <retailer it named> and
+  never mentioned <retailer>'s <deal>, live that day." `sent_to` (the retailers the answer recommended, else those
+  its quotes were judged at) is in the facts; an agent's name with a retailer's right after it ("Gemini Amazon
+  charged") is refused as `who_said_what`.
+* One store: "named Walmart as the place to buy it" (`normalise`, and the prompt).
+
+### Tests
+
+`apps/pipeline/tests/test_brand_coder_2o1.py` (hand-built call records in `fixtures/brand_coder/coder_pairs.json`;
+the FL14-shaped fixture `fl14_shaped.json`, built by `fixtures/build_brand_coder_fl14_2o1.py` from the rescore
+printout, its third calls synthetic), `apps/api/tests/test_console_2o1.py`, `apps/pipeline/tests/
+test_category_product_ask_2o1.py`, `apps/pipeline/tests/test_narratives_2o1.py`.

@@ -838,6 +838,16 @@ def _build_general_prompt(
             f"an example, and no question may name any other brand. A retailer may be named only "
             f"where the naming rule above allows it. A question that names {brand} or one of its "
             f"lines will be discarded."
+            # 2O-1 (H29): FL14's "How do parents decide between disposable diapers and other baby
+            # care options?" drew no brand from any agent on any surface; the demo's questions ask
+            # for a product. Checked after with syndicated_study.asks_for_product.
+            f"\n\nEvery one of these questions asks which product or brand to buy for a need the shopper "
+            f"states, the way a shopper types it: \"what's the safest diaper for a newborn\", \"best "
+            f"diapers for sensitive skin\", \"which diapers hold up overnight for a heavy wetter\". Use "
+            f"\"which\", \"best\", \"recommend\", \"should I buy\" or \"should I get\". Never ask how "
+            f"parents decide, what factors matter, what to compare, how products differ, or how often to "
+            f"buy or restock: an answer to those names no product. A question that does not ask which "
+            f"product to buy will be discarded."
         )
 
     comparison_text = ""
@@ -853,7 +863,8 @@ def _build_general_prompt(
                       "would weigh against it (never a retailer or a store brand).")
         comparison_text = (
             f"\n\nEXCEPT the {COMPARISON_STAGE!r} stage. Those questions are the study's COMPARISON "
-            f"questions, and the no-brand rule above does not apply to them: each must name {brand}, "
+            f"questions, and neither the no-brand rule nor the product-ask rule above applies to them: "
+            f"each must name {brand}, "
             f"spelled exactly that way, AND at least one rival brand, and ask which to choose, the way "
             f"a shopper weighing them types it (\"{brand} vs <rival> for a newborn\", \"{brand} or "
             f"<rival> for overnight leaks?\"). {rival_text} A {COMPARISON_STAGE!r} question that does "

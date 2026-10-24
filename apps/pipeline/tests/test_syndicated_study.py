@@ -44,7 +44,8 @@ def _stage_rows(n=50):
     """What generate_and_review_study returns, in the shape it returns it."""
     return [
         {
-            "query_text": f"stage question {i}",
+            # 2O-1: a category question asks which product to buy (asks_for_product)
+            "query_text": f"which diaper is best for stage question {i}",
             "category": "Baby Care",
             "stage": "Awareness",
             "specificity": "Broad",

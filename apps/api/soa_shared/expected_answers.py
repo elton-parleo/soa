@@ -119,6 +119,18 @@ BRAND_ASSESSMENTS = [
 
 BRAND_OUTCOMES = BRAND_ASSESSMENTS + ['absent', 'unscoreable']
 
+# 2O-1 (H27): the brand-claim coder. One model call per answer used to decide
+# its category, and a rescore of FL14 with no rule change for the tier moved
+# 55 of its 258 answers. Version 2 makes two calls and keeps a category only
+# when both agree (the same category, and for fabricated or grounded a claim
+# that overlaps); a third call breaks a disagreement, two of three decides,
+# and with no majority the answer is `unscoreable` for CODER_DISAGREED,
+# outside every count (scoring/brand_direct_classifier.settle). An outcome
+# row's extraction carries `coder.version`; a row scored before carries none.
+BRAND_CODER_VERSION = 2
+CODER_DISAGREED = 'coder_disagreed'
+CODER_DISAGREED_NOTE = 'the coder could not settle this answer'
+
 # Every value the outcome column may hold, across both vocabularies. A
 # row's tier says which of the two applies; nothing reads this union
 # except the schema constraint and the tests that keep it honest.

@@ -175,5 +175,5 @@ def test_a_stored_v6_score_recomputes_with_the_line_in_its_history(http, upstrea
     _supply(upstream)
     as_('alice')
     body = _score(http)
-    assert (body['score'], body['scorer_version']) == (66, '11')
-    assert body['history'][-1]['replaced_because'] == 'scorer 6 → 11: ungrounded surfaces excluded from pooling'
+    assert (body['score'], body['scorer_version']) == (66, '12')
+    assert body['history'][-1]['replaced_because'] == 'scorer 6 → 12: ungrounded surfaces excluded from pooling'

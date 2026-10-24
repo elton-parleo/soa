@@ -110,6 +110,9 @@ class Verdict:
     #: 'variant_swap', 'not_our_product', 'other_brand') when a rule decided
     #: the outcome.
     reason_code: Optional[str] = None
+    #: 2O-1: a brand-direct record the two-call coder wrote: {'outcomes':
+    #: each call's category, 'pair': the two calls that agreed, or None}.
+    coder: Optional[dict] = None
 
     @property
     def flag_names(self) -> List[str]:
@@ -788,6 +791,24 @@ def _compare_core(expectation, extraction, *, history, source_ref, brand_domain,
     # same reason — our failure to read an answer is never a result about
     # the assistant.
     if bdc.is_brand_direct(tier, expectation):
+        # 2O-1: a record the two-call coder wrote is decided over its calls,
+        # each classified on its own; a record one call wrote, as before
+        calls = bdc.coder_calls(extraction)
+        if calls:
+            codes = [bdc.code_call(c, expectation, brand_facts=brand_facts, grounding=grounding)
+                     for c in calls]
+            pair = bdc.settle(codes)
+            decided = {'outcomes': [c['outcome'] for c in codes], 'pair': list(pair) if pair else None}
+            if pair is None:
+                result = verdict(UNSCOREABLE, ea.CODER_DISAGREED_NOTE)
+                result.reason_code = ea.CODER_DISAGREED
+                result.coder = decided
+                return result
+            code = codes[pair[0]]
+            result = verdict(code['outcome'], code['reason'])
+            result.reason_code = code['reason_code']
+            result.coder = decided
+            return result
         outcome, reason, code = bdc.classify_with_code(
             extraction, expectation, brand_facts=brand_facts, grounding=grounding,
         )

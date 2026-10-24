@@ -28,7 +28,8 @@ PIN = os.path.join(os.path.dirname(__file__), 'fixtures', 'console', 'score_pin_
 DUMP = os.getenv('SOA_2I8A_PIN_DUMP')
 FIXTURES = {'229': _cycle_229, 'fl12_2i7': _fl12_2i7, 'fl12_2i8': _fl12_2i8}
 #: what 2I-8a changes on purpose: the rows and what they are built from, the version, the rule texts
-CHANGED = ('metrics', 'metric_counts', 'metric_surface', 'scorer_version', 'rules')
+#: (2O-1: and the brand-direct coder count beside the score, which no dimension reads)
+CHANGED = ('metrics', 'metric_counts', 'metric_surface', 'scorer_version', 'rules', 'brand_coder')
 VOLATILE = ('scored_at', 'stored', 'history')
 
 
@@ -107,6 +108,6 @@ def test_the_score_moves_by_version_only(http, db, upstream):
         c.execute(text("UPDATE soa_cycles SET share_of_algorithm = :b, share_of_algorithm_version = '9' WHERE id = 229"),
                   {'b': json.dumps(old)})
     body = _get(http).json()
-    assert (body['score'], body['scorer_version']) == (old['score'], '11')
-    assert body['history'][-1]['replaced_because'] == 'scorer 9 → 11'
+    assert (body['score'], body['scorer_version']) == (old['score'], '12')
+    assert body['history'][-1]['replaced_because'] == 'scorer 9 → 12'
     assert score_svc.SCORER_CHANGES['10'] == 'metric rows count every agent'

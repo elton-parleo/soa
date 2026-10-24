@@ -1611,9 +1611,13 @@ def load_overview_rows(conn, cycle: dict, features: Optional[List[str]] = None) 
         # 2N-1: a catalog-built brand-direct question carries its own verdict, never the brand-claim rule's
         row['intent'] = claim_kinds.catalog_intent(ref)
         # 2K-1 (A9): whether a brand-direct answer stated an attribute, from its stored extraction
-        extraction = row.pop('extraction', None)
-        row['claim_kind'] = (console_claims.claim_kind(_json(extraction), features)
+        extraction = _json(row.pop('extraction', None))
+        row['claim_kind'] = (console_claims.claim_kind(extraction, features)
                              if claim_kinds.is_brand_claim(row.get('tier'), ref) else None)
+        # 2O-1: the brand-claim coder that scored a brand-direct row (None: one call, before 2O-1)
+        if row.get('tier') == 'brand_direct':
+            coder = (extraction or {}).get('coder') if isinstance(extraction, dict) else None
+            row['coder_version'] = coder.get('version') if isinstance(coder, dict) else None
         rows.append(row)
     # 2K-1: a price attributed to the brand's own page, which sets none, is not scored
     unpriced = rm.brand_sets_no_price_runs(conn, cycle)

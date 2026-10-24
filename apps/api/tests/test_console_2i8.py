@@ -132,6 +132,8 @@ def per_surface_view(endpoint, body):
     if endpoint == 'score':
         # 2L-4: the brand tiles beside the five, and the rows the merchant's kind picks
         body = before_2l4(body)
+        # 2O-1 adds the brand-direct coder count beside the score; no value it served moved
+        body = {k: v for k, v in body.items() if k != 'brand_coder'}
     body = _strip_volatile(_strip_all(copy.deepcopy(body)))
     for k in DEFAULT_READERS.get(endpoint, ()):
         body.pop(k, None)
