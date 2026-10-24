@@ -744,11 +744,30 @@ def answer_facts(run: dict, outcome: Optional[dict], mentions: List[dict], merch
         'named in order': named if rival or brand_choice else None,
         'flags': [_drop_none({'flag': f.get('flag'), 'detail': f.get('detail') or f.get('evidence')}) for f in flags],
         'answer_spans': spans,
+        # 2O-3: the claim that decided the brand-claim verdict, and its facts against the brand's index
+        'claim_facts': claim_facts(extraction) if brand and not intent else None,
         # 2M-2: the deals live that day the answer never mentions
         'deals_live_that_day': [_deal_fact(d) for d in missed] or None,
         # 2O-1 (B3): and where the answer sent the shopper instead
         'sent_to': sent_to(extraction, quoted) if missed else None,
     })
+
+
+def claim_facts(extraction: dict) -> Optional[dict]:
+    """2O-3: the span that decided a version-3 brand-claim verdict (extraction
+    .brand_claim, scoring/brand_claim_verdict.py) as the facts carry it: what
+    the answer said, the facts in it the brand never published, and the ones
+    it did. None for a row the verdict was not decided on a span."""
+    claim = (extraction or {}).get('brand_claim')
+    if not isinstance(claim, dict) or not isinstance(claim.get('decided_by'), int):
+        return None
+    spans = claim.get('spans') or []
+    if not 0 <= claim['decided_by'] < len(spans):
+        return None
+    span = spans[claim['decided_by']]
+    return _drop_none({'said': span.get('text'),
+                       'never_published': [f.get('text') for f in span.get('facts_missing') or []] or None,
+                       'published': [f.get('text') for f in span.get('facts_found') or []] or None})
 
 
 def attribute_facts(run: dict, attribute: dict, why: List[str], merchant: Merchant, ref: dict,

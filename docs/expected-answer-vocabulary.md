@@ -281,6 +281,20 @@ what they mean everywhere. The rules and their precedence live in
 transcribed fields and the published record, and asks no model whether an
 answer was good.
 
+**2O-3 (brand-claim coder version 3): the verdict is a lookup.** The
+model's calls still transcribe and label; the code then takes only the
+claim spans (asserted sentences about the brand, and sentences naming a
+store it sends the reader to), refuses a call whose span is not in the
+answer text (2A-5's evidence rule), makes two calls agree on their spans,
+and looks each span's checkable facts (prices, counts, sizes, weights,
+names, stores, attribute words) up in the brand's fact index for the cycle
+(`scoring/brand_fact_index.py`: the record, the catalog snapshot, and the
+page reads cached on the cycle). A fact not on the index is `fabricated`;
+facts all on it, `grounded`; a span that only restates the question,
+`echoed`; a span with no checkable fact, `unscoreable` (`no_checkable_fact`),
+outside the counts. Rules and precedence: `scoring/brand_claim_verdict.py`.
+A record version 2 wrote is still decided by the classifier below.
+
 Two consequences worth stating:
 
 **Visibility is retired for this tier**, not renamed. It was the pass-1
