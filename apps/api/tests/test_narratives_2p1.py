@@ -17,6 +17,7 @@ No test calls a model: 229 replays the recordings, and 230's writer is a
 stub that records what it is asked and answers from the lines below.
 """
 import json
+import os
 
 from sqlalchemy import text
 
@@ -186,6 +187,11 @@ def test_the_drawer_lists_every_judged_sentence(http, db, upstream, monkeypatch)
     from tests.test_console_read_models import as_
     as_('op')
     answers = {a['id']: a for a in http.get('/api/console/answers', params={'cycle': f229.CYCLE_229, 'org': 10}).json()}
+    out = os.environ.get('SOA_2P1_SAMPLE_DUMP')
+    if out:   # the console's sample: the three answers, unedited
+        os.makedirs(out, exist_ok=True)
+        with open(os.path.join(out, 'answers-2p1-claims.json'), 'w') as fh:
+            json.dump([answers[i] for i in ('run-70302', 'run-70306', 'run-70304')], fh, indent=1, sort_keys=True)
     gemini = answers['run-70302']
     assert (gemini['brand_verdict'], gemini['narrative']) == ('fabricated', GEMINI_LINE)
     assert gemini['summary'] == "fabricated: '2 to 9 lbs' for Swaddlers Newborn — pampers.com's chart says under 10 lb"
