@@ -167,16 +167,17 @@ def test_the_dry_run_makes_no_model_call_and_no_write(db, capsys, monkeypatch):
 
     code = rc.main([
         "--cycle", "20260915-113207-wiggle-snug-full",
-        "--tier", "brand_direct", "--dry-run",
+        "--tier", "catalog_accuracy", "--dry-run",
     ])
     out = capsys.readouterr().out
 
     assert code == 0
-    assert "runs to score:    66" in out
-    # 2O-1: every one of the 66 is brand-direct, two coder calls each
-    assert "0 extraction calls for the other tiers" in out
-    assert "for the 66 brand-direct answer(s), two coder calls each" in out
+    assert "runs to score:    19" in out
+    # 2O-4: only the tiers outside brand-direct cost a call; brand-direct's
+    # dry run scores in memory (test_brand_claim_selector_2o4)
+    assert "the other tiers' 19 run(s) would cost one extraction call each" in out
     with db.connect() as conn:
+        assert rc.outcome_counts(conn, 1)["catalog_accuracy"] == {"exact": 19}
         assert rc.outcome_counts(conn, 1)["brand_direct"] == {"exact": 66}
 
 

@@ -24,15 +24,17 @@ run_id and the scorer deletes before inserting), so running it twice is
 the same as running it once. It does not touch soa_runs, soa_coded_
 mentions, or anything Layer 1 produced.
 
-It costs one extraction call per run, and (2O-1) two per brand-direct
-answer, a third when they disagree: the brand-claim coder keeps a category
-only when two calls agree (scoring/brand_direct_classifier.settle). After a
-re-score it prints the coder's calls, how often the first two agreed, and
-their tokens. 2O-3: the calls agree on their claim spans and the verdict is
-a lookup of the spans' facts in the brand's fact index (no call); it prints
-the spans, how often the first two calls' span sets differed, the
-no_checkable_fact share and the index's size. --dry-run prints the plan and the current counts and makes no
-model call and no write.
+It costs one extraction call per run for every tier but brand-direct.
+2O-4: a brand-direct answer costs none. Its claim sentences are selected by
+rule from the answer text (scoring/brand_claim_selector.py) and each is
+looked up in the brand's fact index (2O-3's verdict), so two runs over the
+same answers give the same outcomes, and --dry-run prints for brand-direct
+exactly what the real run prints, and writes nothing: the outcomes after,
+the rows that would move, and the brand-direct block (the fact index's size
+by source, the claim sentences selected, per answer min / median / max,
+the no_checkable_fact answers, and "claim sets changed since the stored
+scoring: N of M", the second run's check that nothing moved). With only
+brand_direct named, neither run needs OPEN_AI_API_KEY.
 
 --classify-only (2B) makes NO model call at all. It re-runs the
 deterministic classifier (scoring/expectation_comparator.py, through the
@@ -114,6 +116,7 @@ import os
 import sys
 from collections import Counter
 from datetime import datetime, timezone
+from types import SimpleNamespace
 from typing import Optional
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -303,171 +306,137 @@ def diff_untouched(before: dict, after: dict, targeted) -> list:
     return moved
 
 
-# ─── 2O-1: the brand-claim coder's calls ──────────────────────────────────
+# ─── 2O-4: the brand-direct claims, selected by rule ─────────────────────
 
-def coder_report(extractions) -> dict:
-    """What the two-call coder did on a cycle's brand-direct rows, from their
-    stored `coder` blocks: answers coded (a row with no call, a wall, is not),
-    calls, how many settled on the first two, on a third, or not at all, the
-    agreement rate of the first two, and each call's tokens (the extraction
-    and the labelling). A row scored before 2O-1 carries no block and is
-    counted in `single_call`."""
-    out = {'answers': 0, 'single_call': 0, 'calls': 0, 'agreed_first_two': 0, 'third_calls': 0,
-           'settled_by_third': 0, 'unsettled': 0, 'input_tokens': 0, 'output_tokens': 0}
-    for extraction in extractions:
-        coder = (extraction or {}).get('coder') if isinstance(extraction, dict) else None
-        if not isinstance(coder, dict):
-            out['single_call'] += 1
-            continue
-        calls = coder.get('calls') or []
-        if not calls:
-            continue
-        out['answers'] += 1
-        out['calls'] += len(calls)
-        pair = coder.get('pair')
-        if pair == [0, 1]:
-            out['agreed_first_two'] += 1
-        if len(calls) > 2:
-            out['third_calls'] += 1
-            out['settled_by_third' if pair else 'unsettled'] += 1
-        elif not pair:
-            out['unsettled'] += 1
-        for usage in coder.get('usage') or []:
-            for part in (usage or {}).values():
-                out['input_tokens'] += int((part or {}).get('input_tokens') or 0)
-                out['output_tokens'] += int((part or {}).get('output_tokens') or 0)
-    out['agreement_rate'] = round(out['agreed_first_two'] / out['answers'], 3) if out['answers'] else None
-    return out
-
-
-def coder_dollars(report: dict, model: Optional[str]) -> Optional[float]:
-    """The coder's tokens at config.SOA_CODING_MODEL_PRICE, or None when the
-    coder's model is not the model that price is for."""
-    from soa_shared import config
-    if not model or model != config.SOA_CODING_MODEL:
-        return None
-    price = config.SOA_CODING_MODEL_PRICE
-    return (report['input_tokens'] * price['input'] + report['output_tokens'] * price['output']) / 1_000_000
-
-
-def _render_coder(report: dict, model: Optional[str]) -> str:
-    if not report['answers']:
-        return '    (no brand-direct answer coded by the two-call coder)'
-    dollars = coder_dollars(report, model)
-    cost = (f"${dollars:.2f} at the stored price (unverified)" if dollars is not None else
-            f"no stored price for {model or 'the coder model'} (config.SOA_CODING_MODEL_PRICE is "
-            f"another model's)")
-    return '\n'.join([
-        f"    answers coded        {report['answers']}  ({report['single_call']} row(s) still single-call)",
-        f"    calls                {report['calls']}  (an extraction and a labelling each)",
-        f"    first two agreed     {report['agreed_first_two']}  ({report['agreement_rate']:.1%})",
-        f"    third call           {report['third_calls']}  (settled {report['settled_by_third']}, "
-        f"unsettled {report['unsettled']} -> unscoreable, coder_disagreed)",
-        f"    tokens               {report['input_tokens']} input / {report['output_tokens']} output; {cost}",
-    ])
-
-
-# ─── 2O-3: the brand-claim verdict's spans and facts ──────────────────────
-
-def claim_report(rows) -> dict:
-    """What the version-3 verdict decided on, from each brand-direct row's
-    (extraction, outcome, reason_code): answers, claim spans and their kinds,
-    the first two calls whose span sets differed (the variance the model can
-    still put in), refused calls (2A-5's rule), the no_checkable_fact and
-    fact_type_not_read answers, the missing facts by type, and the index
-    each was judged against (its size and digest)."""
-    from scoring import brand_claim_verdict as bcv
-    out = {'answers': 0, 'spans': 0, 'kinds': Counter(), 'first_two_differ': 0, 'refused_calls': 0,
-           'no_checkable_fact': 0, 'fact_type_not_read': 0, 'missing_by_type': Counter(), 'indexes': Counter()}
+def selection_report(rows) -> dict:
+    """What the brand-direct verdict decided on, from each row's (extraction,
+    outcome, reason_code): answers selected by rule (coder version 4), the
+    claim sentences (total, per answer), their kinds, the no_checkable_fact
+    and fact_type_not_read answers, the missing facts by type, and the fact
+    index each was judged against (version, digest, size, by source)."""
+    out = {'answers': 0, 'claims': 0, 'per_answer': [], 'kinds': Counter(), 'no_checkable_fact': 0,
+           'fact_type_not_read': 0, 'missing_by_type': Counter(), 'indexes': Counter()}
     for extraction, outcome, reason_code in rows:
-        coder = (extraction or {}).get('coder') if isinstance(extraction, dict) else None
-        if not isinstance(coder, dict) or (coder.get('version') or 0) < 3 or not coder.get('calls'):
+        if not isinstance(extraction, dict) or 'selector' not in extraction:
             continue
         out['answers'] += 1
-        calls = coder['calls']
-        out['refused_calls'] += sum(1 for c in calls if bcv.refused(c))
-        if len(calls) >= 2 and not bcv.calls_agree(calls[0], calls[1]):
-            out['first_two_differ'] += 1
+        claim = extraction.get('brand_claim') or {}
+        spans = claim.get('spans') or []
+        out['claims'] += len(spans)
+        out['per_answer'].append(len(spans))
+        for span in spans:
+            out['kinds'][span.get('kind')] += 1
         if outcome == 'unscoreable' and reason_code in ('no_checkable_fact', 'fact_type_not_read'):
             out[reason_code] += 1
-        claim = extraction.get('brand_claim') or {}
-        for span in claim.get('spans') or []:
-            out['spans'] += 1
-            out['kinds'][span.get('kind')] += 1
         decided = claim.get('decided_by')
-        if outcome == 'fabricated' and decided is not None:
-            for fact in (claim['spans'][decided].get('facts_missing') or []):
+        if outcome == 'fabricated' and isinstance(decided, int) and decided < len(spans):
+            for fact in spans[decided].get('facts_missing') or []:
                 out['missing_by_type'][fact.get('type')] += 1
         index = claim.get('index') or {}
         if index:
-            out['indexes'][(index.get('version'), index.get('digest'), index.get('size'))] += 1
+            by = index.get('by_source') or {}
+            out['indexes'][(index.get('version'), index.get('digest'), index.get('size'),
+                            by.get('record'), by.get('catalog'), by.get('brand_pages'))] += 1
+    counts = sorted(out['per_answer'])
+    out['min'], out['max'] = (counts[0], counts[-1]) if counts else (None, None)
+    out['median'] = (counts[len(counts) // 2] if len(counts) % 2 else
+                     (counts[len(counts) // 2 - 1] + counts[len(counts) // 2]) / 2) if counts else None
     out['no_checkable_fact_share'] = (round(out['no_checkable_fact'] / out['answers'], 3)
                                       if out['answers'] else None)
     return out
 
 
-def _render_claims(report: dict) -> str:
+def _render_selection(report: dict, changed: dict) -> str:
+    sets = (f"    claim sets changed since the stored scoring: {changed['changed']} of {changed['compared']}  "
+            f"(answers both scorings decided on a claim set)")
     if not report['answers']:
-        return '    (no brand-direct answer decided by the version-3 verdict)'
-    kinds = ', '.join(f"{k} {n}" for k, n in sorted(report['kinds'].items()))
+        return '\n'.join(['    (no brand-direct answer selected by rule)', sets])
+    indexes = '; '.join(
+        f"{n} facts (record {r}, catalog {c}, brand pages {b}); v{v} {d}" + (f" x{k}" if len(report['indexes']) > 1 else '')
+        for (v, d, n, r, c, b), k in sorted(report['indexes'].items(), key=str))
+    kinds = ', '.join(f"{k} {n}" for k, n in sorted(report['kinds'].items(), key=lambda kv: str(kv[0])))
     missing = ', '.join(f"{k} {n}" for k, n in sorted(report['missing_by_type'].items())) or 'none'
-    indexes = '; '.join(f"v{v} {d} ({n} facts) x{c}" for (v, d, n), c in sorted(report['indexes'].items()))
+    median = report['median']
+    median = int(median) if median is not None and float(median).is_integer() else median
     return '\n'.join([
+        f"    fact index           {indexes or 'none stored'}",
         f"    answers              {report['answers']}",
-        f"    claim spans          {report['spans']}  ({kinds or 'none'})",
-        f"    first two differed   {report['first_two_differ']}  (span sets; the variance left to the model)",
-        f"    refused calls        {report['refused_calls']}  (a span not in the answer text, 2A-5)",
+        f"    claim sentences      {report['claims']}  (per answer: min {report['min']}, median {median}, "
+        f"max {report['max']}; {kinds or 'none'})",
         f"    no_checkable_fact    {report['no_checkable_fact']}  ({report['no_checkable_fact_share']:.1%} of "
         f"answers; unscoreable, outside the counts)",
         f"    fact_type_not_read   {report['fact_type_not_read']}",
         f"    fabricated, by the fact missing: {missing}",
-        f"    fact index           {indexes or 'none stored'}",
+        sets,
     ])
 
 
-def settled_spans(conn, cid: int) -> dict:
-    """{run_id: the claim spans of the call that settled it} for every
-    brand-direct row a version-3 coder decided, read before and after a
-    re-extract to count the span sets that changed between two scorings."""
-    from scoring import brand_claim_verdict as bcv
+def claim_sets(rows) -> dict:
+    """{run_id: the claim sentences a stored row was decided on} from
+    (run_id, extraction) pairs: a version-4 row's selection, a version-3
+    row's settling call's spans (brand_claim_selector.claim_set); rows with
+    neither are left out."""
+    from scoring import brand_claim_selector as sel
     out = {}
-    rows = conn.execute(text("""
-        SELECT run_id, extraction FROM soa_expectation_outcomes
-        WHERE cycle_id = :cid AND tier = 'brand_direct'
-    """), {"cid": cid}).fetchall()
     for run_id, extraction in rows:
-        coder = (_as_json(extraction) or {}).get('coder') or {}
-        pair = coder.get('pair')
-        if (coder.get('version') or 0) >= 3 and pair:
-            out[run_id] = bcv.claim_spans(coder['calls'][pair[0]])
+        claims = sel.claim_set(_as_json(extraction))
+        if claims is not None:
+            out[run_id] = claims
     return out
 
 
-def spans_changed(before: dict, after: dict) -> dict:
-    """{compared, changed}: of the runs both scorings settled on spans, how
-    many settled on span sets that do not agree (brand_claim_verdict.spans_agree)."""
-    from scoring import brand_claim_verdict as bcv
+def claim_sets_changed(before: dict, after: dict) -> dict:
+    """{compared, changed}: of the runs both scorings decided on a claim
+    set, how many were decided on a different one (the same sentences, in
+    the same order, whitespace aside, or not)."""
+    def flat(claims):
+        return [' '.join(str(c or '').split()) for c in claims]
     common = sorted(set(before) & set(after))
-    return {'compared': len(common),
-            'changed': sum(1 for r in common if not bcv.spans_agree(before[r], after[r]))}
+    return {'compared': len(common), 'changed': sum(1 for r in common if flat(before[r]) != flat(after[r]))}
 
 
-def brand_claim_rows(conn, cid: int) -> list:
+def brand_direct_rows(conn, cid: int) -> list:
+    """(run_id, extraction, outcome, reason_code) for the cycle's stored brand-direct rows."""
     rows = conn.execute(text("""
-        SELECT extraction, outcome, reason_code FROM soa_expectation_outcomes
+        SELECT run_id, extraction, outcome, reason_code FROM soa_expectation_outcomes
         WHERE cycle_id = :cid AND tier = 'brand_direct'
     """), {"cid": cid}).fetchall()
-    return [(_as_json(r[0]), r[1], r[2]) for r in rows]
+    return [(r[0], _as_json(r[1]), r[2], r[3]) for r in rows]
 
 
-def brand_direct_extractions(conn, cid: int) -> tuple:
-    """(each brand-direct row's stored extraction, the extraction model)."""
-    rows = conn.execute(text("""
-        SELECT extraction, extraction_model FROM soa_expectation_outcomes
-        WHERE cycle_id = :cid AND tier = 'brand_direct'
-    """), {"cid": cid}).fetchall()
-    models = Counter(r[1] for r in rows if r[1])
-    return [_as_json(r[0]) for r in rows], (models.most_common(1)[0][0] if models else None)
+def print_brand_direct(before_rows, after_rows) -> None:
+    """The brand-direct block, the same for the real run (rows read back) and
+    the dry run (rows planned): see selection_report and claim_sets_changed."""
+    changed = claim_sets_changed(claim_sets((r[0], r[1]) for r in before_rows),
+                                 claim_sets((r[0], r[1]) for r in after_rows))
+    print("\nbrand-direct claims (2O-4: selected by rule, no model call; each looked up in the fact index):")
+    print(_render_selection(selection_report([r[1:] for r in after_rows]), changed))
+
+
+def _brand_direct_scorer(*, fetch: bool = True):
+    """2O-4: the scorer a brand-direct-only re-score uses: no model client
+    (a call is a bug, and _NoModel says so) and no labeller. With
+    fetch=False (the dry run) the cycle's cached reference is read and never
+    fetched, since a fetch writes it."""
+    from scoring.expectation_scorer import ExpectationScorer, ReferenceCache
+    return ExpectationScorer(client=_NoModel(), labeler=False,
+                             **({} if fetch else {'references': ReferenceCache(fetch=False)}))
+
+
+def plan_brand_direct(run_ids, scorer=None) -> list:
+    """2O-4: every brand-direct run decided as the real run decides it
+    (ExpectationScorer.plan: the selection and the verdict, no model call)
+    and nothing written: [(run_id, status, extraction as it would be stored,
+    verdict)]. A run with nothing to store has no extraction."""
+    from scoring.expectation_scorer import _with_brand_claim
+    scorer = scorer or _brand_direct_scorer(fetch=False)
+    out = []
+    for run_id in run_ids:
+        status, run, expectation, extraction, verdict, _model = scorer.plan(run_id)
+        if status == 'needs_model':
+            raise RuntimeError(f"run {run_id} is not brand-direct; only brand-direct is planned without a model")
+        out.append((run_id, status, _with_brand_claim(extraction, verdict) if verdict else None, verdict))
+    return out
 
 
 # ─── 2B: classify-only ─────────────────────────────────────────────────────
@@ -1023,6 +992,27 @@ def _main_narratives(args, writer=None, log=print) -> int:
     return 0
 
 
+def _print_after(summary, before, after, after_secondary, before_rows, after_rows) -> list:
+    """The lines after a re-score, the real run's and (2O-4) the dry run's
+    for brand-direct alike. Returns the tiers whose primary counts moved."""
+    print(f"\nscored {summary.succeeded}/{summary.total} "
+          f"(skipped {summary.skipped}, failed {summary.failed}, "
+          f"retried {summary.retried})")
+    print("after:")
+    print(_render(after))
+    print("after (secondary):")
+    print(_render_secondary(after_secondary))
+
+    moved_primary = changed_tiers(before, after)
+    print(f"\nprimary outcomes changed in: "
+          f"{', '.join(moved_primary) if moved_primary else 'nothing'}")
+
+    moved_rows = row_diff(before_rows, after_rows)
+    print(f"\nrows whose outcome moved: {len(moved_rows)} of {len(after_rows)}")
+    print(_render_rows(moved_rows))
+    return moved_primary
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(
         description="Re-score one or more tiers of a cycle, in place.",
@@ -1127,61 +1117,56 @@ def main(argv=None) -> int:
         print("\nnothing to do.")
         return 0
 
+    with engine.connect() as conn:
+        brand_ids = run_ids_for(conn, cid, ['brand_direct']) if 'brand_direct' in tiers else []
+        before_brand = brand_direct_rows(conn, cid) if brand_ids else []
+    other_ids = [r for r in run_ids if r not in set(brand_ids)]
+
     if args.dry_run:
-        with engine.connect() as conn:
-            brand = len(run_ids_for(conn, cid, ['brand_direct'])) if 'brand_direct' in tiers else 0
-        print(f"\ndry run — no model calls, no writes. "
-              f"A real run costs {len(run_ids) - brand} extraction calls for the other tiers and, "
-              f"for the {brand} brand-direct answer(s), two coder calls each (2O-1), a third on a "
-              f"disagreement; each call is an extraction and a labelling.")
+        print(f"\ndry run — nothing written. Brand-direct is decided with no model call, so its "
+              f"{len(brand_ids)} answer(s) are scored below exactly as the real run scores them; "
+              f"the other tiers' {len(other_ids)} run(s) would cost one extraction call each "
+              f"(an extraction and a labelling) and are not scored here.")
+        if not brand_ids:
+            return 0
+        planned = plan_brand_direct(brand_ids)
+        after_brand = [(run_id, extraction, verdict.outcome, verdict.reason_code)
+                       for run_id, _status, extraction, verdict in planned if verdict is not None]
+        after_rows = dict(before_rows)
+        for run_id, _extraction, outcome, _code in after_brand:
+            label = before_rows.get(run_id)
+            if label:
+                after_rows[run_id] = label[:4] + (outcome,)
+        after = {t: Counter(c) for t, c in before.items() if t != 'brand_direct'}
+        for run_id, _extraction, outcome, _code in after_brand:
+            after.setdefault('brand_direct', Counter())[outcome] += 1
+        summary = SimpleNamespace(
+            succeeded=sum(1 for p in planned if p[1] == 'success'), total=len(planned),
+            skipped=sum(1 for p in planned if p[1].startswith('skipped')), failed=0, retried=0, failures=[])
+        _print_after(summary, before, after, before_secondary, before_rows, after_rows)
+        print_brand_direct(before_brand, after_brand)
         return 0
 
-    if not os.getenv("OPEN_AI_API_KEY"):
-        raise SystemExit("OPEN_AI_API_KEY is not set — extraction cannot run")
+    if other_ids and not os.getenv("OPEN_AI_API_KEY"):
+        raise SystemExit("OPEN_AI_API_KEY is not set — extraction cannot run "
+                         f"(the {len(other_ids)} run(s) outside brand-direct need it)")
 
     from scoring.expectation_batch import score_runs
 
-    if 'brand_direct' in tiers:
-        # 2O-3: the stored spans, to count the span sets this scoring changes
-        with engine.connect() as conn:
-            before_spans = settled_spans(conn, cid)
-
-    summary = asyncio.run(score_runs(run_ids, concurrency=args.concurrency))
+    # 2O-4: brand-direct makes no model call, so its scorer never builds a client
+    scorer = None if other_ids else _brand_direct_scorer()
+    summary = asyncio.run(score_runs(run_ids, concurrency=args.concurrency,
+                                     **({'scorer': scorer} if scorer else {})))
 
     with engine.connect() as conn:
         after = outcome_counts(conn, cid)
         after_secondary = secondary_counts(conn, cid)
         after_rows = row_outcomes(conn, cid)
+        after_brand = brand_direct_rows(conn, cid) if brand_ids else []
 
-    print(f"\nscored {summary.succeeded}/{summary.total} "
-          f"(skipped {summary.skipped}, failed {summary.failed}, "
-          f"retried {summary.retried})")
-    print("after:")
-    print(_render(after))
-    print("after (secondary):")
-    print(_render_secondary(after_secondary))
-
-    moved_primary = changed_tiers(before, after)
-    print(f"\nprimary outcomes changed in: "
-          f"{', '.join(moved_primary) if moved_primary else 'nothing'}")
-
-    moved_rows = row_diff(before_rows, after_rows)
-    print(f"\nrows whose outcome moved: {len(moved_rows)} of {len(after_rows)}")
-    print(_render_rows(moved_rows))
-
-    if 'brand_direct' in tiers:
-        with engine.connect() as conn:
-            extractions, model = brand_direct_extractions(conn, cid)
-        print("\nbrand-direct coder (2O-1):")
-        print(_render_coder(coder_report(extractions), model))
-        with engine.connect() as conn:
-            claims = claim_report(brand_claim_rows(conn, cid))
-        print("\nbrand-claim verdict (2O-3, no model call; the verdict is a lookup):")
-        print(_render_claims(claims))
-        with engine.connect() as conn:
-            changed = spans_changed(before_spans, settled_spans(conn, cid))
-        print(f"    span sets changed since the stored scoring: {changed['changed']} of {changed['compared']} "
-              f"(answers both scorings decided on spans; the run-to-run variance the model still puts in)")
+    moved_primary = _print_after(summary, before, after, after_secondary, before_rows, after_rows)
+    if brand_ids:
+        print_brand_direct(before_brand, after_brand)
 
     for failure in summary.failures[:10]:
         print(f"    FAILED run {failure.run_id}: {failure.status} "

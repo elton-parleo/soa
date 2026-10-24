@@ -197,6 +197,8 @@ class FactIndex:
         self.text: List[str] = []            # page and record text, normalised
         self.attributes: set = set()         # ATTRIBUTE_TERMS the text states
         self.page_text = False               # any text beyond titles was read
+        #: 2O-4: the facts each source put on the index first (build's three passes)
+        self.by_source = {'record': 0, 'catalog': 0, 'brand_pages': 0}
 
     # ── what was read ──
     def types_read(self) -> List[str]:
@@ -222,7 +224,7 @@ class FactIndex:
     def stamp(self) -> dict:
         """What an outcome stores about the index it was judged against."""
         return {'version': INDEX_VERSION, 'digest': self.digest(), 'size': self.size(),
-                'types_read': self.types_read()}
+                'types_read': self.types_read(), 'by_source': dict(self.by_source)}
 
     # ── building ──
     def add_title(self, title) -> None:
@@ -296,6 +298,16 @@ def build(facts: Optional[dict], reference: Optional[dict] = None) -> FactIndex:
     index = FactIndex()
     index.brand = facts.get('brand')
     index.domain = ea.normalize_domain(facts.get('domain')) or None
+    # 2O-4: read in three passes, each fact counted for the first that put it
+    # on the index (by_source): the merchant record, the catalog, the pages
+    for name in [facts.get('program_name')] + list(facts.get('tier_names') or []):
+        if name:
+            index.add_text(name, page=False)
+    for d in list(facts.get('own_domains') or []) + list(facts.get('tenant_own_domains') or []) \
+            + [facts.get('domain')] + list(facts.get('retailer_list') or []):
+        if ea.normalize_domain(d):
+            index.retailers.add(ea.normalize_domain(d))
+    index.by_source['record'] = index.size()
     for title in facts.get('product_titles') or []:
         index.add_title(title)
     for v in facts.get('variants') or []:
@@ -305,13 +317,8 @@ def build(facts: Optional[dict], reference: Optional[dict] = None) -> FactIndex:
                           (v.get('list_price'), v.get('member_price')), v.get('weight_range'), v.get('attributes'))
     for text in list(facts.get('features') or []) + list(facts.get('descriptions') or []):
         index.add_text(text)
-    for name in [facts.get('program_name')] + list(facts.get('tier_names') or []):
-        if name:
-            index.add_text(name, page=False)
-    for d in list(facts.get('own_domains') or []) + list(facts.get('tenant_own_domains') or []) \
-            + [facts.get('domain')] + list(facts.get('retailer_list') or []):
-        if ea.normalize_domain(d):
-            index.retailers.add(ea.normalize_domain(d))
+    index.sizes.discard(None)
+    index.by_source['catalog'] = index.size() - index.by_source['record']
 
     rows = [r for r in ((reference or {}).get('prices') or (reference or {}).get('rows') or []) if isinstance(r, dict)]
     for row in rows:
@@ -346,6 +353,7 @@ def build(facts: Optional[dict], reference: Optional[dict] = None) -> FactIndex:
         for text in _json_ld_texts(row.get('json_ld')):
             index.add_text(text)
     index.sizes.discard(None)
+    index.by_source['brand_pages'] = index.size() - index.by_source['record'] - index.by_source['catalog']
     return index
 
 
