@@ -409,6 +409,45 @@ async def get_score(cycle: str = Query(...), merchant: Optional[str] = Query(Non
 
 
 async def _score(row: dict, org: int, merchant: Optional[str], rescore: bool, scope: CustomerScope) -> dict:
+    body = await _score_body(row, org, merchant, rescore, scope)
+    score_svc.at('reading the previous cycle')
+    with engine.connect() as conn:
+        prev, _ = parity.previous_scored_cycle(conn, row, cycle_customer_org_sql())
+        # 2K-4 (B1): each cycle's study and questions, compared first (soa_shared/cycle_compare)
+        studies = (rm.study_identity(conn, row), rm.study_identity(conn, prev)) if prev else None
+    return score_svc.with_previous(body, prev['cycle_code'] if prev else None,
+                                   await _previous_score(prev, row, org, merchant, scope), studies=studies)
+
+
+async def _previous_score(prev: Optional[dict], row: dict, org: int, merchant: Optional[str],
+                          scope: CustomerScope) -> Optional[dict]:
+    """2Q-1 (B2): the previous cycle's score as its own read serves it: the
+    stored one, recomputed (and stored) when a refresh or a rescore made it
+    stale (score_svc.needs_recompute, 2N-2), never a stored score that
+    predates them. FL15's Attribute accuracy tile read +5 against FL14's score
+    stored before its reference refresh (48 of 68) while Impact read -1
+    against FL14 recomputed (54 of 77). Every delta's prior is now the
+    previous cycle's current read: the tiles here, and the Changes block,
+    Visibility, True Value, Trade promotions and Impact, which read it live.
+    A prior stored under another scorer version, or never stored, is served
+    as it is: compare() says "re-score to compare" or "open it to score it",
+    never a delta. A prior that cannot be recomputed is no prior (None),
+    never the stale one."""
+    if prev is None:
+        return None
+    stored = score_svc.stored_score(engine, prev['id'])
+    if not score_svc.is_current(stored):
+        return stored
+    try:
+        return await _score_body({**prev, 'customer_org_id': row['customer_org_id']}, org, merchant, False, scope)
+    except Exception as exc:  # noqa: BLE001 - the cycle's own score still reads; its delta says why not
+        score_svc.log_event('score.previous_failed', cycle=row['cycle_code'], previous=prev.get('cycle_code'),
+                            error=type(exc).__name__, message=str(exc)[:200])
+        return None
+
+
+async def _score_body(row: dict, org: int, merchant: Optional[str], rescore: bool, scope: CustomerScope) -> dict:
+    """One cycle's score, served from its row or recomputed (and stored), with no previous."""
     score_svc.at('reading the stored score')
     stored = score_svc.stored_score(engine, row['id'])
     body = dict(stored or {}, stored=True)
@@ -489,13 +528,7 @@ async def _score(row: dict, org: int, merchant: Optional[str], rescore: bool, sc
         score_svc.log_event('score.end', cycle=row['cycle_code'], cycle_id=row['id'], org=org,
                             surfaces=[s['surface'] for s in body['surfaces']], score=body['score'],
                             stored=body['stored'], read_errors=sorted(errors), ms=int((time.monotonic() - started) * 1000))
-    score_svc.at('reading the previous cycle')
-    with engine.connect() as conn:
-        prev, _ = parity.previous_scored_cycle(conn, row, cycle_customer_org_sql())
-        # 2K-4 (B1): each cycle's study and questions, compared first (soa_shared/cycle_compare)
-        studies = (rm.study_identity(conn, row), rm.study_identity(conn, prev)) if prev else None
-    prev_stored = score_svc.stored_score(engine, prev['id']) if prev else None
-    return score_svc.with_previous(body, prev['cycle_code'] if prev else None, prev_stored, studies=studies)
+    return body
 
 
 def _true_value_inputs(conn, row) -> tuple:

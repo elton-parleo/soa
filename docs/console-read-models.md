@@ -8044,3 +8044,25 @@ the own-site alias; unavailable; everyday words; through the scorer with no mode
 FL14-shaped fixture 36 → 49; the printout, dry and real) on `fixtures/retailer_coding/fl14_where_to_buy.json` built
 by `fixtures/build_where_to_buy_2q1.py` (hand-written in FL14's shapes, mixed to give the printout's two figures; not
 FL14's text); `apps/api/tests/test_console_2q1_stores.py`.
+
+### B2: one prior for every delta
+
+FL15's Overview read Attribute accuracy "53 of 77, +5": the prior was FL14's score as stored before its reference
+refresh (48 of 68). Impact's "What moved since the baseline" read "54 of 77 → 53 of 77, −1": FL14 recomputed live.
+The Changes block, Visibility's `moved`, True Value's `drift`, Trade promotions' `aside.delta` and Impact's
+`since_baseline` already read the previous cycle live (router `_compared`); only `/score`'s `previous` (the tiles'
+deltas, the pillar and dimension deltas) read the previous cycle's stored score as it was.
+
+* `/score`'s previous is now the previous cycle's own read (router `_previous_score`): its stored score, recomputed
+  and stored when 2N-2's `needs_recompute` says so (`cycle reference refreshed`, `outcomes re-scored`, a new
+  domain-check record), exactly as opening that cycle would. A prior stored under another scorer version, or never
+  stored, is served as it is, so `compare()` still says "Scored under vN, re-score to compare." or "Open it to score
+  it.", never a delta. A prior that cannot be recomputed is no prior, never the stale one (`score.previous_failed`).
+* The score body without a previous is `_score_body`; `_score` adds the previous.
+
+Tests: `apps/api/tests/test_console_2q1_one_prior.py`, on 2P-1's pair: cycle 1's cached reference refreshed after
+its score was stored (Swaddlers Size 4 to 22–37 lb). Before, the Attribute accuracy tile read **+1** (against the
+stored 61 of 79) while Impact read **−1** (against 63 of 79 live); now the tiles, the Changes lines (the weight-range
+lines sum to the tile's −1; Retailer coverage; deals named), Visibility's coverage, Trade promotions' aside, Impact's
+four rows and True Value's drift (net against Prices right) all agree. `test_console_2e`'s hand-made prior now
+carries the domain-check record and inputs it was measured on, so the prior cycle's own read serves it.
