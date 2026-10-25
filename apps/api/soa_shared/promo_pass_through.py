@@ -27,6 +27,12 @@ and
 Loose: any of deal, sale, off, coupon, save, promo, discount, rollback,
 clearance. Subscribe: "Subscribe & Save", "auto-delivery", "subscription"
 (the charter's standing program, not a deal). No model.
+
+2Q-1 (B4): a deal on a shelf that says the SKU is out of stock is not live
+(out_of_stock: the shelf's words, or supply's `availability` / `excluded`
+when it serves them). FL15's Walmart Rollback on Pure Protection Size 1 was
+read beside "Out of stock". No answer is judged against it; Trade
+promotions keeps its row and says why it was not counted.
 """
 import re
 from decimal import Decimal, InvalidOperation
@@ -96,6 +102,27 @@ def _entry_keys(v: dict) -> set:
     return {str(k) for k in keys if k}
 
 
+#: 2Q-1 (B4): the shelf says the SKU cannot be bought there
+OUT_OF_STOCK = re.compile(r"\b(?:out of stock|sold out|currently unavailable|temporarily unavailable)\b", re.I)
+#: supply's exclusion reason for such a deal, when its extractor serves one
+EXCLUDED_OUT_OF_STOCK = 'out_of_stock'
+
+
+def out_of_stock(deal: dict, entry: Optional[dict] = None) -> bool:
+    """Whether the shelf said the SKU was out of stock beside the deal: for
+    one variant's `entry`, or (none given) every variant the deal ran on."""
+    entries = [entry] if entry is not None else (deal.get('variants') or [{}])
+    if (deal.get('excluded') or deal.get('reason')) == EXCLUDED_OUT_OF_STOCK:
+        return True
+
+    def gone(e: dict) -> bool:
+        if (e or {}).get('availability') == EXCLUDED_OUT_OF_STOCK:
+            return True
+        said = ' '.join(str(x) for x in ((e or {}).get('evidence'), deal.get('evidence'), deal.get('text')) if x)
+        return bool(OUT_OF_STOCK.search(said))
+    return all(gone(e) for e in entries)
+
+
 def deal_id(deal: dict) -> str:
     return f"{deal.get('retailer_domain')}|{deal.get('kind')}|{(deal.get('text') or '').casefold()}"
 
@@ -106,7 +133,8 @@ def live_for(deals_payload: Optional[dict], ref: Optional[dict]) -> List[dict]:
     out = []
     for deal in (deals_payload or {}).get('deals') or []:
         entry = next((v for v in deal.get('variants') or [] if _entry_keys(v) & mine), None)
-        if entry is not None:
+        # 2Q-1 (B4): a deal beside "Out of stock" was not live for the SKU
+        if entry is not None and not out_of_stock(deal, entry):
             out.append({**deal, 'variant': entry})
     return out
 

@@ -342,6 +342,16 @@ The attribute check reads the line page's feature bullets: "Fragrance Free"
 on the Swaddlers page contradicts "scented"; an attribute no page states
 stays unverified.
 
+**2Q-1 (brand-claim coder version 7): a where-to-buy answer's stores are
+coded over the whole answer.** On a where-to-buy or cheapest-place question
+the scorer stores `named_stores` on the extraction (`soa_shared/retailers.
+named_stores`, no model): every store the answer names, first named first,
+from the merchant's retailer list, the retailer lexicon and the brand's own
+site (2N-1's brand row), each `unavailable` when the answer says it does not
+have the product. 2O-4's store pass kept a store only from a unit with a buy
+word, so a list with a price after each store lost its stores. The verdict
+is unchanged; coverage, routing and the "sent the shopper to" fact read it.
+
 Two consequences worth stating:
 
 **Visibility is retired for this tier**, not renamed. It was the pass-1

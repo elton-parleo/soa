@@ -531,6 +531,7 @@ class ExpectationScorer:
         source_ref = _as_dict(run.source_ref) or {}
         extraction = code_attribute(source_ref, extraction, getattr(run, 'raw_response', None),
                                     truth=self._attribute_truth(run, source_ref))
+        extraction = self._code_stores(run, expectation, extraction)
         payload = {
             "run_id": run.id,
             "query_id": run.query_id,
@@ -585,6 +586,17 @@ class ExpectationScorer:
                 )
             """), payload)
             conn.commit()
+
+    def _code_stores(self, run, expectation, extraction):
+        """2Q-1: code_stores on an answered where-to-buy or cheapest-place
+        run, with the merchant's retailer list and own sites; every other
+        run's extraction as it is (a wall or an empty answer names no store)."""
+        source_ref = _as_dict(run.source_ref) or {}
+        if source_ref.get('intent') not in STORE_INTENTS or not _answered(run):
+            return extraction
+        facts = self._facts(run)
+        return code_stores(source_ref, extraction, getattr(run, 'raw_response', None), facts=facts,
+                           brand=self._brand(run, expectation, facts))
 
     # ─── The model calls ──────────────────────────────────────────────
 
@@ -685,6 +697,8 @@ class ExpectationScorer:
             facts = self._facts(run)
             record = self._select_brand_direct(run, expectation, brand=self._brand(run, expectation, facts),
                                                facts=facts)
+            # 2Q-1: and its stores, so a dry run prints what _store writes
+            record = self._code_stores(run, expectation, record)
             return 'success', run, expectation, record, self._classify(run, expectation, record), None
         return 'needs_model', run, expectation, None, None, None
 
@@ -773,6 +787,40 @@ def code_attribute(source_ref: dict, extraction: dict, answer: str, truth: dict 
         return {**extraction, **judged}  # no answer text to read: the stored coding stands
     stated, evidence = aa.weight_from_answer(answer, source_ref.get('size'))
     return {**extraction, 'weight_range': stated, 'weight_evidence': evidence, **judged}
+
+
+#: 2Q-1: the intents whose answers' stores are coded (code_stores)
+STORE_INTENTS = ('where_to_buy', 'cheapest_place')
+
+
+def _answered(run) -> bool:
+    """An answer arrived and the surface returned it (no wall, not empty)."""
+    return getattr(run, 'status', None) == 'success' and bool((getattr(run, 'raw_response', None) or '').strip()) \
+        and getattr(run, 'answer_status', None) not in NO_ANSWER_STATUSES
+
+
+def code_stores(source_ref: dict, extraction: dict, answer: str, *, facts: dict = None, brand: str = None) -> dict:
+    """
+    2Q-1: on a where-to-buy or cheapest-place run, the stores the answer
+    names, over the whole answer and in its order (soa_shared/retailers.
+    named_stores: the merchant's retailer list, the retailer lexicon, and
+    its own site as the brand's row), as the extraction's `named_stores`.
+    Coverage, routing, the where-to-buy verdict and the "sent the shopper
+    to" fact read it. `facts` is BrandFactsCache.for_merchant()'s (supply's
+    retailer list and own domains), the question's source_ref when the
+    catalog could not be read. Every other run's extraction is returned as
+    it is. No model.
+    """
+    from soa_shared import retailers as rt
+
+    if (source_ref or {}).get('intent') not in STORE_INTENTS or not isinstance(extraction, dict):
+        return extraction
+    if answer is None and 'named_stores' in extraction:
+        return extraction  # no answer text to read: the stored coding stands
+    facts, ref = facts or {}, source_ref or {}
+    retailers = facts.get('retailer_list') or ref.get('retailer_list') or []
+    own = facts.get('own_domains') or [d for d in (ref.get('own_domain'), ref.get('domain')) if d]
+    return {**extraction, 'named_stores': rt.named_stores(answer, retailers=retailers, own_domains=own, brand=brand)}
 
 
 def _as_dict(value):

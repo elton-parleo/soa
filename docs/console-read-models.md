@@ -8005,3 +8005,140 @@ assistant said, then what was true". Production rows were not read to confirm it
 The 2L-3 fixture's 131 FL14 subjects keep their facts digests and decisions; 2P-1's two recordings replay
 unchanged (no model call, no re-recording). `narratives_fixture.fl14_beside` adds the three shapes, tested without a
 writer. Tests: `apps/api/tests/test_narratives_2p2.py`.
+
+## 2Q-1: what the first week-over-week cycle showed (console scorer 17)
+
+### B1: retailer coding for where-to-buy and cheapest-place answers, by rule
+
+After 2O-4 the brand-direct record's store pass (`brand_claim_selector.select`) kept a store only from a unit that
+also carried a buy word ("buy", "sold", "in stock"), and never the brand's own site. A where-to-buy answer lists
+stores with a price after each ("**Target** - $28.49", "Costco also has a bulk box for $44.99"), so FL14's Retailer
+coverage read 49 of 60 before the 2O-4 rescore and 36 of 60 after, on the same answers; routing's base fell from 119
+to 103 answers; FL15 read 31 of 60 and 103.
+
+* **The coding** (`soa_shared/retailers.named_stores`, sync copies in apps/api and apps/pipeline): one pass over the
+  whole answer. Every alias of the retailer lexicon (`KNOWN_RETAILERS`, which gains Instacart, DoorDash, Uber Eats,
+  Shipt, Gopuff and Thrive Market), every domain of the merchant's retailer list (supply's `/retailers`) written or
+  named by its label, and the merchant's own site as the brand's row: an own domain written ("pampers.com") or the
+  site in words ("the Pampers website", "directly from Pampers"). An alias that is an everyday word ("target",
+  "chewy", "rollback") names the store only written with a capital; a cited domain that is no store is not one.
+  Each store `{name, domain, position, at, role, own, listed}`: `position` 1..n in order of first appearance, `at`
+  its character offset, `role` `unavailable` when every mention sits in a clause saying the store does not have
+  it ("Costco doesn't carry this size"), `recommendation` otherwise.
+* **Stored** on the outcome's extraction as `named_stores` (`expectation_scorer.code_stores`, beside 2M-1's
+  `code_attribute`), on an answered where-to-buy or cheapest-place run only, in `plan()` and in `_store()` (so
+  `--dry-run` prints what the real run writes, and `--classify-only` codes it too). No model call.
+* **Read by** `console_read_models.stores_in_order` (Retailer coverage, routing, the where-to-buy verdict) and
+  `narratives.sent_to` (the promo line's "sent the shopper to"). A row scored before 2Q-1 reads its
+  `retailer_mentions` as it did. `ROUTING_RULE` names `named_stores`.
+* **The printout.** `rescore_cycle --tier brand_direct` (and its dry run) prints the stored coding's coverage and
+  routing base against 2Q-1's: `retailer coverage  36 of 60 -> 49 of 60 (...)`, `routing base  41 -> 60`.
+
+Brand-claim coder version **7** (three copies); console `SCORER_VERSION` **17**, `SCORER_CHANGES['17']` "where-to-buy
+stores coded over the whole answer", which never explains a moved score (Retailer coverage is a tile, never a
+dimension). `CODER_SCORER_VERSIONS` gains 6 → "16" and 7 → "17"; a score stored under 16 compares as its oldest
+outcome's version. FL14 and FL15 compare once both are rescored with `--tier brand_direct`.
+
+Tests: `apps/pipeline/tests/test_retailer_coding_2q1.py` (a list with a price after each store, prose and a table;
+the own-site alias; unavailable; everyday words; through the scorer with no model call, twice identical; the
+FL14-shaped fixture 36 → 49; the printout, dry and real) on `fixtures/retailer_coding/fl14_where_to_buy.json` built
+by `fixtures/build_where_to_buy_2q1.py` (hand-written in FL14's shapes, mixed to give the printout's two figures; not
+FL14's text); `apps/api/tests/test_console_2q1_stores.py`.
+
+### B2: one prior for every delta
+
+FL15's Overview read Attribute accuracy "53 of 77, +5": the prior was FL14's score as stored before its reference
+refresh (48 of 68). Impact's "What moved since the baseline" read "54 of 77 → 53 of 77, −1": FL14 recomputed live.
+The Changes block, Visibility's `moved`, True Value's `drift`, Trade promotions' `aside.delta` and Impact's
+`since_baseline` already read the previous cycle live (router `_compared`); only `/score`'s `previous` (the tiles'
+deltas, the pillar and dimension deltas) read the previous cycle's stored score as it was.
+
+* `/score`'s previous is now the previous cycle's own read (router `_previous_score`): its stored score, recomputed
+  and stored when 2N-2's `needs_recompute` says so (`cycle reference refreshed`, `outcomes re-scored`, a new
+  domain-check record), exactly as opening that cycle would. A prior stored under another scorer version, or never
+  stored, is served as it is, so `compare()` still says "Scored under vN, re-score to compare." or "Open it to score
+  it.", never a delta. A prior that cannot be recomputed is no prior, never the stale one (`score.previous_failed`).
+* The score body without a previous is `_score_body`; `_score` adds the previous.
+
+Tests: `apps/api/tests/test_console_2q1_one_prior.py`, on 2P-1's pair: cycle 1's cached reference refreshed after
+its score was stored (Swaddlers Size 4 to 22–37 lb). Before, the Attribute accuracy tile read **+1** (against the
+stored 61 of 79) while Impact read **−1** (against 63 of 79 live); now the tiles, the Changes lines (the weight-range
+lines sum to the tile's −1; Retailer coverage; deals named), Visibility's coverage, Trade promotions' aside, Impact's
+four rows and True Value's drift (net against Prices right) all agree. `test_console_2e`'s hand-made prior now
+carries the domain-check record and inputs it was measured on, so the prior cycle's own read serves it.
+
+### B3: `/overview` is slow and the console gives up
+
+`/overview?cycle=FL15…` took 15.7 s on a warm API, and the console's first load showed "Couldn't load the overview —
+Failed to fetch". On 2P-1's pair one read made eleven supply calls in six sequential rounds (the merchant's kind
+four times, `/reference` and `/deals` twice, the catalog, `/retailers`, `/access`) and read the previous cycle in
+full (its rows, its Visibility, its deals, its attribute answers) on every request.
+
+* **One round.** The overview's supply reads (the catalog's features, the routing facts, the access run and the
+  reference, both cycles' deals) run together (`asyncio.gather`), the previous cycle found first.
+* **`app/services/console_cache.py`**, in the process (the API is a Vercel function: a warm instance keeps it),
+  bounded (256 entries, least recently used out), every hit a deep copy:
+  * supply: `reads(client, org)` wraps the client for `get_reference`, `get_retailers`, `get_deals`, `get_access`,
+    `get_merchant_catalog`, and `cached()` the merchant's kind; kept 300 s per org, method and arguments; a read
+    under way is shared (two asks, one call); a failed read is never kept. The merchant check (2H) still reads the
+    org's merchants every time.
+  * cycles: `cycle_read(conn, cycle, name, compute, *parts)` keeps one cycle's overview rows, Visibility, promo
+    answers and attribute answers under the cycle's stamp (`cycle_stamp`: its runs, outcomes and Layer 1 mentions,
+    each counted with the newest id and `scored_at`, and its reference's `refreshed_at`) and the inputs beside it
+    (the merchant's facts, the catalog's features, the reference). A rescore (rows replaced: new ids, a new
+    `scored_at`), a recode or a refresh is a new key, never a stale read; 1800 s as a backstop. A pair's read is its
+    two cycles' entries, so Visibility, True Value, Trade promotions and Impact (`_compared`) reuse them.
+  * `SOA_CONSOLE_CACHE=0` turns it off. The API's tests run with it off (their fixtures edit rows and supply's answers
+    between two reads); `tests/test_console_2q1_cache.py` runs with it on. With it on everywhere, the only tests that
+    differ are the three that turn a brand merchant into a seller mid-test (its kind is kept 300 s).
+* `overview.read` is logged per read: the cycle, the previous, `ms`, and the cache's entries, hits and misses.
+
+Timings on 2P-1's pair, local Postgres, every supply call delayed by the latency shown (simulated; production's
+15.7 s also carries FL15's larger cycle, which only the cycle cache shortens):
+
+| supply latency | before, every read | after, cold | after, warm |
+|---|---|---|---|
+| 1.0 s | 9.3 s (11 calls) | 3.3 s (8 calls, 3 rounds) | 1.1 s (1 call) |
+| 0.3 s | 3.0 s | 1.25 s | 0.42 s |
+
+Tests: `apps/api/tests/test_console_2q1_cache.py` (the overview, Visibility, True Value, Trade promotions and Impact
+bodies identical cached or not, cold or warm; a warm overview reads supply once and neither cycle's rows; a refresh
+of the previous cycle's reference is seen on the next read; a failed deals read is named and the next read tries
+again; a replaced outcome row moves the stamp).
+
+### B4: two copy items on reads
+
+* **A quote for another pack says so.** FL15's lead signal read "Wrong price on Pampers Zzz overnight, Size 4, 104 ct
+  in 11 runs. Quoted $44.99 against $44.99." The price check had moved each quote off the asked variant for its
+  count (the claim's `conflict`, "pack count 58", `variant_clash`). True Value's quotes now carry it (`pack`,
+  `console_read_models.pack_conflict`), and when most of a product's wrong quotes are for another pack
+  (`console_parity.pack_mismatch`: the most common such quote, its pack, the asked pack from the row's name, the
+  reference) the signal's detail reads `signal.wrong_product_pack`, "Quoted $44.99 for a 58 ct pack against $44.99
+  for the 104 ct. …", and the products table's issue line `product.wrong_pack`, "Quoted $44.99 for a 58 ct pack
+  against $44.99 for the 104 ct in 11 of 18 runs." (the runs quoted for the other pack, never every wrong run beside
+  them). The product carries `pack_mismatch` beside its typed fields only
+  when there is one. A product narrative's facts already name the product a quote was for (`for_variant`); they are
+  unchanged, so no recorded narrative moves.
+* **A deal beside "Out of stock" is not live.** FL15's Walmart Rollback on Pure Protection Size 1 was read beside
+  "Out of stock". `promo_pass_through.out_of_stock` (the shelf's words beside the deal: "out of stock", "sold out",
+  "currently unavailable"; or supply's `excluded: out_of_stock` / a variant's `availability: out_of_stock` when it
+  serves them) and `live_for` leaves such a variant out, so no answer is judged against it and the pass-through
+  counts only live deals. Trade promotions keeps its row, last, with `live: false`, `not_live: 'out_of_stock'`,
+  tone `neu`, agents "Not counted: out of stock", and the detail "Not live: the shelf said out of stock on <date>,
+  so no answer is counted against it. Shown on <variants>." Against a compared cycle such a row's `change` is `out_of_stock` ("Out of
+  stock on <date>: <retailer> showed it beside "Out of stock". Live in <code>.") and an ended deal reads `ended`, as
+  before. Supply's extractor (parleo-supply-app `truesync/fullloop/deals.py`, `accept_deal`) does not refuse such a
+  deal yet; soa's rule holds for the deals supply already stored, FL15's among them.
+
+Tests: `apps/api/tests/test_console_2q1_copy.py` (on 2P-1's pair, four quotes at the reference's own price for a
+58 ct pack: the signal and the issue line; the rule by hand on FL15's shape, 11 of 18; on 2M-2's deals, the
+Rollback beside "Out of stock": its row, the pass-through 5 of 50 to 3 of 50; `live_for` per variant; against the
+previous cycle, out of stock and ended).
+
+### A's samples
+
+`apps/api/tests/test_console_2q1_samples.py`: 2P-1's pair with what FL15 showed (cycle 1's reference refreshed after
+its score was stored; cycle 2's Size 4, 120 ct at Amazon quoted at its own price for a 58 ct pack by four agents;
+cycle 2's Amazon multi-buy beside "Out of stock"). `SOA_2Q1_SAMPLE_DUMP=<dir>` writes `score-2q1`, `overview-2q1`,
+`visibility-2q1`, `visibility-2q1-c1`, `true-value-2q1`, `prove-2q1`, `revenue-2q1`, `revenue-history-2q1`,
+`runs-2q1`, `answers-summary-2q1`, `answers-summary-2q1-c1`, unedited.

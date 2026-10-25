@@ -19,3 +19,15 @@ WORKER_ONLY_SETTINGS = ('SOA_CONSUMER_SURFACES_ENABLED', 'SERPAPI_API_KEY')
 def _no_worker_settings_in_the_api(monkeypatch):
     for name in WORKER_ONLY_SETTINGS:
         monkeypatch.delenv(name, raising=False)
+
+
+@pytest.fixture(autouse=True)
+def _console_cache(monkeypatch):
+    """2Q-1 (B3): the console's in-process cache, off unless a test turns it
+    on (its fixtures edit rows and supply's answers between two reads of the
+    same cycle), and empty at every test's start."""
+    from app.services import console_cache
+    monkeypatch.setenv('SOA_CONSOLE_CACHE', os.environ.get('SOA_TEST_CONSOLE_CACHE', '0'))
+    console_cache.clear()
+    yield
+    console_cache.clear()

@@ -124,7 +124,7 @@ import sys
 from collections import Counter
 from datetime import datetime, timezone
 from types import SimpleNamespace
-from typing import Optional
+from typing import List, Optional
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -459,14 +459,80 @@ def brand_direct_rows(conn, cid: int) -> list:
     return [(r[0], _as_json(r[1]), r[2], r[3]) for r in rows]
 
 
-def print_brand_direct(before_rows, after_rows) -> None:
+def print_brand_direct(before_rows, after_rows, runs=None) -> None:
     """The brand-direct block, the same for the real run (rows read back) and
-    the dry run (rows planned): see selection_report and claim_sets_changed."""
+    the dry run (rows planned): see selection_report and claim_sets_changed.
+    2Q-1: with `runs` (store_runs), the where-to-buy stores before and after."""
     changed = claim_sets_changed(claim_sets((r[0], r[1]) for r in before_rows),
                                  claim_sets((r[0], r[1]) for r in after_rows))
     print("\nbrand-direct claims (2O-4: selected by rule, no model call; 2O-5: fabricated is contradicted by "
           "the fact index, absent is unverified):")
     print(_render_selection(selection_report([r[1:] for r in after_rows]), changed))
+    if runs:
+        listed = listed_retailers(after_rows) or listed_retailers(before_rows)
+        print(_render_stores(store_report(before_rows, runs, listed), store_report(after_rows, runs, listed)))
+
+
+def store_runs(conn, cid: int) -> dict:
+    """2Q-1: {run_id: (intent, answered)} for the cycle's where-to-buy and
+    cheapest-place runs (source_ref.intent; answered: an answer arrived and
+    the surface returned it)."""
+    from scoring.expectation_scorer import NO_ANSWER_STATUSES, STORE_INTENTS
+    out = {}
+    for run_id, ref, status, answer_status in conn.execute(text("""
+        SELECT r.id, q.source_ref, r.status, r.answer_status FROM soa_runs r
+        JOIN soa_queries q ON q.id = r.query_id WHERE r.cycle_id = :cid AND q.tier = 'brand_direct'
+    """), {"cid": cid}).fetchall():
+        intent = (_as_json(ref) or {}).get('intent')
+        if intent in STORE_INTENTS:
+            out[run_id] = (intent, status == 'success' and answer_status not in NO_ANSWER_STATUSES)
+    return out
+
+
+def _stores_sent(extraction) -> Optional[List[str]]:
+    """The domains an answer sends the shopper to, as the console reads them
+    (console_read_models.stores_in_order): named_stores when the row carries
+    them, else its retailer_mentions; None for a row with neither."""
+    from soa_shared.retailers import retailers_named
+    x = extraction if isinstance(extraction, dict) else {}
+    if isinstance(x.get('named_stores'), list):
+        return [st.get('domain') for st in x['named_stores'] if isinstance(st, dict) and st.get('role') != 'unavailable']
+    if 'retailer_mentions' not in x:
+        return None
+    return [d for m in x.get('retailer_mentions') or [] if isinstance(m, dict) and m.get('role') != 'unavailable'
+            for d in retailers_named(m.get('name'))[:1]]
+
+
+def listed_retailers(rows) -> List[str]:
+    """2Q-1: the merchant's retailers the rows' named_stores marked `listed`."""
+    return sorted({st.get('domain') for r in rows for st in ((r[1] if isinstance(r[1], dict) else {})
+                                                             .get('named_stores') or [])
+                   if isinstance(st, dict) and st.get('listed')})
+
+
+def store_report(rows, runs: dict, listed: List[str]) -> dict:
+    """2Q-1: from (run_id, extraction, ...) rows: Retailer coverage (the
+    answered where-to-buy answers with a coding, and those naming two or more
+    of the merchant's retailers, `listed`) and routing's base (the answered
+    where-to-buy and cheapest-place answers naming a store)."""
+    listed = set(listed)
+    coded = {r[0]: _stores_sent(r[1]) for r in rows if r[0] in runs and runs[r[0]][1]}
+    coded = {k: v for k, v in coded.items() if v is not None}
+    wtb = [v for k, v in coded.items() if runs[k][0] == 'where_to_buy']
+    return {'coverage': (sum(1 for v in wtb if len(set(v) & listed) >= 2), len(wtb)),
+            'routing': sum(1 for v in coded.values() if v), 'listed': sorted(listed)}
+
+
+def _render_stores(before: dict, after: dict) -> str:
+    listed = after['listed'] or before['listed']
+    return '\n'.join([
+        "\nwhere-to-buy stores (2Q-1: coded over the whole answer, named_stores; before is the stored coding):",
+        f"    retailer coverage    {before['coverage'][0]} of {before['coverage'][1]} -> "
+        f"{after['coverage'][0]} of {after['coverage'][1]}  (where-to-buy answers naming 2 or more of "
+        f"{', '.join(listed) or 'the merchant' + chr(39) + 's retailers'})",
+        f"    routing base         {before['routing']} -> {after['routing']}  (where-to-buy and cheapest-place "
+        f"answers naming a store)",
+    ])
 
 
 def _brand_direct_scorer(*, fetch: bool = True):
@@ -1221,6 +1287,7 @@ def main(argv=None) -> int:
     with engine.connect() as conn:
         brand_ids = run_ids_for(conn, cid, ['brand_direct']) if 'brand_direct' in tiers else []
         before_brand = brand_direct_rows(conn, cid) if brand_ids else []
+        stores = store_runs(conn, cid) if brand_ids else {}
     other_ids = [r for r in run_ids if r not in set(brand_ids)]
 
     if args.dry_run:
@@ -1245,7 +1312,7 @@ def main(argv=None) -> int:
             succeeded=sum(1 for p in planned if p[1] == 'success'), total=len(planned),
             skipped=sum(1 for p in planned if p[1].startswith('skipped')), failed=0, retried=0, failures=[])
         _print_after(summary, before, after, before_secondary, before_rows, after_rows)
-        print_brand_direct(before_brand, after_brand)
+        print_brand_direct(before_brand, after_brand, stores)
         return 0
 
     if other_ids and not os.getenv("OPEN_AI_API_KEY"):
@@ -1267,7 +1334,7 @@ def main(argv=None) -> int:
 
     moved_primary = _print_after(summary, before, after, after_secondary, before_rows, after_rows)
     if brand_ids:
-        print_brand_direct(before_brand, after_brand)
+        print_brand_direct(before_brand, after_brand, stores)
 
     for failure in summary.failures[:10]:
         print(f"    FAILED run {failure.run_id}: {failure.status} "

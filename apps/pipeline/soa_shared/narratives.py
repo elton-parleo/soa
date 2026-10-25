@@ -709,9 +709,16 @@ def sent_to(extraction: dict, quoted: List[dict]) -> Optional[List[str]]:
     its order, as the console names them: the ones the labeller called a
     recommendation (retailer_mentions), else the transcription's
     recommended_retailers, else the retailers its quotes were judged at
-    (agent_quoted's judged_at). None when it named none."""
+    (agent_quoted's judged_at). None when it named none. 2Q-1: the stores
+    coded over the whole answer (named_stores) when the row carries them,
+    an unavailable one left out."""
+    coded = (extraction or {}).get('named_stores')
     mentions = (extraction or {}).get('retailer_mentions')
-    if mentions is not None:
+    if isinstance(coded, list):
+        names = [st.get('name') for st in sorted((st for st in coded if isinstance(st, dict)),
+                                                 key=lambda st: st.get('position') or 0)
+                 if st.get('role') != 'unavailable']
+    elif mentions is not None:
         names = [m.get('name') for m in mentions if isinstance(m, dict) and m.get('role') == 'recommendation']
     else:
         names = list((extraction or {}).get('recommended_retailers') or [])

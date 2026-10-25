@@ -124,7 +124,7 @@ def test_the_score_does_not_move_when_the_12_are_comparison_rather_than_branded_
     _supply(upstream)
     keep = ('score', 'earned', 'applicable_max', 'verdict', 'pillars', 'surfaces', 'measured', 'biggest_gap')
     with_comparison = _get(http, rescore=1).json()
-    assert with_comparison['scorer_version'] == '16'
+    assert with_comparison['scorer_version'] == '17'
     assert with_comparison['unprompted'] == {'questions': 17, 'named_the_brand': 33 - 12, 'category_control': 38}
     with db.begin() as c:
         c.execute(text("UPDATE soa_queries SET tier = 'category_control' WHERE tier = 'comparison'"))
@@ -146,7 +146,7 @@ def test_the_study_list_counts_the_comparison_tier(http, db, upstream):
 
 
 def test_scorer_11_names_its_change_and_never_explains_a_moved_score():
-    assert score_svc.SCORER_VERSION == '16'
+    assert score_svc.SCORER_VERSION == '17'
     assert score_svc.SCORER_CHANGES['11'] == 'brand-choice set for Lost and the first-pick tiles'
     assert score_svc.SCORER_CHANGE_APPLIES['11']({}) is False
 

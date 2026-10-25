@@ -15,10 +15,10 @@ def _body(version, coded, of=258, oldest=None, coder=None):
 
 
 def test_the_version():
-    assert score_svc.SCORER_VERSION == '16' and ea.BRAND_CODER_VERSION == 6
+    # 2Q-1 moved the current pins to 17 / 7 (test_console_2q1); 16 stays what coder 6's rows compare as
     assert score_svc.SCORER_CHANGES['16'] == 'brand-direct pack counts an open set; a count off the page is unverified'
     assert score_svc.SCORER_CHANGE_APPLIES['16']({}) is False
-    assert score_svc.CODER_SCORER_VERSIONS == {None: '11', 1: '11', 2: '12', 3: '13', 4: '14', 5: '15', 6: '16'}
+    assert score_svc.CODER_SCORER_VERSIONS[6] == '16'
 
 
 def test_fl14_re_scored_compares_as_its_oldest_outcome():

@@ -235,4 +235,4 @@ def test_two_runs_are_identical():
     assert json.dumps(one, sort_keys=True) == json.dumps(two, sort_keys=True)
     club = [judge("Sam's Club sells Pampers Swaddlers in a 210 count box.", idx=served()) for _ in range(2)]
     assert json.dumps(club[0], sort_keys=True) == json.dumps(club[1], sort_keys=True)
-    assert club[0]['brand_claim']['version'] == ea.BRAND_CODER_VERSION == 6
+    assert club[0]['brand_claim']['version'] == ea.BRAND_CODER_VERSION == 7

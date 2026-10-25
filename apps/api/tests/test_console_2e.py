@@ -256,16 +256,23 @@ def test_history_is_kept_newest_last_and_bounded():
 # ═══ comparability: applicable points changed ════════════════════════════
 
 def _store_on_previous(db, body):
+    """2Q-1 (B2): the previous cycle's score is its own read's, so 178 carries
+    the domain-check record its stored twin was measured on (229's, now), and
+    its read serves the twin rather than recomputing it."""
     with db.begin() as c:
-        c.execute(text("UPDATE soa_cycles SET share_of_algorithm = :b, share_of_algorithm_version = :v WHERE id = 178"),
-                  {'b': json.dumps(body), 'v': body['scorer_version']})
+        record = c.execute(text("SELECT domain_checks FROM soa_cycles WHERE id = 229")).scalar()
+        c.execute(text("UPDATE soa_cycles SET share_of_algorithm = :b, share_of_algorithm_version = :v, "
+                       "domain_checks = :d WHERE id = 178"),
+                  {'b': json.dumps(body), 'v': body['scorer_version'],
+                   'd': record if record is None or isinstance(record, str) else json.dumps(record)})
 
 
 def _comparable_twin(body):
     """A previous cycle's stored score comparable with this one: same pooled
-    surfaces, the same agents on each, the same scorer version."""
+    surfaces, the same agents on each, the same scorer version; and the inputs
+    it was computed on (2Q-1: read back as 178's own)."""
     return {k: body[k] for k in ('scorer_version', 'adapter_revision', 'brand_coder', 'score', 'earned', 'applicable_max',
-                                 'surfaces', 'pillars', 'metric_counts', 'measured')}
+                                 'surfaces', 'pillars', 'metric_counts', 'measured', 'inputs')}
 
 
 def test_69_against_100_shows_the_line_and_deltas_only_where_both_measured(http, upstream, db):
