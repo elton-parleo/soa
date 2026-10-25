@@ -6,7 +6,7 @@ from fastapi.responses import FileResponse
 from app.routers import (
     studies, entities, cycles, metrics, scope, actions, full_analysis,
     truesync, customers, lite_requests, public_lite, public_demo, public_full_analysis,
-    console, console_ops, full_loop,
+    console, console_ops, console_manufacturer, full_loop,
 )
 from app.auth import verify_token
 
@@ -133,6 +133,13 @@ app.include_router(
 # operator-only on top of the console scope (app/routers/console_ops.py).
 app.include_router(
     console_ops.router,
+    prefix="/api",
+    dependencies=[Depends(verify_token)],
+)
+# 2R-2: manufacturer mode (Rules, Publishing, the sent statement, the
+# compiled file through soa): console-scoped, the rule switch operator-only.
+app.include_router(
+    console_manufacturer.router,
     prefix="/api",
     dependencies=[Depends(verify_token)],
 )

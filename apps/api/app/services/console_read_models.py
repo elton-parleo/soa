@@ -2469,7 +2469,7 @@ def build_retired_named(retired: List[dict], *, rows: List[dict], runs: List[dic
                         surface_list: List[str], retired_by: Optional[str] = None) -> dict:
     """
     {lines: [{line, label, product_name, variant_ids, successor, brand_choice,
-    brand_direct, headline, sentence}], rule, still_sold_note}. `rows` are
+    agents, brand_direct, headline, sentence}], rule, still_sold_note}. `rows` are
     build_visibility's byQuestion rows (each `run` is `run-<id>`); `runs`
     the loaded runs with their question's `source_ref`; `texts` each run's
     answer text by run id.
@@ -2478,6 +2478,8 @@ def build_retired_named(retired: List[dict], *, rows: List[dict], runs: List[dic
     answers (`answers`), how many named the line (`named`) and how many its
     successor (`successor_named`), plus `no_text`: answers with no stored
     text, counted in `answers` and never as naming anything.
+    agents (2R-2): on the first surface, how many agents answered a
+    brand-choice question (`of`) and how many of them named the line.
     brand_direct: the answered runs of the question asked about this line
     (source_ref.retired_line), how many named the successor, and
     `still_sold`: null, with RETIRED_STILL_SOLD_NOTE.
@@ -2508,6 +2510,10 @@ def build_retired_named(retired: List[dict], *, rows: List[dict], runs: List[dic
         asked = [r for r in answered if r.get('tier') == 'brand_direct'
                  and ((refs.get(texts_of[r['run']][0]) or {}).get('retired_line') or {}).get('line') == line.get('line')]
         top = per.get(surface_list[0]) if surface_list else {'answers': 0, 'named': 0, 'successor_named': 0}
+        # 2R-2 (B1): the agents that answered on the first surface, and those that named the line
+        on_top = [r for r in choice if surface_list and on(r['surface'], surface_list[0])]
+        agents_of = {r.get('agent') or r.get('platform') for r in on_top}
+        agents_named = {r.get('agent') or r.get('platform') for r in on_top if named(r, line.get('terms'))}
         label = line.get('label') or line.get('line')
         headline = f"{label} named in {top['named']} of {top['answers']} brand-choice answers"
         sentence = f"Agents named {label}, which {by} retired, {_times(top['named'])} in {top['answers']} category answers"
@@ -2519,6 +2525,7 @@ def build_retired_named(retired: List[dict], *, rows: List[dict], runs: List[dic
             'variant_ids': line.get('variant_ids') or [],
             'successor': {k: succ.get(k) for k in ('variant_id', 'sku', 'product_name', 'line', 'label')} if succ else None,
             'brand_choice': per,
+            'agents': {'named': len(agents_named), 'of': len(agents_of)},
             'brand_direct': {'answers': len(asked),
                              'named_successor': sum(1 for r in asked if named(r, succ.get('terms'))) if succ else None,
                              'still_sold': None},
