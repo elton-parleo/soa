@@ -1,51 +1,48 @@
 """
-2R-2 (B1-B4): manufacturer mode, a brand at retail, on 2P-1's pair (cycle 229
-Oct 14, cycle 230 Oct 21) with supply's answers for a brand whose `mode` is
-manufacturer (console_fixture_2r2, synthetic to 2R-1's shapes: see its
-docstring). sqlite and Postgres.
+2R-2 (B1-B4) and 2R-2a: manufacturer mode, a brand at retail, on 2P-1's pair
+(cycle 229 Oct 14, cycle 230 Oct 21) with supply's answers RECORDED from
+parleo-supply-app#33 (console_fixture_2r2; tests/fixtures/console/supply_2r1/
+PROVENANCE.md). sqlite and Postgres.
 
-Supply holds Manufacturer Center's ten records and the brand's ACP feed
-(compiled Oct 13); P&G's team sends them, Parleo never does. Until P&G says it
-sent the file, Rules' "after" reads "Next read" and Impact is locked; once it
-says so (sent Oct 17, between the two cycles), after is cycle 230 and Impact
-reads what moved since cycle 229, through the one comparability rule.
+#33's merchant `pampers-2r1` holds four records compiled Oct 25: schema_org
+and Manufacturer Center held (Manufacturer Center 2 of 4 valid: Pure and AMORE
+carry no GTIN), ACP blocked with its spec clause. The brand's team sends the
+file; Parleo never does. Until the brand says it sent it, Rules' "after"
+reads "Next read" and Impact is locked; once it says so (Oct 17, between the
+two cycles) after is cycle 230 and Impact reads what moved since cycle 229,
+through the one comparability rule.
+
+A test that needs a state #33's harness did not produce (every Manufacturer
+Center record failing) derives it from a recorded row and says so.
 """
-import copy
 import json
 import os
 
 import pytest
-from sqlalchemy import text
 
-from app.routers.console_manufacturer import named_by_variant
 from app.services import console_cache
 from app.services import console_manufacturer as manu
 from tests import console_fixture_2p1 as f2p1
 from tests import console_fixture_2r2 as f2r2
-from tests import test_console_2m1_attribute as t2m1
 from tests.test_console_2c3a import db  # noqa: F401  (fixture)
-from tests.test_console_2p1_two_cycles import WS, _get, _pair
+from tests.test_console_2p1_two_cycles import _get, _pair
 from tests.test_console_read_models import TOKEN_A, WS_TENANT, as_, http, upstream  # noqa: F401  (pytest fixtures)
 
-BASE = f2r2.BASE
-SELLERS_OVERRIDE = {'v5': ['costco.com', 'samsclub.com', 'bjs.com']}
+SLUG, BASE = f2r2.SLUG, f2r2.BASE
+CLAUSE = f2r2.body('artifact-acp')['detail']['spec_clause']
 
 
-def _named(db, cycle_id=f2p1.ID_2):
-    with db.connect() as c:
-        row = dict(c.execute(text("SELECT * FROM soa_cycles WHERE id = :i"), {'i': cycle_id}).mappings().one())
-        return named_by_variant(c, row)
-
-
-def _shape(db, http, upstream, **kw):
+def _shape(db, http, upstream, sent=None):
     _pair(db, http, upstream)
-    f2r2.answer(upstream, base_reference=f2p1.reference_2(t2m1.ATTRIBUTE_REFERENCE), named=_named(db),
-                override=SELLERS_OVERRIDE, **kw)
+    f2r2.retag(db)
+    f2r2.alias(upstream)
+    return f2r2.answer(upstream, sent=sent)
 
 
-def _read(http, endpoint, user='op', status=200, **params):
+def _read(http, endpoint, user='op', status=200, merchant=SLUG, **params):
     as_(user)
-    r = http.get(f'/api/console/{endpoint}', params={'merchant': WS, **({'org': 10} if user == 'op' else {}), **params})
+    r = http.get(f'/api/console/{endpoint}', params={'merchant': merchant, **({'org': 10} if user == 'op' else {}),
+                                                     **params})
     assert r.status_code == status, r.text
     return r.json()
 
@@ -68,61 +65,45 @@ def test_truesync_and_publishing_carry_the_same_objects(http, db, upstream):
     _dump('truesync-2r2.json', ts)
     _dump('publishing-2r2.json', pub)
     assert ts['mode'] == pub['mode'] == 'manufacturer'
-    for key in ('surfaces', 'diff', 'preview', 'artifacts'):
+    for key in ('surfaces', 'diff', 'preview', 'artifacts', 'held'):
         assert ts[key] == pub[key], key
-    # the matrix is still there beside them
-    assert [p['listing_id'] for p in ts['products']] == list(range(40, 50))
-    # a tenant with no Manufacturer Center account: the matrix's cell is "not connected", as before; the held
-    # file is on the surface
-    assert ts['products'][0]['cells']['manufacturer_center']['s'] == 'na'
-    assert ts['products'][0]['cells']['acp']['s'] == 'compiled'
+    # the matrix reads the held feed records as its catalog listings (record_ref = the listing's product_id)
+    cells = {p['name']: {k: c['s'] for k, c in p['cells'].items()} for p in ts['products']}
+    assert list(cells) == ['Pampers Swaddlers', 'Pampers Pure Protection', 'Pampers AMORE', 'Pampers Zzz']
+    assert {(c['schema_org'], c['acp'], c['manufacturer_center']) for c in cells.values()} == {('compiled', 'compiled', 'na')}
 
 
-def test_the_surfaces_by_hand(http, db, upstream):
+def test_the_surfaces_from_33(http, db, upstream):
     _shape(db, http, upstream)
     surfaces = {s['id']: s for s in _read(http, 'publishing')['surfaces']}
     assert list(surfaces) == ['mfc', 'oai', 'markup', 'ucp', 'coupons']
     mfc = surfaces['mfc']
-    assert (mfc['status'], mfc['last'], mfc['records'], mfc['connected']) == ('held', 'File compiled Oct 13', 10, False)
-    # the attribute names the compile actually carried, never a fixed list
-    assert mfc['fields'] == 'gtin, brand, title, productName, count, size, productDetail, productPageUrl'
+    assert (mfc['status'], mfc['last'], mfc['records'], mfc['connected']) == \
+        ('held', 'File compiled Oct 25', '2 of 4 valid', False)
+    # the attribute names the valid records' compile actually carried
+    assert mfc['fields'] == 'brand, description, gtin, imageLink, itemGroupId, productName, productPageUrl, title, count'
     assert mfc['note'] == "The brand's own team sends it. Parleo never writes into its account"
-    assert (surfaces['oai']['status'], surfaces['oai']['last']) == ('held', 'Compiled Oct 13')
+    assert (mfc['images_from_brand_page'], mfc['no_image']) == (2, 0)
+    assert mfc['errors'] == ['no variant carries a GTIN; Manufacturer Center keys every product by GTIN'] * 2
+    oai = surfaces['oai']
+    assert (oai['status'], oai['last'], oai['note'], oai['blocked']) == ('blocked', 'Compiled Oct 25', CLAUSE, 4)
     markup = surfaces['markup']
-    assert (markup['name'], markup['status'], markup['last']) == ('Site markup (pampers.com)', 'drift', 'Read Oct 13')
-    assert markup['note'] == ('Cruisers 360, Zzz and Swaddlers markup carry the wrong Size 3, Size 4 and Size 5 weights. '
-                              'AMORE GTIN has 11 digits')
+    assert (markup['name'], markup['status'], markup['last'], markup['pages']) == \
+        ('Site markup (pampers.com)', 'drift', 'Read Oct 20', 2)
+    # the weight rows are the pair's (/reference attributes); the brand pages' GTINs are all GTINs as written
+    assert markup['note'] == 'Cruisers 360, Zzz and Swaddlers markup carry the wrong Size 3, Size 4 and Size 5 weights'
+    assert markup['gtin_flags'] == 0
     assert (surfaces['ucp']['status'], surfaces['ucp']['last']) == ('none', 'Not in this pass')
     coupons = surfaces['coupons']
-    assert (coupons['status'], coupons['last'], coupons['note'], coupons['approval']) == \
-        ('next', 'Next release', 'Publishes after Legal approves rule 4', 'needs_legal')
+    assert (coupons['note'], coupons['approval'], coupons['approval_look']) == \
+        ('Publishes after Legal approves rule 4', 'needs_approval', 'needs_legal')
 
 
-def test_each_surface_follows_supply(http, db, upstream):
-    _shape(db, http, upstream, acp='blocked', ucp=True)
-    rules = copy.deepcopy(f2r2.RULES)
-    rules['rules'][3]['approval'] = {'state': 'approved', 'by': 'legal@pg.test', 'at': '2026-10-24T10:00:00+00:00'}
-    upstream.answer('GET', f'{BASE}/rules', body=rules, token=TOKEN_A)
-    surfaces = {s['id']: s for s in _read(http, 'publishing')['surfaces']}
-    assert surfaces['oai']['status'] == 'blocked'
-    assert surfaces['oai']['note'].startswith('ACP product feed spec, price: required on every item.')
-    assert (surfaces['ucp']['status'], surfaces['ucp']['last']) == ('live', 'Live, version 2026-04-08')
-    assert surfaces['coupons']['note'] == 'Legal approved rule 4 on Oct 24. Publishes in the next release'
-    # before the first hold Manufacturer Center is not compiled; no markup drift reads none
-    upstream.answer('GET', '/api/truesync/publications', body=[], token=TOKEN_A)
-    plain = copy.deepcopy(f2p1.reference_2(t2m1.ATTRIBUTE_REFERENCE))
-    for v in plain['attributes']:
-        v['markup'] = v['chart']
-    upstream.answer('GET', f'{BASE}/reference', body=plain, token=TOKEN_A)
-    body = _read(http, 'publishing')
-    surfaces = {s['id']: s for s in body['surfaces']}
-    assert (surfaces['mfc']['status'], surfaces['mfc']['last'], surfaces['mfc']['fields']) == \
-        ('not_compiled', 'Not compiled yet', '')
-    assert surfaces['markup']['status'] == 'none'
-    assert body['preview'] == {'title': 'No Pampers record compiled yet', 'note': 'Not compiled yet', 'records': 0,
-                               'compiled_at': None, 'held': False}
-    assert body['artifacts'] == []
-    # a rules read that fails is named, never "approved"
+def test_rule_4_s_approval_moves_the_deals_surface(http, db, upstream):
+    _shape(db, http, upstream)
+    upstream.answer('GET', f'{BASE}/rules', body=f2r2.body('rules-after-put'), token=TOKEN_A)
+    coupons = {s['id']: s for s in _read(http, 'publishing')['surfaces']}['coupons']
+    assert coupons['note'] == 'Legal approved rule 4 on Oct 25. Publishes in the next release'
     upstream.answer('GET', f'{BASE}/rules', status=500, body={'detail': 'down'}, token=TOKEN_A)
     body = _read(http, 'publishing')
     assert 'rules' in body['read_errors']
@@ -130,63 +111,93 @@ def test_each_surface_follows_supply(http, db, upstream):
         "Publishes after Legal approves rule 4. Rule 4's approval could not be read"
 
 
+def test_every_manufacturer_center_record_failing_is_blocked():
+    """A4. #33's harness held 2 of 4 valid; every record failing is derived from its rows: the two valid ones
+    given the failing ones' validation."""
+    rows = f2r2.mine(f2r2.body('publications-held'))
+    failing = next(r for r in rows if r['channel_slug'] == 'manufacturer_center' and r['error'])
+    derived = [{**r, 'validation': failing['validation'], 'error': failing['error']}
+               if r['channel_slug'] == 'manufacturer_center' else r for r in rows]
+    held = f2r2.body('tenant-held')['merchants'][0]['held']
+    surfaces = manu.build_surfaces(pubs=derived, channels=f2r2.body('channels'), drift=[], reference=None, pages=[],
+                                   flags=[], own_domain='pampers.com', rules=[], held=held)
+    mfc = surfaces[0]
+    assert (mfc['status'], mfc['records'], mfc['note']) == \
+        ('blocked', '0 of 4 valid', 'no variant carries a GTIN; Manufacturer Center keys every product by GTIN')
+    preview = manu.build_preview(surfaces=surfaces, brand='Pampers', name='Pampers 2R-1', domain='pampers.com')
+    assert preview['note'] == ("Compiled Oct 25 from Pampers 2R-1's feed and pampers.com. 0 of 4 valid, so nothing is "
+                               "ready to send: no variant carries a GTIN; Manufacturer Center keys every product by GTIN")
+    assert preview['held'] is False
+
+
+def test_no_image_yet_is_never_invented():
+    """A record whose compile took no image from the brand page and whose validator names the image."""
+    row = {'expressiveness': [{'field': 'description_from_brand_page'}],
+           'validation': {'ok': False, 'errors': ['US:en:00037000799818: imageLink is required']}}
+    assert manu.no_image(row) is True
+    assert manu.no_image({**row, 'expressiveness': [{'field': 'image_from_brand_page'}]}) is False
+    assert manu.no_image({'expressiveness': [], 'validation': {'ok': True, 'errors': []}}) is False
+
+
 def test_the_diff_preview_and_artifacts(http, db, upstream):
     _shape(db, http, upstream)
     body = _read(http, 'publishing')
-    diff = body['diff']
-    kinds = [r['kind'] for r in diff]
-    # 2M-1's weight rows first (3 markup, 6 retailer pages), then GTINs, the retired line, the sellers
-    assert (kinds.count('markup'), kinds.count('page')) == (3, 6)
-    assert [(r['field'], r['was'], r['now'], r['prov']) for r in diff if r['kind'] != 'markup' and r['kind'] != 'page'] == [
-        ('amore.size_1.gtin', '30772244425', '030772244425', 'parleo'),
-        ('baby_dry.size_4.gtin', '37000799818', '037000799818', 'parleo'),
-        ('pure_protection.status', 'sold, per 4 of 6 agents', 'retired, successor AMORE', 'brand'),
-        ('swaddlers.size_5.sellers', 'Target, Walmart, Amazon', "Costco, Sam's Club, BJ's", 'brand')]
-    # every "was" names its source cycle
-    assert {r['source']['cycle'] for r in diff} == {f2p1.CYCLE_2}
-    assert {r['source']['what'] for r in diff} == {'supply read', 'feed', 'answers'}
+    kinds = [r['kind'] for r in body['diff']]
+    # 2M-1's weight rows (3 markup, 6 retailer pages) and the retired line. No GTIN row: every GTIN the brand
+    # pages' markup and #33's feed state is one as written. No sellers row: #33's feed SKUs (sku_pg_…) are not
+    # the pair's questions' variants, so no SKU has both sides.
+    assert (kinds.count('markup'), kinds.count('page'), kinds.count('gtin'), kinds.count('sellers')) == (3, 6, 0, 0)
+    assert [(r['field'], r['was'], r['now'], r['prov']) for r in body['diff'] if r['kind'] == 'lifecycle'] == [
+        ('pure_protection.status', 'sold, per 4 of 6 agents', 'retired, successor AMORE', 'brand')]
+    assert {r['source']['cycle'] for r in body['diff']} == {f2p1.CYCLE_2}
     assert body['preview'] == {
-        'title': 'Ten Pampers records, Manufacturer Center first',
-        'note': "Compiled Oct 13 from pampers.com and same-day shelf reads. Held until P&G's team sends it.",
-        'records': 10, 'compiled_at': f2r2.COMPILED_AT, 'held': True, 'sent': None}
-    assert [(a['channel'], a['records'], a['url']) for a in body['artifacts']] == [
-        ('manufacturer_center', 10, f'/api/console/truesync/artifact?merchant={WS}&channel=manufacturer_center'),
-        ('acp', 10, f'/api/console/truesync/artifact?merchant={WS}&channel=acp')]
+        'title': 'Four Pampers records, Manufacturer Center first',
+        'note': "Compiled Oct 25 from Pampers 2R-1's feed and pampers.com. 2 of 4 valid. Held until Pampers 2R-1's "
+                "team sends it.",
+        'records': 4, 'valid': 2, 'compiled_at': f2r2.body('tenant-held')['merchants'][0]['held']['compiled_at'],
+        'held': True, 'sent': None}
+    assert [(a['channel'], a['records'], a['held'], a['blocked']) for a in body['artifacts']] == [
+        ('manufacturer_center', 4, True, False), ('schema_org', 4, True, False), ('acp', 4, False, True)]
+    assert body['artifacts'][2]['spec_clause'] == CLAUSE
 
 
 def test_a_merchant_not_in_manufacturer_mode_is_unchanged(http, db, upstream):
     _shape(db, http, upstream)
     upstream.answer('GET', '/api/truesync/tenant', body=WS_TENANT, token=TOKEN_A)
-    ts = _read(http, 'truesync')
+    ts = _read(http, 'truesync', merchant=f2r2.PAIR_SLUG)
     assert not {'mode', 'surfaces', 'diff', 'preview', 'artifacts'} & set(ts)
     for endpoint in ('publishing', 'rules'):
-        assert _read(http, endpoint, status=404)['detail'] == f"merchant '{WS}' is not in manufacturer mode"
-    assert 'locked' not in _read(http, 'revenue', cycle=f2p1.CYCLE_2)
+        assert _read(http, endpoint, status=404, merchant=f2r2.PAIR_SLUG)['detail'] == \
+            f"merchant '{f2r2.PAIR_SLUG}' is not in manufacturer mode"
 
 
 # ── B2: /rules, its backtest, the switch ──────────────────────────────────
 
-def test_rules_and_the_backtest_on_the_fl15_shape(http, db, upstream):
+def test_rules_are_supply_s_words_and_the_backtest(http, db, upstream):
     _shape(db, http, upstream)
     body = _read(http, 'rules')
     _dump('rules-2r2.json', body)
-    assert [(r['id'], r['on'], r['approval']['state']) for r in body['rules']] == [
-        ('r1', True, 'approved'), ('r2', True, 'approved'), ('r3', True, 'approved'), ('r4', False, 'needs_legal'),
-        ('r5', True, 'approved'), ('r6', True, 'approved')]
-    assert body['note'] == 'Compliance rules compile into every product record. Legal signs off before Publishing switches a rule on.'
+    supply = f2r2.body('rules')['rules']
+    # every word of the rules is supply's (2R-2a A3); soa carries none
+    for mine, theirs in zip(body['rules'], supply):
+        assert (mine['id'], mine['name'], mine['detail'], mine['scope'], mine['outcome'], mine['on']) == \
+            (theirs['code'], theirs['name'], theirs['detail'], theirs['scope'], theirs['outcome'], theirs['on'])
+        assert mine['audience'] == [{'name': theirs['audience']}] and mine['audience_text'] == theirs['audience']
+    assert {(r['approval'], r['approval_look']) for r in body['rules']} == {('needs_approval', 'needs_legal')}
+    assert not {'title', 'sub', 'note'} & set(body)
     assert body['cycle'] == f2p1.CYCLE_2 and body['sent'] is None
     rows = {r['key']: r for r in body['backtest']}
     assert [(r['label'], r['before'], r['after']) for r in body['backtest']] == [
         ("Size 4 weight answers giving only the chart's range", '9 of 15', 'Next read'),
         ('Category answers naming Pure', '7 of 102', 'Next read'),
         ('Cheapest-place answers naming a live deal', '3 of 100', 'Next read')]
-    unsent = ("After is the first cycle scored after P&G's team sends the file. A held file changes nothing an agent "
-              "reads, so holding it starts no clock.")
+    unsent = ("After is the first cycle scored after Pampers 2R-1's team sends the file. A held file changes nothing an "
+              "agent reads, so holding it starts no clock.")
     assert rows['attribute']['note'] == f'Swaddlers, Zzz and Baby-Dry, Oct 21. {unsent}'
     assert rows['retired']['note'] == f'AMORE named in 3, Oct 21. {unsent}'
     assert rows['promo']['note'] == f'Amazon multi-buy 2 and Amazon coupon 1, Oct 21. {unsent}'
     # the same helpers as the Overview: its retired line and its promo tile read the same counts
-    over = _get(http, 'overview', cycle=f2p1.CYCLE_2, merchant=WS)
+    over = _get(http, 'overview', cycle=f2p1.CYCLE_2, merchant=SLUG)
     pure = over['retired_named']['lines'][0]['brand_choice']['all']
     assert rows['retired']['before'] == f"{pure['named']} of {pure['answers']}"
     promo = over['promo_pass_through']
@@ -195,80 +206,78 @@ def test_rules_and_the_backtest_on_the_fl15_shape(http, db, upstream):
     assert rows['attribute']['before'] == f'{15 - len(size4_misses)} of 15'
 
 
-def test_putting_a_rule_is_forwarded_operator_only_and_rereads(http, db, upstream):
+def test_putting_a_rule_is_forwarded_with_the_actor_operator_only(http, db, upstream):
     _shape(db, http, upstream)
-    upstream.answer('PUT', f'{BASE}/rules/r4', body={'code': 'r4', 'on': True}, token=TOKEN_A)
     as_('alice')
-    r = http.put('/api/console/rules/r4', params={'merchant': WS}, json={'on': True})
-    assert r.status_code == 403, r.text
+    assert http.put('/api/console/rules/r4', params={'merchant': SLUG}, json={'on': True}).status_code == 403
     as_('op')
-    r = http.put('/api/console/rules/r4', params={'merchant': WS, 'org': 10},
-                 json={'on': True, 'approval': 'approved', 'note': 'Legal signed Oct 24'})
+    r = http.put('/api/console/rules/r4', params={'merchant': SLUG, 'org': 10},
+                 json={'approval': 'approved', 'note': 'Legal signed Oct 24'})
     assert r.status_code == 200, r.text
     put = [c for c in upstream.calls if c['method'] == 'PUT']
     assert put == [{'method': 'PUT', 'path': f'{BASE}/rules/r4', 'token': TOKEN_A, 'params': None,
-                    'json': {'on': True, 'approval': 'approved', 'note': 'Legal signed Oct 24', 'by': 'op@test'}}]
+                    'json': {'approval': 'approved', 'note': 'Legal signed Oct 24', 'actor': 'op@test'}}]
     assert [x['id'] for x in r.json()['rules']] == ['r1', 'r2', 'r3', 'r4', 'r5', 'r6']   # the re-read list
-    assert http.put('/api/console/rules/r4', params={'merchant': WS, 'org': 10}, json={}).status_code == 422
-    assert http.put('/api/console/rules/r4', params={'merchant': WS, 'org': 10},
-                    json={'approval': 'yes'}).status_code == 422
+    bad = lambda body: http.put('/api/console/rules/r4', params={'merchant': SLUG, 'org': 10}, json=body).status_code  # noqa: E731
+    assert bad({}) == 422
+    assert bad({'approval': 'pending'}) == 422     # 2R-2's assumed state; supply's are needs_approval/approved/declined
 
 
 # ── B3: sent is a fact the brand states; Impact unlocks on it ─────────────
 
 def test_impact_is_locked_until_the_brand_says_it_sent_the_file(http, db, upstream):
     _shape(db, http, upstream)
-    rev = _read(http, 'revenue', cycle=f2p1.CYCLE_2)
-    assert rev['locked'] == {
-        'state': 'locked', 'title': 'Cause shows once P&G publishes the record',
-        'text': ("TrueSync can tie a change in these answers to a fix only after P&G's team publishes the Pampers record "
-                 "to Manufacturer Center and pampers.com. Until then every figure here is a count of answers you can "
-                 "audit.")}
+    assert _read(http, 'revenue', cycle=f2p1.CYCLE_2)['locked'] == {
+        'state': 'locked', 'title': 'Cause shows once Pampers 2R-1 publishes the record',
+        'text': ("TrueSync can tie a change in these answers to a fix only after Pampers 2R-1's team publishes the "
+                 "Pampers record to Manufacturer Center and pampers.com. Until then every figure here is a count of "
+                 "answers you can audit.")}
 
 
-def test_the_sent_statement_is_journaled_on_the_held_publications(http, db, upstream):
+def test_the_sent_statement_goes_to_supply_as_33_takes_it(http, db, upstream):
     _shape(db, http, upstream)
-    upstream.answer('POST', f'{BASE}/publications/sent', body={'journaled': []}, token=TOKEN_A)
     as_('alice')   # the brand states it: a member may
-    r = http.post('/api/console/publishing/sent', params={'merchant': WS},
-                  json={'channel': 'manufacturer_center', 'sent_at': f2r2.SENT_AT,
-                        'by': "P&G's Manufacturer Center team", 'note': 'uploaded through the UI'})
+    post = lambda body: http.post('/api/console/publishing/sent', params={'merchant': SLUG}, json=body)  # noqa: E731
+    r = post({'channel': 'manufacturer_center', 'sent_at': '2026-10-17T15:30:00Z', 'stated_by': 'P&G content team',
+              'note': 'uploaded in Manufacturer Center'})
     assert r.status_code == 200, r.text
     [call] = [c for c in upstream.calls if c['method'] == 'POST']
     assert call['token'] == TOKEN_A and call['path'] == f'{BASE}/publications/sent'
-    assert call['json'] == {'channel': 'manufacturer_center', 'sent_at': f2r2.SENT_AT,
-                            'by': "P&G's Manufacturer Center team", 'note': 'uploaded through the UI',
-                            'stated_by': 'alice@test', 'event': 'sent_by_merchant',
-                            'publication_ids': list(range(8040, 8050))}
-    assert r.json()['mode'] == 'manufacturer'   # the re-read Publishing
-    bad = lambda body: http.post('/api/console/publishing/sent', params={'merchant': WS}, json=body).status_code  # noqa: E731
-    assert bad({'channel': 'ucp_uip', 'sent_at': f2r2.SENT_AT}) == 409          # nothing held there
-    assert bad({'channel': 'manufacturer_center', 'sent_at': 'last week'}) == 422
-    assert bad({'channel': 'manufacturer_center', 'sent_at': '2027-01-01'}) == 422
+    assert call['json'] == {'channel': 'manufacturer_center', 'sent_at': '2026-10-17T15:30:00Z',
+                            'stated_by': 'P&G content team', 'actor': 'alice@test',
+                            'note': 'uploaded in Manufacturer Center'}
+    assert r.json()['recorded'] == 4 and r.json()['mode'] == 'manufacturer'
+    # ACP is blocked: nothing held to send, as supply says it (and soa does not ask it)
+    r = post({'channel': 'acp', 'sent_at': '2026-10-17T15:30:00Z', 'stated_by': 'P&G content team'})
+    assert r.status_code == 409 and r.json()['detail'] == "acp is blocked for 'pampers-2r1'; nothing was held to send"
+    assert r.json()['detail'] == f2r2.body('sent-acp-409')['detail']
+    assert post({'channel': 'manufacturer_center', 'sent_at': 'yesterday', 'stated_by': 'x'}).status_code == 422
+    assert post({'channel': 'manufacturer_center', 'sent_at': '2999-01-01', 'stated_by': 'x'}).status_code == 422
+    assert post({'channel': 'manufacturer_center', 'sent_at': '2026-10-17', 'stated_by': ' '}).status_code == 422
+    assert len([c for c in upstream.calls if c['method'] == 'POST']) == 1
 
 
 def test_once_sent_impact_and_the_backtest_read_the_next_cycle(http, db, upstream):
-    _shape(db, http, upstream, sent=f2r2.SENT_AT)
-    rev = _read(http, 'revenue', cycle=f2p1.CYCLE_2)
-    _dump('revenue-2r2.json', rev)
-    locked = rev['locked']
+    _shape(db, http, upstream, sent='2026-10-17')
+    locked = _read(http, 'revenue', cycle=f2p1.CYCLE_2)['locked']
+    _dump('revenue-locked-2r2.json', locked)
     assert (locked['state'], locked['title']) == ('unlocked', 'What moved since the record was sent (Oct 17)')
     assert (locked['before'], locked['after'], locked['status']) == (f2p1.CYCLE_1, f2p1.CYCLE_2, 'compared')
-    assert locked['sent']['by'] == "P&G's Manufacturer Center team"
-    # the first cycle after the send against the last before it: 2P-1's four rows, by the same rule
+    assert (locked['sent']['stated_by'], locked['sent']['by']) == ('P&G content team', 'alice@test')
     assert [(m['label'], m['then'], m['now'], m['delta']) for m in locked['rows']] == [
         ('Attribute accuracy', '61 of 79', '62 of 79', '+1'), ('Retailer coverage', '38 of 49', '40 of 49', '+2'),
         ('Promo pass-through', '5 of 100', '3 of 100', '-2'), ('Category presence', '51 of 102', '51 of 102', '0')]
     rules = _read(http, 'rules')
     assert (rules['cycle'], rules['after_cycle']) == (f2p1.CYCLE_1, f2p1.CYCLE_2)
     rows = {r['key']: r for r in rules['backtest']}
-    assert rows['promo']['before'] == '5 of 100' and rows['promo']['after'] == '3 of 100'
+    assert (rows['promo']['before'], rows['promo']['after']) == ('5 of 100', '3 of 100')
     assert rows['promo']['note'].endswith(f'After is {f2p1.CYCLE_2} (Oct 21), the first cycle scored after the send on Oct 17.')
     pub = _read(http, 'publishing')
     mfc = pub['surfaces'][0]
-    assert mfc['last'] == 'File compiled Oct 13, sent Oct 17' and mfc['sent']['sent_at'] == f2r2.SENT_AT
-    assert pub['preview']['note'] == ("Compiled Oct 13 from pampers.com and same-day shelf reads. P&G's team says it "
-                                      "sent it on Oct 17.")
+    # the sent line is /tenant's `held.sent`, never a recount
+    assert (mfc['last'], mfc['sent']) == ('File compiled Oct 25, sent Oct 17', '2026-10-17T15:30:00+00:00')
+    assert pub['preview']['note'] == ("Compiled Oct 25 from Pampers 2R-1's feed and pampers.com. 2 of 4 valid. "
+                                      "Pampers 2R-1's team says it sent it on Oct 17.")
 
 
 def test_a_send_after_the_newest_cycle_waits_for_the_next_read(http, db, upstream):
@@ -283,22 +292,32 @@ def test_a_send_after_the_newest_cycle_waits_for_the_next_read(http, db, upstrea
 
 # ── B4: the file through soa ──────────────────────────────────────────────
 
-def test_the_artifact_comes_through_soa_with_its_filename(http, db, upstream):
-    _shape(db, http, upstream)
+def test_the_artifact_comes_through_soa_with_33_s_headers(http, db, upstream):
+    pub_id = _shape(db, http, upstream)
     as_('alice')
-    r = http.get('/api/console/truesync/artifact', params={'merchant': WS, 'channel': 'manufacturer_center'})
+    get = lambda **p: http.get('/api/console/truesync/artifact', params={'merchant': SLUG, **p})  # noqa: E731
+    r = get(channel='manufacturer_center')
     assert r.status_code == 200, r.text
-    assert r.content == f2r2.ARTIFACT
-    assert r.headers['content-type'].startswith('application/json')
-    assert r.headers['content-disposition'] == 'attachment; filename="pampers-manufacturer-center-2026-10-13.json"'
+    assert r.content == f2r2.content('artifact-manufacturer_center')
+    recorded = f2r2.recorded('artifact-manufacturer_center')['headers']
+    for header in ('content-disposition', 'x-truesync-compiled-at', 'x-truesync-record-count', 'x-truesync-validator',
+                   'x-truesync-merchant-kind', 'x-truesync-mode'):
+        assert r.headers[header] == recorded[header], header
+    assert r.headers['x-truesync-validator'] == 'ok=2; failed=2'
     assert TOKEN_A not in r.text and TOKEN_A not in json.dumps(dict(r.headers))
-    [call] = [c for c in upstream.calls if '/artifacts/' in c['path']]
-    assert call['token'] == TOKEN_A
-    assert http.get('/api/console/truesync/artifact', params={'merchant': WS, 'channel': 'ucp_uip'}).status_code == 404
-    # supply refuses the token: said so, never an empty file
-    upstream.answer('GET', f'{BASE}/artifacts/manufacturer_center', status=403, body={'detail': 'bad key'}, token=TOKEN_A)
-    r = http.get('/api/console/truesync/artifact', params={'merchant': WS, 'channel': 'manufacturer_center'})
-    assert r.status_code == 403 and r.json()['detail'].startswith('Not authorized for this customer')
+    [call] = [c for c in upstream.calls if '/artifacts' in c['path']]
+    assert (call['token'], call['params']) == (TOKEN_A, {'channel': 'manufacturer_center'})
+    # one publication's file
+    r = get(channel='manufacturer_center', publication_id=pub_id)
+    assert r.status_code == 200 and r.content == f2r2.content('artifact-publication')
+    assert r.headers['x-truesync-reason'] == 'held_for_merchant'
+    assert get(channel='manufacturer_center', publication_id=999).status_code == 404   # not the merchant's
+    assert get(channel='ucp_uip').status_code == 404
+    # ACP while blocked: supply's 409 with its clause, as JSON, never a file
+    upstream.answer('GET', f'{BASE}/artifacts', status=409, body=f2r2.body('artifact-acp'), token=TOKEN_A)
+    r = get(channel='acp')
+    assert r.status_code == 409 and r.headers['content-type'].startswith('application/json')
+    assert r.json()['spec_clause'] == CLAUSE and r.json()['reason'] == 'blocked' and r.json()['record_count'] == 4
 
 
 def test_the_artifact_is_kept_per_compiled_at(http, db, upstream, monkeypatch):
@@ -308,19 +327,41 @@ def test_the_artifact_is_kept_per_compiled_at(http, db, upstream, monkeypatch):
     as_('alice')
 
     def fetch():
-        r = http.get('/api/console/truesync/artifact', params={'merchant': WS, 'channel': 'manufacturer_center'})
+        r = http.get('/api/console/truesync/artifact', params={'merchant': SLUG, 'channel': 'manufacturer_center'})
         assert r.status_code == 200
-        return sum(1 for c in upstream.calls if '/artifacts/' in c['path'])
+        return sum(1 for c in upstream.calls if '/artifacts' in c['path'])
     assert fetch() == 1
     assert fetch() == 1                 # the same compile: kept
-    recompiled = f2r2.publications()
-    for p in recompiled:
-        p['compiled_at'] = '2026-10-24T16:00:00+00:00'
-    upstream.answer('GET', '/api/truesync/publications', body=recompiled, token=TOKEN_A)
-    assert fetch() == 2                 # a recompile is a new file
+    # #33's second recording compiled the same records again, a few seconds later: a new file
+    upstream.answer('GET', '/api/truesync/publications', body=f2r2.body('sent-20261023/publications-sent'), token=TOKEN_A)
+    assert fetch() == 2
 
 
 # ── the rules by hand ─────────────────────────────────────────────────────
+
+def test_the_markup_gtin_is_the_brand_page_s_json_ld():
+    pages = [{'url': p['url'], 'observed_at': p['observed_at'], 'brand_page': p['brand_page']}
+             for p in f2r2.recorded('brand-pages').values()]
+    gtins = manu.markup_gtins(pages)
+    # each page's hasVariant Products, by its line: Swaddlers Size 4 and Zzz Size 4 among them
+    assert {'gtin': '037000799818', 'size': 'Size 4', 'line': 'Pampers Swaddlers'} in gtins
+    assert [g for g in gtins if g['gtin'] == '037000833970'][0]['size'] == 'Size 4'
+    assert manu.gtin_flags(pages) == []     # every one a GTIN as written
+    # a Product whose gtin13 lost its leading zero (by hand: no recorded page has one)
+    lost = [{'brand_page': {'line': 'Pampers AMORE', 'json_ld': {'@type': 'ProductGroup', 'hasVariant': [
+        {'@type': 'Product', 'size': '1', 'gtin13': '30772244425'}]}}}]
+    assert manu.gtin_flags(lost, brand='Pampers') == [
+        {'field': 'amore.size_1.gtin (markup)', 'was': '30772244425', 'now': '030772244425', 'prov': 'parleo',
+         'kind': 'gtin', 'where': 'markup', 'line': 'AMORE', 'digits': 11}]
+
+
+def test_build_rules_maps_33_s_flat_approval():
+    rules = manu.build_rules([{**f2r2.body('rules')['rules'][3], 'approval': a} for a in manu.APPROVAL_STATES])
+    assert [(r['approval'], r['approval_look']) for r in rules] == [
+        ('needs_approval', 'needs_legal'), ('approved', 'approved'), ('declined', 'returned')]
+    assert manu.build_rules([{'code': 'r1', 'audience': 'All agents, Google agents'}])[0]['audience'] == \
+        [{'name': 'All agents'}, {'name': 'Google agents'}]
+
 
 def test_gtin_corrections_and_carried_fields():
     assert manu.gtin_correction('30772244425') == '030772244425'

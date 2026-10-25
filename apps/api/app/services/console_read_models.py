@@ -1630,11 +1630,16 @@ def build_truesync(merchant: str, *, channels: List[dict], publications: List[di
     channel_list = [c for c in channels or [] if c.get('is_active', True)]
     listings = catalog.get('listings') or []
     listing_ids = {l.get('listing_id') for l in listings}
+    # 2R-2a: a brand's held rows are feed records (record_ref "feed:<slug>:…", no listing); the
+    # catalog lists each record as a listing whose product_id is that record_ref
+    by_record = {l.get('product_id'): l.get('listing_id') for l in listings
+                 if str(l.get('product_id') or '').startswith('feed:')}
     pubs: Dict[tuple, dict] = {}
     for pub in publications or []:
-        if pub.get('listing_id') not in listing_ids:
+        lid = pub.get('listing_id') if pub.get('listing_id') in listing_ids else by_record.get(pub.get('record_ref'))
+        if lid is None:
             continue
-        key = (pub['listing_id'], pub.get('channel_slug'))
+        key = (lid, pub.get('channel_slug'))
         best = pubs.get(key)
         if best is None or (_ts(pub.get('compiled_at')), pub.get('id') or 0) > (_ts(best.get('compiled_at')), best.get('id') or 0):
             pubs[key] = pub

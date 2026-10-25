@@ -1,6 +1,7 @@
 """
 2R-2: manufacturer mode, under /api/console/. A brand at retail: supply
-compiles its record per surface and holds it; the brand's own team sends it.
+(parleo-supply-app#33) compiles its records from its SKU feed and holds them;
+the brand's own team sends them.
 
     GET  /api/console/rules?merchant=<slug>              the compliance rules, their approval, the backtest (B2)
     PUT  /api/console/rules/{code}?merchant=<slug>        on / approval / note, forwarded to supply (operator only) (B2)
@@ -18,12 +19,12 @@ Overview's own helpers (console.py's _routing_inputs, _visibility,
 _promo_inputs, the cached attribute answers), never a second implementation.
 """
 import asyncio
-import re
+import json
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
-from fastapi.responses import Response
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
 from sqlalchemy import text
 
@@ -43,6 +44,10 @@ from app.services import console_score as score_svc
 from soa_shared.database import engine
 
 router = APIRouter(prefix="/console", tags=["console-manufacturer"])
+
+#: supply's file headers soa passes through (#33: every file response carries them).
+ARTIFACT_HEADERS = ('content-disposition', 'x-truesync-compiled-at', 'x-truesync-record-count',
+                    'x-truesync-validator', 'x-truesync-merchant-kind', 'x-truesync-mode', 'x-truesync-reason')
 
 
 def _record(ms: MerchantScope) -> Optional[dict]:
@@ -78,7 +83,7 @@ def _brand(catalog: Optional[dict]) -> Optional[str]:
 
 def _own_domain(retailers: Optional[dict], record: Optional[dict]) -> Optional[str]:
     own = ((retailers or {}).get('own_domains') or [None])[0] or (retailers or {}).get('own_domain') or \
-        (record or {}).get('domain')
+        ((record or {}).get('own_domains') or [None])[0] or (record or {}).get('domain')
     return str(own).lower().removeprefix('www.') if own else None
 
 
@@ -87,9 +92,11 @@ async def _held_inputs(scope: CustomerScope, merchant: str) -> tuple:
     the artifacts read."""
     client = full_loop._client(scope)
     (k_status, catalog, k_err), (_, pubs, p_err) = await asyncio.gather(
-        _reads(scope).get_merchant_catalog(merchant), client.get_publications(limit=500))
-    errors = {n: e for n, e in (('catalog', k_err), ('publications', p_err)) if e}
-    mine = manu.merchant_publications(pubs or [], _listing_ids(catalog)) if not errors else []
+        _reads(scope).get_merchant_catalog(merchant), client.get_publications(limit=1000))
+    errors = {'publications': p_err} if p_err else {}
+    if k_err is not None and k_status != 404:
+        errors['catalog'] = k_err
+    mine = manu.merchant_publications(pubs or [], _listing_ids(catalog), merchant) if p_err is None else []
     return (catalog if k_err is None else None), mine, errors
 
 
@@ -122,20 +129,26 @@ async def publishing_view(scope: CustomerScope, ms: MerchantScope, merchant: str
                           drift: List[dict]) -> dict:
     """B1: {mode, surfaces, diff, preview, artifacts, cycle, read_errors} for
     a merchant in manufacturer mode, from the reads /truesync already holds
-    (channels, publications, catalog, reference and its weight rows), its
-    rules, feed and retailer list, and the newest scored cycle's answers."""
+    (channels, publications, catalog, reference and its weight rows), the
+    merchant's /tenant record (`held`), its rules, feed, retailer list and
+    brand pages (retailer-prices), and the newest scored cycle's answers."""
     record = _record(ms)
     client = full_loop._client(scope)
-    (_, rules, rules_err), (f_status, feed, f_err), (_, retailers, o_err) = await asyncio.gather(
-        client.get_rules(merchant), client.get_feed(merchant), _reads(scope).get_retailers(merchant))
-    errors = {n: e for n, e in (('rules', rules_err), ('retailers', o_err)) if e}
+    (_, rules, rules_err), (f_status, feed, f_err), (_, retailers, o_err), (_, prices, rp_err) = await asyncio.gather(
+        client.get_rules(merchant), client.get_feed(merchant), _reads(scope).get_retailers(merchant),
+        client.get_retailer_prices(merchant))
+    errors = {n: e for n, e in (('rules', rules_err), ('retailers', o_err), ('retailer_prices', rp_err)) if e}
     if f_err is not None and f_status != 404:   # a merchant with no feed has no sellers to compare
         errors['feed'] = f_err
-    pubs = manu.merchant_publications(publications, _listing_ids(catalog))
+    pubs = manu.merchant_publications(publications, _listing_ids(catalog), merchant)
     own = _own_domain(retailers if o_err is None else None, record)
-    flags = manu.gtin_flags(reference, (feed or {}).get('rows') if f_err is None else None)
-    surfaces = manu.build_surfaces(pubs=pubs, channels=channels, drift=drift, reference=reference, flags=flags,
-                                   own_domain=own, rules=(rules or {}).get('rules') if rules_err is None else None)
+    pages = manu.brand_pages((prices or {}).get('prices') if rp_err is None else None, [own] if own else [])
+    feed_rows = (feed or {}).get('rows') if f_err is None else None
+    flags = manu.gtin_flags(pages, feed_rows, brand=_brand(catalog))
+    held = (record or {}).get('held')
+    surfaces = manu.build_surfaces(pubs=pubs, channels=channels, drift=drift, reference=reference, pages=pages,
+                                   flags=flags, own_domain=own, held=held,
+                                   rules=(rules or {}).get('rules') if rules_err is None else None)
     cycles = _scored_cycles(ms)
     cycle = cycles[0] if cycles else None
     lifecycle, sellers = [], []
@@ -146,9 +159,8 @@ async def publishing_view(scope: CustomerScope, ms: MerchantScope, merchant: str
             vis = _visibility(conn, cycle, facts, routing_errors)
             named = named_by_variant(conn, cycle)
         lifecycle = manu.lifecycle_rows(vis.get('retired_named'), cycle)
-        sellers = manu.seller_rows(named, (feed or {}).get('rows') if f_err is None else None, cycle,
-                                   own_domains=[own] if own else [])
-    read_at = manu.brand_page_read(reference, [own] if own else [])
+        sellers = manu.seller_rows(named, feed_rows, cycle, own_domains=[own] if own else [])
+    read_at = max((str(p['observed_at']) for p in pages if p.get('observed_at')), default=None)
     return {
         'mode': manu.MANUFACTURER,
         'surfaces': surfaces,
@@ -156,7 +168,8 @@ async def publishing_view(scope: CustomerScope, ms: MerchantScope, merchant: str
                                 read_at=read_at),
         'preview': manu.build_preview(surfaces=surfaces, brand=_brand(catalog), name=(record or {}).get('name'),
                                       domain=own),
-        'artifacts': manu.build_artifacts(merchant, pubs, channels),
+        'artifacts': manu.build_artifacts(merchant, pubs, channels, held),
+        'held': held,
         'cycle': (cycle or {}).get('cycle_code'),
         'read_errors': errors,
     }
@@ -171,18 +184,21 @@ async def get_publishing(merchant: str = Query(...), scope: CustomerScope = Depe
     client = full_loop._client(scope)
     reads = _reads(scope)
     (c_status, channels, c_err), (p_status, pubs, p_err), (k_status, catalog, k_err), (_, reference, r_err) = \
-        await asyncio.gather(client.get_channels(), client.get_publications(limit=500),
+        await asyncio.gather(client.get_channels(), client.get_publications(limit=1000),
                              reads.get_merchant_catalog(merchant), reads.get_reference(merchant))
-    for status, error in ((k_status, k_err), (c_status, c_err), (p_status, p_err)):
+    for status, error in ((c_status, c_err), (p_status, p_err)):
         if error is not None:
             raise HTTPException(status_code=404 if status == 404 else 502,
                                 detail=f"TrueSync publishing unavailable: {error}")
     reference = reference if r_err is None else None
+    catalog = catalog if k_err is None else None
     drift = rm.build_weight_drift(reference, brand=_brand(catalog))
     body = await publishing_view(scope, ms, merchant, channels=[c for c in channels or [] if c.get('is_active', True)],
                                  publications=pubs or [], catalog=catalog, reference=reference, drift=drift)
     if r_err is not None:
         body['read_errors']['reference'] = r_err
+    if k_err is not None and k_status != 404:
+        body['read_errors']['catalog'] = k_err
     body['merchant'] = merchant
     return body
 
@@ -213,6 +229,8 @@ async def _counts(scope: CustomerScope, row: dict, merchant: str, errors: dict) 
 
 
 async def _rules_body(scope: CustomerScope, ms: MerchantScope, merchant: str) -> dict:
+    """The rules screen: every word of the rules is supply's (2R-2a A3); soa
+    adds only the backtest."""
     record = _record(ms)
     client = full_loop._client(scope)
     (_, rules, rules_err), (catalog, pubs, held_errors) = await asyncio.gather(
@@ -228,10 +246,9 @@ async def _rules_body(scope: CustomerScope, ms: MerchantScope, merchant: str) ->
         before_counts = await _counts(scope, before, merchant, errors)
         after_counts = await _counts(scope, after, merchant, errors) if after is not None else None
         backtest = manu.build_backtest(before_counts, before, after_counts, after, sent, name)
-    t = manu.MANUFACTURER_TEMPLATES
-    return {'merchant': merchant, 'mode': manu.MANUFACTURER, 'title': t['rules.title'], 'sub': t['rules.sub'],
+    return {'merchant': merchant, 'mode': manu.MANUFACTURER, 'kind': (rules or {}).get('kind'),
             'rules': manu.build_rules((rules or {}).get('rules') if rules_err is None else None),
-            'backtest': backtest, 'note': t['rules.note'], 'sent': sent,
+            'backtest': backtest, 'sent': sent,
             'cycle': (before or {}).get('cycle_code'), 'after_cycle': (after or {}).get('cycle_code'),
             'read_errors': errors}
 
@@ -256,17 +273,18 @@ class RuleChange(BaseModel):
 async def put_rule(code: str, body: RuleChange, merchant: str = Query(...),
                    scope: CustomerScope = Depends(operator_scope), user: dict = Depends(verify_token)):
     """B2: switch a rule on or off, record its approval or a note, forwarded to
-    supply with the tenant token (supply journals it). Operator only. The
-    answer is the re-read list. Reversible: the same call sets it back."""
+    supply with the tenant token and the operator as `actor` (supply journals
+    each changed field). Operator only. The answer is the re-read list.
+    Reversible: the same call sets it back."""
     ms, _record_ = await _manufacturer(scope, merchant)
     change = body.model_dump(exclude_none=True)
     if not change:
         raise HTTPException(status_code=422, detail="nothing to change: send on, approval or note")
     if 'approval' in change and change['approval'] not in manu.APPROVAL_STATES:
         raise HTTPException(status_code=422, detail=f"approval must be one of {', '.join(manu.APPROVAL_STATES)}")
-    by = user.get('email') or user.get('sub')
-    _unwrap(*await full_loop._client(scope).put_rule(merchant, code, {**change, 'by': by}))
-    score_svc.log_event('rules.put', org=scope.org.id, merchant=merchant, code=code, fields=sorted(change), by=by)
+    actor = user.get('email') or user.get('sub')
+    _unwrap(*await full_loop._client(scope).put_rule(merchant, code, {**change, 'actor': actor}))
+    score_svc.log_event('rules.put', org=scope.org.id, merchant=merchant, code=code, fields=sorted(change), actor=actor)
     return await _rules_body(scope, ms, merchant)
 
 
@@ -275,85 +293,115 @@ async def put_rule(code: str, body: RuleChange, merchant: str = Query(...),
 class SentStatement(BaseModel):
     channel: str
     sent_at: str
-    by: Optional[str] = None
+    #: who says it was sent (the brand's team)
+    stated_by: str
     note: Optional[str] = None
+    publication_ids: Optional[List[int]] = None
+
+
+#: supply refuses a sent_at more than this ahead of its clock (#33); soa says so first.
+SENT_CLOCK_SKEW = timedelta(minutes=5)
 
 
 def _when(value: str) -> datetime:
     try:
         when = datetime.fromisoformat(value.strip().replace('Z', '+00:00'))
     except ValueError:
-        raise HTTPException(status_code=422, detail="sent_at must be an ISO date or date-time")
+        raise HTTPException(status_code=422, detail="sent_at must be an ISO 8601 date or date-time")
     return when if when.tzinfo else when.replace(tzinfo=timezone.utc)
 
 
 @router.post("/publishing/sent")
 async def post_sent(body: SentStatement = Body(...), merchant: str = Query(...),
                     scope: CustomerScope = Depends(console_scope), user: dict = Depends(verify_token)):
-    """B3: the brand says its team sent the held file for `channel` on
-    `sent_at`. Parleo never sends it, so the system cannot observe the send:
-    supply journals the statement on the channel's held publications as
-    `sent_by_merchant`, with who stated it. Members and operators. The answer
-    is the re-read Publishing."""
+    """B3: the brand says its team (`stated_by`) sent the held file for
+    `channel` on `sent_at`. Parleo never sends it, so the system cannot
+    observe the send: supply journals the statement on the channel's held
+    publications as `sent_by_merchant`, with the signed-in user as `actor`.
+    Members and operators. A blocked channel (ACP) holds nothing to send:
+    409. The answer is the re-read Publishing with supply's `recorded`."""
     ms, _record_ = await _manufacturer(scope, merchant)
-    when = _when(body.sent_at)
-    if when > datetime.now(timezone.utc) + timedelta(days=1):
+    if not body.stated_by.strip():
+        raise HTTPException(status_code=422, detail="stated_by is required: who says it was sent")
+    if _when(body.sent_at) > datetime.now(timezone.utc) + SENT_CLOCK_SKEW:
         raise HTTPException(status_code=422, detail="sent_at is in the future")
     _catalog, pubs, errors = await _held_inputs(scope, merchant)
-    if errors:
-        raise HTTPException(status_code=502, detail=f"TrueSync publications unavailable: {'; '.join(errors.values())}")
-    held = [p for p in manu.latest_by_listing(pubs, body.channel) if p.get('status') in manu.HELD]
-    if not held:
-        raise HTTPException(status_code=409, detail=f"no held {body.channel!r} file for {merchant!r} to have been sent")
-    stated_by = user.get('email') or user.get('sub')
-    _unwrap(*await full_loop._client(scope).post_sent(merchant, {
-        'channel': body.channel, 'sent_at': body.sent_at, 'by': body.by or stated_by, 'note': body.note,
-        'stated_by': stated_by, 'event': manu.SENT,
-        'publication_ids': sorted(p['id'] for p in held if p.get('id') is not None)}))
+    if 'publications' in errors:
+        raise HTTPException(status_code=502, detail=f"TrueSync publications unavailable: {errors['publications']}")
+    rows = manu.latest_by_record(pubs, body.channel)
+    if not [p for p in rows if manu.is_held(p)]:
+        why = 'is blocked' if any(manu.is_blocked(p) for p in rows) else 'holds nothing'
+        raise HTTPException(status_code=409, detail=f"{body.channel} {why} for {merchant!r}; nothing was held to send")
+    actor = user.get('email') or user.get('sub')
+    statement = {'channel': body.channel, 'sent_at': body.sent_at, 'stated_by': body.stated_by, 'actor': actor,
+                 'note': body.note, **({'publication_ids': body.publication_ids} if body.publication_ids else {})}
+    answer = _unwrap(*await full_loop._client(scope).post_sent(merchant, statement))
     score_svc.log_event('publishing.sent', org=scope.org.id, merchant=merchant, channel=body.channel,
-                        sent_at=body.sent_at, stated_by=stated_by, publications=len(held))
-    return await get_publishing(merchant=merchant, scope=scope)
+                        sent_at=body.sent_at, actor=actor, recorded=(answer or {}).get('recorded'))
+    out = await get_publishing(merchant=merchant, scope=scope)
+    out['recorded'] = (answer or {}).get('recorded')
+    return out
 
 
 # ─── Artifacts through soa ────────────────────────────────────────────────
 
-_FILENAME = re.compile(r'filename\*?=(?:UTF-8\'\')?"?([^";]+)"?', re.I)
+def _detail(error: Optional[str]):
+    """supply's JSON error body's `detail`, or the text as it came."""
+    try:
+        return json.loads(error or '').get('detail', error)
+    except (ValueError, AttributeError):
+        return error
 
 
 @router.get("/truesync/artifact")
 async def get_artifact(merchant: str = Query(...), channel: str = Query(...),
                        publication_id: Optional[int] = Query(None), scope: CustomerScope = Depends(console_scope)):
-    """B4: the compiled file for a channel (the newest held or live one of the
-    merchant's, or `publication_id`), from supply with the org's tenant token,
-    with its filename and content type. Members and operators. Kept per
-    supply's compiled_at, so a recompile is a new file and a repeat is not a
-    second supply call."""
+    """B4: the compiled file for a channel (every held product's, supply's
+    /merchants/{slug}/artifacts), or one publication's (`publication_id`,
+    which must be the merchant's), from supply with the org's tenant token,
+    with supply's filename, content type and X-TrueSync-* headers. Members and
+    operators. A blocked channel (ACP while it is) is supply's 409 with its
+    clause, answered as JSON, never a file. Kept per supply's compiled_at, so
+    a recompile is a new file and a repeat is not a second supply call."""
     await check_merchant(scope, merchant)
     _catalog, pubs, errors = await _held_inputs(scope, merchant)
-    if errors:
-        raise HTTPException(status_code=502, detail=f"TrueSync publications unavailable: {'; '.join(errors.values())}")
-    rows = [p for p in manu.latest_by_listing(pubs, channel) if p.get('status') in manu.HELD + manu.LIVE]
+    if 'publications' in errors:
+        raise HTTPException(status_code=502, detail=f"TrueSync publications unavailable: {errors['publications']}")
     if publication_id is not None:
-        pub = next((p for p in pubs if p.get('id') == publication_id and p.get('channel_slug') == channel), None)
+        pub = next((p for p in pubs if p.get('id') == publication_id
+                    and (p.get('channel_slug') or p.get('channel')) == channel), None)
+        if pub is None:
+            raise HTTPException(status_code=404, detail=f"publication {publication_id} is not {merchant!r}'s on {channel}")
+        rows = [pub]
     else:
-        pub = max(rows, key=lambda p: (rm._ts(p.get('compiled_at')), p.get('id') or 0), default=None)
-    if pub is None:
+        rows = [p for p in manu.latest_by_record(pubs, channel) if manu.is_held(p) or manu.is_blocked(p)
+                or p.get('status') == manu.LIVE_STATUS]
+    if not rows:
         raise HTTPException(status_code=404, detail=f"no {channel!r} file for {merchant!r}")
-    compiled_at = str(pub.get('compiled_at') or '')
+    compiled_at = max(str(p.get('compiled_at') or '') for p in rows)
+    client = full_loop._client(scope)
 
     async def fetch():
-        status, response, error = await full_loop._client(scope).get_artifact(merchant, channel, publication_id)
+        if publication_id is not None:
+            status, response, error = await client.get_publication_artifact(publication_id)
+        else:
+            status, response, error = await client.get_merchant_artifacts(merchant, channel)
         if error is not None:
+            if status == 409:   # blocked: supply's clause, never a file (and never kept)
+                return {'refused': _detail(error)}
             _unwrap(status, response, error)
-        headers = getattr(response, 'headers', None) or {}
-        found = _FILENAME.search(headers.get('content-disposition') or '')
-        return {'content': response.content,
-                'content_type': headers.get('content-type') or 'application/octet-stream',
-                'filename': found.group(1) if found else f"{merchant}-{channel}-{compiled_at[:10] or 'compiled'}.json"}
-    got = await console_cache.cached(('artifact', scope.org.id, merchant, channel, publication_id, compiled_at), fetch,
-                                     ttl=console_cache.CYCLE_TTL)
-    return Response(content=got['content'], media_type=got['content_type'],
-                    headers={'Content-Disposition': f'attachment; filename="{got["filename"]}"'})
+        headers = {k.lower(): v for k, v in (getattr(response, 'headers', None) or {}).items()}
+        return {'content': response.content, 'content_type': headers.get('content-type') or 'application/json',
+                'headers': {k: headers[k] for k in ARTIFACT_HEADERS if headers.get(k)}}
+    key = ('artifact', scope.org.id, merchant, channel, publication_id, compiled_at)
+    got = await fetch() if any(manu.is_blocked(p) for p in rows) else \
+        await console_cache.cached(key, fetch, ttl=console_cache.CYCLE_TTL)
+    if 'refused' in got:
+        refused = got['refused']
+        return JSONResponse(status_code=409, content=refused if isinstance(refused, dict) else {'detail': refused})
+    headers = dict(got['headers'])
+    headers.setdefault('content-disposition', f'attachment; filename="{merchant}-{channel}-{compiled_at[:10]}.json"')
+    return Response(content=got['content'], media_type=got['content_type'], headers=headers)
 
 
 # ─── Impact ───────────────────────────────────────────────────────────────

@@ -90,10 +90,11 @@ async def _tenant_view(org: customers.CustomerOrg) -> dict:
             if status == 403 else error
         )
         return entry
-    # 2R-2: supply 2R-1's `mode` ('manufacturer' for a brand at retail), only when it sends one
+    # 2R-2: supply 2R-1's `mode` ('manufacturer' for a brand at retail) and what it holds
+    # (`held`: total, by_channel, blocked, compiled_at, sent), only when it sends them
     entry["merchants"] = [
         {**{k: m.get(k) for k in ("slug", "name", "domain", "kind", "hosting", "has_record")},
-         **({"mode": m["mode"]} if m.get("mode") else {})}
+         **{k: m[k] for k in ("mode", "held") if m.get(k)}}
         for m in (data or {}).get("merchants", [])
     ]
     return entry

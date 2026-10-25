@@ -1,20 +1,22 @@
 """
 2R-2: manufacturer mode, a brand at retail. The read models behind the
 console's TrueSync, Rules, Publishing and Impact screens when supply says the
-merchant's `mode` is `manufacturer` (supply 2R-1).
+merchant's `mode` is `manufacturer` (supply 2R-1, parleo-supply-app#33,
+docs/truesync/manufacturer-mode.md there).
 
 A manufacturer never sets a price and Parleo never writes into its accounts:
-supply compiles the brand's record for each surface and HOLDS it
-(`compiled_not_published`, `held_for_merchant`); the brand's own team sends
-the file. So nothing here is a publish state Parleo caused, and "sent" is a
-fact the brand states (`sent_by_merchant` in supply's journal), never one the
-system observed.
+supply compiles the brand's records from its SKU feed and HOLDS them (status
+`compiled_not_published`, reason `held_for_merchant`, or `blocked` where the
+channel's spec cannot take the record); the brand's own team sends the file.
+So nothing here is a publish state Parleo caused, and "sent" is a fact the
+brand states (`sent_by_merchant` in supply's journal), never one soa observed.
 
-Every state is derived from supply's rows and the cycles' answers; no state is
-a hardcoded string. The copy is MANUFACTURER_TEMPLATES. The router
+Every state is derived from supply's rows and the cycles' answers. The rules'
+own words (name, detail, scope, audience, outcome) are supply's; soa's copy,
+MANUFACTURER_TEMPLATES, is only what soa derives: the surface notes, the
+backtest notes and Impact's locked block. The router
 (app/routers/console_manufacturer.py) does the reads; these are the pure
-builders. Shapes and every rule: docs/console-read-models.md, "2R-2".
-Deterministic; no model.
+builders. Shapes: docs/console-read-models.md, "2R-2". Deterministic; no model.
 """
 import re
 from datetime import date, datetime
@@ -25,23 +27,24 @@ from soa_shared import attribute_accuracy, retailers as retailer_names
 
 MANUFACTURER = 'manufacturer'
 
-#: supply's publication statuses: held (compiled, not sent by Parleo), live, refused.
-HELD = ('compiled_not_published', 'held_for_merchant')
-LIVE = ('published',)
-BLOCKED = ('failed',)
+#: supply's publication status for every row of a hold; its `reason` says which kind.
+HELD_STATUS = 'compiled_not_published'
+HELD_REASON = 'held_for_merchant'
+BLOCKED_REASON = 'blocked'
+LIVE_STATUS = 'published'
 
-#: supply 2R-1's publication journal, the events soa reads. `sent_by_merchant`
-#: is the brand saying its team sent the held file (POST /publishing/sent).
-JOURNAL_EVENTS = ('compiled', 'held_for_merchant', 'sent_by_merchant')
+#: supply's publication journal (`journal[]` on each row), the events soa reads.
+JOURNAL_EVENTS = ('compiled', 'held_for_merchant', 'blocked', 'sent_by_merchant')
 SENT = 'sent_by_merchant'
 
-#: The demo's five surfaces, in its order: (id, supply channel slug).
-SURFACES = (('mfc', 'manufacturer_center'), ('oai', 'acp'), ('markup', None), ('ucp', 'ucp_uip'), ('coupons', None))
+#: The channels supply compiles in manufacturer mode (#33: the three).
+COMPILED_CHANNELS = ('schema_org', 'manufacturer_center', 'acp')
 
 #: The rule whose approval the brand-funded deals surface waits on.
 DEALS_RULE = 'r4'
-#: The rules' approval states supply 2R-1 serves.
-APPROVAL_STATES = ('approved', 'pending', 'needs_legal', 'returned')
+#: supply's rule approval states, and the console's look for each (the demo's chips).
+APPROVAL_STATES = ('needs_approval', 'approved', 'declined')
+APPROVAL_LOOK = {'needs_approval': 'needs_legal', 'approved': 'approved', 'declined': 'returned'}
 
 #: The backtest's attribute row: the size rule r5's outcome names.
 BACKTEST_SIZE = 'Size 4'
@@ -51,6 +54,8 @@ MANUFACTURER_TEMPLATES = {
     'mfc.last': 'File compiled {day}',
     'mfc.last.sent': 'File compiled {day}, sent {sent}',
     'mfc.note': "The brand's own team sends it. Parleo never writes into its account",
+    'mfc.records': '{valid} of {total} valid',
+    'mfc.no_image': '{n} with no image yet: the brand page served none',
     'oai.name': 'OpenAI product feed (brand)',
     'oai.last': 'Compiled {day}',
     'oai.note': 'Brand feed, retailer-neutral',
@@ -59,7 +64,8 @@ MANUFACTURER_TEMPLATES = {
     'markup.drift': '{lines} markup {verb} the wrong {sizes} {weights}',
     'markup.drift.sizes': '{lines} markup {verb} the wrong {weights}',
     'markup.gtin': '{lines} {gtins} {verb} {digits} digits',
-    'markup.none': 'The markup states the record\'s weight ranges and GTINs',
+    'markup.none': "The markup states the record's weight ranges and GTINs",
+    'markup.unread': 'Not read yet',
     'ucp.name': 'UCP profile ({domain})',
     'ucp.last': 'Live, version {version}',
     'ucp.none': 'Not in this pass',
@@ -68,19 +74,17 @@ MANUFACTURER_TEMPLATES = {
     'coupons.fields': 'terms, retailers, end dates',
     'coupons.note.pending': 'Publishes after Legal approves rule 4',
     'coupons.note.approved': 'Legal approved rule 4{on}. Publishes in the next release',
+    'coupons.note.declined': 'Legal returned rule 4. It publishes once approved',
     'coupons.note.unread': "Publishes after Legal approves rule 4. Rule 4's approval could not be read",
     'not_compiled': 'Not compiled yet',
-    'blocked.last': 'Refused {day}',
     'diff.lifecycle.was': 'sold, per {named} of {of} agents',
     'diff.lifecycle.now': 'retired, successor {successor}',
     'diff.lifecycle.now_none': 'retired',
     'preview.title': '{count} {brand} records, Manufacturer Center first',
     'preview.title.none': 'No {brand} record compiled yet',
-    'preview.note': "Compiled {day} from {domain} and same-day shelf reads. Held until {name}'s team sends it.",
-    'preview.note.sent': "Compiled {day} from {domain} and same-day shelf reads. {name}'s team says it sent it on {sent}.",
-    'rules.title': 'Compliance rules',
-    'rules.sub': 'A manufacturer shows retailers neutrally and never sets a price. These rules hold on every surface.',
-    'rules.note': 'Compliance rules compile into every product record. Legal signs off before Publishing switches a rule on.',
+    'preview.note': "Compiled {day} from {name}'s feed and {domain}. {valid}. Held until {name}'s team sends it.",
+    'preview.note.blocked': "Compiled {day} from {name}'s feed and {domain}. {valid}, so nothing is ready to send: {error}",
+    'preview.note.sent': "Compiled {day} from {name}'s feed and {domain}. {valid}. {name}'s team says it sent it on {sent}.",
     'backtest.attribute': "{size} weight answers giving only the chart's range",
     'backtest.retired': 'Category answers naming {line}',
     'backtest.promo': 'Cheapest-place answers naming a live deal',
@@ -138,49 +142,67 @@ def _and(items: List[str]) -> str:
 
 # ─── supply's publications ────────────────────────────────────────────────
 
-def merchant_publications(publications: Iterable[dict], listing_ids: Iterable) -> List[dict]:
-    """The merchant's publications (its catalog's listings) of every channel."""
-    ids = set(listing_ids)
-    return [p for p in publications or [] if p.get('listing_id') in ids]
+def merchant_publications(publications: Iterable[dict], listing_ids: Iterable, slug: str) -> List[dict]:
+    """The merchant's publications: a hold's rows are feed records
+    (`record_ref` "feed:<slug>:…", no listing), a hosted merchant's are its
+    catalog's listings."""
+    ids = {i for i in listing_ids if i is not None}
+    prefix = f"feed:{slug}:"
+    return [p for p in publications or []
+            if p.get('listing_id') in ids or str(p.get('record_ref') or '').startswith(prefix)]
 
 
-def latest_by_listing(publications: Iterable[dict], channel: str) -> List[dict]:
-    """The newest publication per listing on `channel`, as build_truesync picks it."""
+def is_held(p: dict) -> bool:
+    return p.get('status') == HELD_STATUS and p.get('reason') == HELD_REASON
+
+
+def is_blocked(p: dict) -> bool:
+    return p.get('status') == HELD_STATUS and p.get('reason') == BLOCKED_REASON
+
+
+def is_valid(p: dict) -> bool:
+    validation = p.get('validation') or {}
+    return bool(validation.get('ok', not p.get('error')))
+
+
+def latest_by_record(publications: Iterable[dict], channel: str) -> List[dict]:
+    """The newest row per record on `channel` (supply's "held now": per record,
+    per channel, the newest row)."""
     best: Dict[object, dict] = {}
     for p in publications or []:
-        if p.get('channel_slug') != channel:
+        if (p.get('channel_slug') or p.get('channel')) != channel:
             continue
-        key = p.get('listing_id')
+        key = p.get('record_ref') or p.get('listing_id')
         have = best.get(key)
         if have is None or (rm._ts(p.get('compiled_at')), p.get('id') or 0) > \
                 (rm._ts(have.get('compiled_at')), have.get('id') or 0):
             best[key] = p
-    return list(best.values())
+    return sorted(best.values(), key=lambda p: p.get('id') or 0)
 
 
 def journal(publications: Iterable[dict]) -> List[dict]:
-    """Every journal entry on the publications, each with its publication's
-    id and channel, oldest first."""
+    """Every journal entry on the rows, each with its row's id and channel,
+    oldest first."""
     out = []
     for p in publications or []:
         for e in p.get('journal') or []:
             if isinstance(e, dict) and e.get('event') in JOURNAL_EVENTS:
-                out.append({**e, 'publication_id': e.get('publication_id') or p.get('id'),
-                            'channel': e.get('channel') or p.get('channel_slug')})
+                out.append({**e, 'publication_id': p.get('id'), 'channel': p.get('channel_slug') or p.get('channel')})
     return sorted(out, key=lambda e: (str(e.get('sent_at') or e.get('at') or ''), e.get('publication_id') or 0))
 
 
 def sent_facts(publications: Iterable[dict]) -> List[dict]:
     """The brand's statements that it sent a held file, one per (channel,
-    sent_at), oldest first: {channel, sent_at, by, note, at, publication_ids}."""
+    sent_at), oldest first: {channel, sent_at, stated_by, by, note, at,
+    publication_ids}."""
     out: Dict[tuple, dict] = {}
     for e in journal(publications):
         if e.get('event') != SENT:
             continue
-        key = (e.get('channel'), str(e.get('sent_at') or e.get('at')))
-        fact = out.setdefault(key, {'channel': e.get('channel'), 'sent_at': e.get('sent_at') or e.get('at'),
-                                    'by': e.get('by'), 'note': e.get('note'), 'at': e.get('at'),
-                                    'publication_ids': []})
+        key = (e.get('channel'), str(e.get('sent_at')))
+        fact = out.setdefault(key, {'channel': e.get('channel'), 'sent_at': e.get('sent_at'),
+                                    'stated_by': e.get('stated_by'), 'by': e.get('by'), 'note': e.get('note'),
+                                    'at': e.get('at'), 'publication_ids': []})
         fact['publication_ids'].append(e.get('publication_id'))
     return sorted(out.values(), key=lambda f: str(f['sent_at']))
 
@@ -193,8 +215,8 @@ def first_sent(publications: Iterable[dict]) -> Optional[dict]:
 
 def carried_fields(payload) -> List[str]:
     """The field names a compiled payload actually carries: Manufacturer
-    Center's products[].attributes, a feed's items[] keys, else the payload's
-    own keys. In first-seen order."""
+    Center's products[].attributes, a feed's items[] keys, schema.org's
+    variants' keys, else the payload's own keys. In first-seen order."""
     names: List[str] = []
 
     def add(keys):
@@ -202,17 +224,33 @@ def carried_fields(payload) -> List[str]:
             if k not in names:
                 names.append(k)
     if isinstance(payload, dict):
-        products = payload.get('products')
-        items = payload.get('items')
+        products, items, variants = payload.get('products'), payload.get('items'), payload.get('hasVariant')
         if isinstance(products, list) and products:
             for p in products:
                 add(((p or {}).get('attributes') or {}).keys() if isinstance(p, dict) else ())
         elif isinstance(items, list) and items:
             for i in items:
                 add(i.keys() if isinstance(i, dict) else ())
+        elif isinstance(variants, list) and variants:
+            for v in variants:
+                add(k for k in (v.keys() if isinstance(v, dict) else ()) if not k.startswith('@'))
         else:
-            add(payload.keys())
+            add(k for k in payload.keys() if not str(k).startswith('@'))
     return names
+
+
+def _flags(p: dict) -> List[str]:
+    return [f.get('field') for f in p.get('expressiveness') or [] if isinstance(f, dict)]
+
+
+def _errors(p: dict) -> List[str]:
+    return [str(e) for e in (p.get('validation') or {}).get('errors') or []] or ([p['error']] if p.get('error') else [])
+
+
+def no_image(p: dict) -> bool:
+    """A record with no image yet: the compile took none from the brand page
+    (no `image_from_brand_page` flag) and its validator names the image."""
+    return 'image_from_brand_page' not in _flags(p) and any('image' in e.lower() for e in _errors(p))
 
 
 # ─── GTINs ────────────────────────────────────────────────────────────────
@@ -238,15 +276,16 @@ def gtin_correction(value) -> Optional[str]:
     return None
 
 
-def _brand_word(variants: List[dict]) -> Optional[str]:
-    firsts = {(v.get('product_name') or '').split(' ')[0] for v in variants if v.get('product_name')}
+def _brand_word(rows: List[dict]) -> Optional[str]:
+    firsts = {(v.get('product_name') or '').split(' ')[0] for v in rows if v.get('product_name')}
     return next(iter(firsts)) if len(firsts) == 1 else None
 
 
 def _line_display(product_name: Optional[str], brand: Optional[str]) -> str:
     """"Pampers Cruisers 360" -> "Cruisers 360": the line as the copy names it."""
-    head = re.split(r',|\bsize\b', product_name or '', maxsplit=1, flags=re.I)[0]
-    words = [w for w in head.split() if w.lower() not in {(brand or '').lower(), 'diapers', 'diaper'}]
+    head = re.split(r',|\bsize\b|\|', product_name or '', maxsplit=1, flags=re.I)[0]
+    words = [w for w in head.replace('®', ' ').replace('™', ' ').split()
+             if w.lower() not in {(brand or '').lower(), 'diapers', 'diaper'}]
     return ' '.join(words) or (product_name or '')
 
 
@@ -255,36 +294,77 @@ def _field_base(product_name: Optional[str], label: Optional[str], brand: Option
     return f"{rm.line_of(product_name or label, brand)}.{rm._slug(size or label)}"
 
 
-def gtin_flags(reference: Optional[dict], feed_rows: Optional[List[dict]] = None) -> List[dict]:
+def brand_pages(prices: Optional[List[dict]], own_domains: Iterable[str]) -> List[dict]:
+    """The brand's own pages supply read (2O-6's `brand_page` on its
+    retailer-prices rows), one per page URL, newest read first:
+    [{url, observed_at, brand_page}]."""
+    own = {str(d).lower().removeprefix('www.') for d in own_domains or () if d}
+    seen: Dict[str, dict] = {}
+    for r in sorted(prices or [], key=lambda r: str(r.get('observed_at') or ''), reverse=True):
+        page = r.get('brand_page')
+        domain = str(r.get('retailer_domain') or '').lower().removeprefix('www.')
+        if isinstance(page, dict) and (domain in own or r.get('role') == 'own'):
+            seen.setdefault(r.get('final_url') or r.get('url') or str(len(seen)),
+                            {'url': r.get('final_url') or r.get('url'), 'observed_at': r.get('observed_at'),
+                             'brand_page': page})
+    return list(seen.values())
+
+
+def _products(node) -> List[dict]:
+    """Every schema.org Product node in a JSON-LD value (a ProductGroup's hasVariant included)."""
+    out = []
+    if isinstance(node, list):
+        for n in node:
+            out += _products(n)
+    elif isinstance(node, dict):
+        kind = node.get('@type')
+        if kind == 'Product' or (isinstance(kind, list) and 'Product' in kind):
+            out.append(node)
+        for key in ('hasVariant', '@graph'):
+            out += _products(node.get(key))
+    return out
+
+
+def markup_gtins(pages: List[dict]) -> List[dict]:
+    """The GTINs the brand page's markup states (brand_page.json_ld's Product
+    nodes, `gtin13` / `gtin12` / `gtin14` / `gtin`): [{line, size, gtin}]."""
+    out = []
+    for page in pages:
+        bp = page.get('brand_page') or {}
+        ld = bp.get('json_ld')
+        line = bp.get('line') or (ld.get('name') if isinstance(ld, dict) else None)
+        for node in _products(bp.get('json_ld')):
+            gtin = next((node.get(k) for k in ('gtin13', 'gtin12', 'gtin14', 'gtin') if node.get(k)), None)
+            if gtin:
+                size = str(node.get('size') or node.get('name') or '')
+                out.append({'line': line, 'size': f"Size {size}" if size.isdigit() else size, 'gtin': str(gtin)})
+    return out
+
+
+def gtin_flags(pages: List[dict], feed_rows: Optional[List[dict]] = None, brand: Optional[str] = None) -> List[dict]:
     """GTINs that are not GTINs as written: the brand page markup's
-    (/reference attributes[].markup_gtin, supply 2R-1) and the feed's as
-    given. [{field, was, now, prov, kind, line, where}]; one per (field, was)."""
-    variants = (reference or {}).get('attributes') or []
-    brand = _brand_word(variants)
+    (json_ld, 2O-6) and the feed's as given. [{field, was, now, prov, kind,
+    where, line, digits}]; one per (field, was)."""
     out, seen = [], set()
-    for v in variants:
-        was = v.get('markup_gtin')
-        now = gtin_correction(was)
+
+    def add(field, was, now, where, line):
+        if (field, str(was)) in seen:
+            return
+        seen.add((field, str(was)))
+        out.append({'field': field, 'was': str(was), 'now': now, 'prov': 'parleo', 'kind': 'gtin', 'where': where,
+                    'line': line, 'digits': len(''.join(ch for ch in str(was) if ch.isdigit()))})
+    for g in markup_gtins(pages):
+        now = gtin_correction(g['gtin'])
         if now:
-            field = f"{_field_base(v.get('product_name'), v.get('variant_label'), brand)}.gtin"
-            if (field, str(was)) not in seen:
-                seen.add((field, str(was)))
-                out.append({'field': field, 'was': str(was), 'now': now, 'prov': 'parleo', 'kind': 'gtin',
-                            'where': 'markup', 'line': _line_display(v.get('product_name'), brand),
-                            'digits': len(''.join(ch for ch in str(was) if ch.isdigit())),
-                            'variant_ref': v.get('variant_ref')})
-    feed_brand = _brand_word(feed_rows or [])
+            line = _line_display(g['line'], brand)
+            add(f"{rm._slug(line)}.{rm._slug(g['size'])}.gtin (markup)", g['gtin'], now, 'markup', line)
+    feed_brand = _brand_word(feed_rows or []) or brand
     for row in feed_rows or []:
         was = row.get('gtin')
         now = gtin_correction(was)
         if now:
-            field = f"{_field_base(row.get('product_name'), row.get('variant_label'), feed_brand)}.gtin"
-            if (field, str(was)) not in seen:
-                seen.add((field, str(was)))
-                out.append({'field': field, 'was': str(was), 'now': now, 'prov': 'parleo', 'kind': 'gtin',
-                            'where': 'feed', 'line': _line_display(row.get('product_name'), feed_brand),
-                            'digits': len(''.join(ch for ch in str(was) if ch.isdigit())),
-                            'variant_ref': row.get('sku')})
+            add(f"{_field_base(row.get('product_name'), row.get('variant_label'), feed_brand)}.gtin", was, now, 'feed',
+                _line_display(row.get('product_name'), feed_brand))
     return out
 
 
@@ -293,8 +373,8 @@ def gtin_flags(reference: Optional[dict], feed_rows: Optional[List[dict]] = None
 def markup_reason(drift: List[dict], reference: Optional[dict], flags: List[dict]) -> Optional[str]:
     """The site markup surface's reason, from the weight rows whose markup
     disagrees with the chart and the markup's GTIN flags: "Zzz and Cruisers
-    360 markup carry the wrong Size 4 and Size 3 weights. AMORE and Ultra
-    GTINs have 11 digits". None when neither."""
+    360 markup carry the wrong Size 4 and Size 3 weights. AMORE GTIN has 11
+    digits". None when neither."""
     by_ref = {v.get('variant_ref'): v for v in (reference or {}).get('attributes') or []}
     brand = _brand_word(list(by_ref.values()))
     pairs: List[tuple] = []
@@ -328,123 +408,128 @@ def markup_reason(drift: List[dict], reference: Optional[dict], flags: List[dict
     return '. '.join(parts) or None
 
 
-def brand_page_read(reference: Optional[dict], own_domains: Iterable[str]) -> Optional[str]:
-    """When supply last read the brand's own page: its newest own-domain row,
-    else the read's own date."""
-    own = {str(d).lower().removeprefix('www.') for d in own_domains or () if d}
-    stamps = [r.get('observed_at') for r in (reference or {}).get('rows') or []
-              if str(r.get('retailer_domain') or '').lower().removeprefix('www.') in own and r.get('observed_at')]
-    if stamps:
-        return max(str(s) for s in stamps)
-    run = (reference or {}).get('reference_run') or {}
-    return (reference or {}).get('as_of') or run.get('finished_at') or run.get('created_at')
-
-
-def _status_of(latest: List[dict]) -> str:
-    statuses = {p.get('status') for p in latest}
-    if statuses & set(LIVE):
-        return 'live'
-    if statuses & set(HELD):
-        return 'held'
-    if statuses & set(BLOCKED):
-        return 'blocked'
-    return 'not_compiled'
-
-
 def _newest(rows: List[dict], key: str = 'compiled_at') -> Optional[dict]:
     rows = [r for r in rows if r.get(key)]
     return max(rows, key=lambda r: (rm._ts(r.get(key)), r.get('id') or 0)) if rows else None
 
 
+def _fields_of(rows: List[dict]) -> List[str]:
+    fields: List[str] = []
+    for p in rows:
+        for f in carried_fields(p.get('payload')):
+            if f not in fields:
+                fields.append(f)
+    return fields
+
+
 def build_surfaces(*, pubs: List[dict], channels: List[dict], drift: List[dict], reference: Optional[dict],
-                   flags: List[dict], own_domain: Optional[str], rules: Optional[List[dict]]) -> List[dict]:
-    """The Publishing screen's five surfaces, in the demo's order (SURFACES),
-    each {id, name, status, last, fields, note} with the facts it was derived
-    from beside. `pubs` are the merchant's publications; `rules` supply's
-    rules (None when unread)."""
+                   pages: List[dict], flags: List[dict], own_domain: Optional[str], rules: Optional[List[dict]],
+                   held: Optional[dict]) -> List[dict]:
+    """The Publishing screen's five surfaces, in the demo's order, each {id,
+    name, status, last, fields, note} with the facts it was derived from
+    beside. `pubs` are the merchant's rows; `held` supply's /tenant `held`
+    (its counts and the newest stated send per channel); `rules` supply's
+    rules (None when unread); `pages` the brand pages supply read."""
     by_slug = {c.get('slug'): c for c in channels or []}
     domain = own_domain or 'the brand site'
-    sent = {f['channel']: f for f in sent_facts(pubs)}
+    held = held or {}
+    sent_on = held.get('sent') or {}
     out = []
 
-    mc = latest_by_listing(pubs, 'manufacturer_center')
-    status = _status_of(mc)
-    held = [p for p in mc if p.get('status') in HELD]
-    newest = _newest(held or mc)
-    fields = []
-    for p in held or mc:
-        for f in carried_fields(p.get('payload')):
-            if f not in fields:
-                fields.append(f)
-    day = short_day((newest or {}).get('compiled_at'))
-    fact = sent.get('manufacturer_center')
+    # Manufacturer Center: held only when at least one held record is valid
+    mc = latest_by_record(pubs, 'manufacturer_center')
+    held_mc = [p for p in mc if is_held(p)]
+    valid = [p for p in held_mc if is_valid(p)]
+    live = [p for p in mc if p.get('status') == LIVE_STATUS]
+    if live:
+        status = 'live'
+    elif valid:
+        status = 'held'
+    elif held_mc or any(is_blocked(p) for p in mc):
+        status = 'blocked'
+    else:
+        status = 'not_compiled'
+    compiled_at = held.get('compiled_at') or (_newest(held_mc or mc) or {}).get('compiled_at')
+    day = short_day(compiled_at)
+    sent = sent_on.get('manufacturer_center')
+    total = (held.get('by_channel') or {}).get('manufacturer_center', len(held_mc))
+    first_error = next((e for p in held_mc if not is_valid(p) for e in _errors(p)), None)
+    missing_image = sum(1 for p in held_mc if no_image(p))
+    note = first_error if status == 'blocked' and first_error else T['mfc.note']
+    if missing_image and status != 'blocked':
+        note += '. ' + T['mfc.no_image'].format(n=missing_image)
     if status == 'not_compiled':
         last = T['not_compiled']
-    elif status == 'blocked':
-        last = T['blocked.last'].format(day=day)
-    elif fact:
-        last = T['mfc.last.sent'].format(day=day, sent=short_day(fact['sent_at']))
+    elif sent:
+        last = T['mfc.last.sent'].format(day=day, sent=short_day(sent))
     else:
         last = T['mfc.last'].format(day=day)
-    out.append({'id': 'mfc', 'name': T['mfc.name'], 'status': status, 'last': last, 'fields': ', '.join(fields),
-                'note': T['mfc.note'],
+    out.append({'id': 'mfc', 'name': T['mfc.name'], 'status': status, 'last': last,
+                'fields': ', '.join(_fields_of(valid or held_mc)), 'note': note,
                 # beside the typed fields
                 'channel': 'manufacturer_center', 'connected': (by_slug.get('manufacturer_center') or {}).get('connected'),
-                'compiled_at': (newest or {}).get('compiled_at'), 'records': len(held),
-                'field_list': fields, 'sent': fact,
-                'publication_ids': sorted(p.get('id') for p in held if p.get('id') is not None)})
+                'compiled_at': compiled_at, 'records': T['mfc.records'].format(valid=len(valid), total=total) if total else None,
+                'records_total': total, 'records_valid': len(valid), 'errors': [e for p in held_mc for e in _errors(p)],
+                'images_from_brand_page': sum(1 for p in held_mc if 'image_from_brand_page' in _flags(p)),
+                'no_image': missing_image, 'sent': sent,
+                'publication_ids': [p['id'] for p in held_mc if p.get('id') is not None]})
 
-    acp = latest_by_listing(pubs, 'acp')
-    status = _status_of(acp)
+    # the brand's OpenAI (ACP) feed: blocked with supply's clause, never a placeholder price
+    acp = latest_by_record(pubs, 'acp')
+    blocked = [p for p in acp if is_blocked(p)]
+    held_acp = [p for p in acp if is_held(p)]
+    if any(p.get('status') == LIVE_STATUS for p in acp):
+        status = 'live'
+    elif blocked:
+        status = 'blocked'
+    elif held_acp:
+        status = 'held'
+    else:
+        status = 'not_compiled'
     newest = _newest(acp)
-    day = short_day((newest or {}).get('compiled_at'))
-    fields = []
-    for p in [p for p in acp if p.get('status') in HELD + LIVE] or acp:
-        for f in carried_fields(p.get('payload')):
-            if f not in fields:
-                fields.append(f)
-    refused = next((p for p in sorted(acp, key=lambda p: rm._ts(p.get('compiled_at')), reverse=True)
-                    if p.get('status') in BLOCKED), None)
-    clause = (refused or {}).get('spec_clause') or (refused or {}).get('error')
+    clause = next((p.get('spec_clause') for p in blocked if p.get('spec_clause')), None)
     out.append({'id': 'oai', 'name': T['oai.name'], 'status': status,
                 'last': T['not_compiled'] if status == 'not_compiled' else
-                (T['blocked.last'] if status == 'blocked' else T['oai.last']).format(day=day),
-                'fields': ', '.join(fields),
+                T['oai.last'].format(day=short_day((newest or {}).get('compiled_at'))),
+                'fields': ', '.join(_fields_of(held_acp or acp)),
                 'note': clause if status == 'blocked' and clause else T['oai.note'],
-                'channel': 'acp', 'compiled_at': (newest or {}).get('compiled_at'), 'field_list': fields,
-                'spec_clause': clause, 'sent': sent.get('acp')})
+                'channel': 'acp', 'compiled_at': (newest or {}).get('compiled_at'), 'spec_clause': clause,
+                'records_total': (held.get('by_channel') or {}).get('acp', len(acp)), 'blocked': len(blocked),
+                'sent': sent_on.get('acp')})
 
     reason = markup_reason(drift, reference, flags)
-    read_at = brand_page_read(reference, [own_domain] if own_domain else [])
+    read_at = max((str(p['observed_at']) for p in pages if p.get('observed_at')), default=None)
     out.append({'id': 'markup', 'name': T['markup.name'].format(domain=domain), 'status': 'drift' if reason else 'none',
-                'last': T['markup.last'].format(day=short_day(read_at)) if read_at else T['not_compiled'],
-                'fields': ', '.join(['weight range'] + (['gtin'] if any(v.get('markup_gtin') for v in
-                                                                       (reference or {}).get('attributes') or []) else [])),
+                'last': T['markup.last'].format(day=short_day(read_at)) if read_at else T['markup.unread'],
+                'fields': ', '.join(['weight range'] + (['gtin'] if markup_gtins(pages) else [])),
                 'note': reason or T['markup.none'],
-                'read_at': read_at, 'markup_rows': sum(1 for r in drift or [] if r.get('kind') == 'markup'),
+                'read_at': read_at, 'pages': len(pages),
+                'markup_rows': sum(1 for r in drift or [] if r.get('kind') == 'markup'),
                 'gtin_flags': sum(1 for f in flags if f.get('where') == 'markup')})
 
-    ucp = [p for p in latest_by_listing(pubs, 'ucp_uip') if p.get('status') in LIVE]
+    ucp = [p for p in latest_by_record(pubs, 'ucp_uip') if p.get('status') == LIVE_STATUS]
     live = _newest(ucp, 'published_at') or _newest(ucp)
     version = (live or {}).get('spec_version') or short_day((live or {}).get('published_at'))
     out.append({'id': 'ucp', 'name': T['ucp.name'].format(domain=domain), 'status': 'live' if live else 'none',
                 'last': T['ucp.last'].format(version=version) if live else T['ucp.none'],
                 'fields': ', '.join(carried_fields((live or {}).get('payload'))) if live else '',
-                'note': T['ucp.none'] if not live else '',
+                'note': '' if live else T['ucp.none'],
                 'channel': 'ucp_uip', 'published_at': (live or {}).get('published_at')})
 
-    rule = next((r for r in rules or [] if (r.get('code') or r.get('id')) == DEALS_RULE), None)
-    approval = (rule or {}).get('approval') or {}
+    rule = next((r for r in rules or [] if r.get('code') == DEALS_RULE), None)
+    approval = (rule or {}).get('approval')
     if rules is None:
         note = T['coupons.note.unread']
-    elif approval.get('state') == 'approved':
-        on = short_day(approval.get('at'))
+    elif approval == 'approved':
+        on = short_day((rule or {}).get('approved_at'))
         note = T['coupons.note.approved'].format(on=f" on {on}" if on else '')
+    elif approval == 'declined':
+        note = T['coupons.note.declined']
     else:
         note = T['coupons.note.pending']
     out.append({'id': 'coupons', 'name': T['coupons.name'], 'status': 'next', 'last': T['coupons.last'],
-                'fields': T['coupons.fields'], 'note': note,
-                'rule': DEALS_RULE, 'approval': approval.get('state') if rule else None})
+                'fields': T['coupons.fields'], 'note': note, 'rule': DEALS_RULE, 'approval': approval,
+                'approval_look': APPROVAL_LOOK.get(approval) if approval else None})
     return out
 
 
@@ -472,7 +557,9 @@ def lifecycle_rows(retired_named: Optional[dict], cycle: Optional[dict]) -> List
     return out
 
 
-def _store_name(domain: Optional[str]) -> Optional[str]:
+def store_name(domain: Optional[str]) -> Optional[str]:
+    """supply gives domains ("amazon.com"); the console names them as the
+    Overview does (soa_shared/retailers.retailer_name)."""
     d = str(domain or '').lower().removeprefix('www.')
     return retailer_names.retailer_name(d) or d or None
 
@@ -484,13 +571,14 @@ def seller_rows(named: Dict[str, List[str]], feed_rows: Optional[List[dict]], cy
     not the feed's retailer list for it: was the agents', now the feed's.
     Only SKUs both sides list; the brand's own site is neither."""
     own = {str(d).lower().removeprefix('www.') for d in own_domains or () if d}
-    own_names = {_store_name(d) for d in own}
+    own_names = {store_name(d) for d in own}
     brand = _brand_word(feed_rows or [])
     out = []
     for row in feed_rows or []:
-        keys = [k for k in (row.get('sku'), row.get('variant_key'), rm._gtin14(row.get('gtin14') or row.get('gtin'))) if k]
+        keys = [k for k in (row.get('sku'), row.get('variant_key'), f"sku:{row['sku']}" if row.get('sku') else None,
+                            rm._gtin14(row.get('gtin14') or row.get('gtin'))) if k]
         agents = next((named[k] for k in keys if named.get(k)), None)
-        listed = [_store_name(r.get('domain')) for r in row.get('retailers') or []
+        listed = [store_name(r.get('domain')) for r in row.get('retailers') or []
                   if str(r.get('domain') or '').lower().removeprefix('www.') not in own]
         listed = list(dict.fromkeys(n for n in listed if n))
         if not agents or not listed:
@@ -510,40 +598,55 @@ def build_diff(*, drift: List[dict], flags: List[dict], lifecycle: List[dict], s
     (the cycle whose read or answers the "was" is): 2M-1's weight rows (the
     markup or a retailer page against the chart), the GTIN corrections, the
     retired lines, the sellers."""
-    out = [{**{k: v for k, v in r.items()}, 'source': _source(cycle, read_at, 'supply read')} for r in drift or []]
-    out += [{**{k: v for k, v in f.items() if k not in ('line', 'digits', 'where')}, 'where': f['where'],
-             'source': _source(cycle, read_at, 'supply read' if f['where'] == 'markup' else 'feed')} for f in flags]
+    out = [{**r, 'source': _source(cycle, read_at, 'supply read')} for r in drift or []]
+    out += [{**{k: v for k, v in f.items() if k not in ('line', 'digits')},
+             'source': _source(cycle, read_at, 'brand page' if f['where'] == 'markup' else 'feed')} for f in flags]
     return out + list(lifecycle) + list(sellers)
 
 
 def build_preview(*, surfaces: List[dict], brand: Optional[str], name: Optional[str],
                   domain: Optional[str]) -> dict:
-    """{title, note, records, compiled_at, held}: Manufacturer Center's held file."""
+    """{title, note, records, valid, compiled_at, held, sent}: Manufacturer
+    Center's held file, its counts from supply's /tenant `held`."""
     mfc = next(s for s in surfaces if s['id'] == 'mfc')
-    n, day = mfc['records'], short_day(mfc.get('compiled_at'))
+    n, day = mfc['records_total'] or 0, short_day(mfc.get('compiled_at'))
     brand = brand or name or 'the brand'
+    name = name or brand
     if not n:
         return {'title': T['preview.title.none'].format(brand=brand), 'note': T['not_compiled'], 'records': 0,
-                'compiled_at': None, 'held': False}
-    fact = mfc.get('sent')
-    note = (T['preview.note.sent'] if fact else T['preview.note']).format(
-        day=day, domain=domain or 'the brand site', name=name or brand, sent=short_day((fact or {}).get('sent_at')))
+                'valid': 0, 'compiled_at': None, 'held': False, 'sent': None}
+    domain = domain or 'the brand site'
+    if mfc['status'] == 'blocked':
+        note = T['preview.note.blocked'].format(day=day, name=name, domain=domain, valid=mfc['records'],
+                                                error=(mfc['errors'] or [''])[0])
+    elif mfc.get('sent'):
+        note = T['preview.note.sent'].format(day=day, name=name, domain=domain, valid=mfc['records'],
+                                             sent=short_day(mfc['sent']))
+    else:
+        note = T['preview.note'].format(day=day, name=name, domain=domain, valid=mfc['records'])
     return {'title': T['preview.title'].format(count=_NUMBER_WORDS.get(n, str(n)), brand=brand), 'note': note,
-            'records': n, 'compiled_at': mfc.get('compiled_at'), 'held': not fact, 'sent': fact}
+            'records': n, 'valid': mfc['records_valid'], 'compiled_at': mfc.get('compiled_at'),
+            'held': mfc['status'] == 'held' and not mfc.get('sent'), 'sent': mfc.get('sent')}
 
 
-def build_artifacts(merchant: str, pubs: List[dict], channels: List[dict]) -> List[dict]:
-    """One entry per channel with a held or live file, its soa URL (B4): the
-    file comes through soa with the org's token, never supply's URL."""
+def build_artifacts(merchant: str, pubs: List[dict], channels: List[dict], held: Optional[dict] = None) -> List[dict]:
+    """One entry per channel supply compiled for the merchant, its soa URL
+    (B4): the file comes through soa with the org's token. A blocked channel
+    (ACP) is listed with its clause: soa answers it as JSON, never a file."""
     names = {c.get('slug'): c.get('name') or c.get('slug') for c in channels or []}
+    by_channel = (held or {}).get('by_channel') or {}
     out = []
-    for slug in dict.fromkeys(p.get('channel_slug') for p in pubs or [] if p.get('channel_slug')):
-        rows = [p for p in latest_by_listing(pubs, slug) if p.get('status') in HELD + LIVE]
+    slugs = list(dict.fromkeys(p.get('channel_slug') or p.get('channel') for p in pubs or []))
+    order = ('manufacturer_center', 'schema_org', 'acp')
+    for slug in sorted(slugs, key=lambda s: (order.index(s) if s in order else len(order), str(s))):
+        rows = [p for p in latest_by_record(pubs, slug) if is_held(p) or is_blocked(p) or p.get('status') == LIVE_STATUS]
         newest = _newest(rows)
         if newest is None:
             continue
-        out.append({'channel': slug, 'name': names.get(slug, slug), 'records': len(rows),
-                    'compiled_at': newest.get('compiled_at'), 'held': newest.get('status') in HELD,
+        blocked = [p for p in rows if is_blocked(p)]
+        out.append({'channel': slug, 'name': names.get(slug, slug), 'records': by_channel.get(slug, len(rows)),
+                    'compiled_at': newest.get('compiled_at'), 'held': any(is_held(p) for p in rows),
+                    'blocked': bool(blocked), 'spec_clause': next((p.get('spec_clause') for p in blocked), None),
                     'url': f"/api/console/truesync/artifact?merchant={merchant}&channel={slug}"})
     return out
 
@@ -551,18 +654,22 @@ def build_artifacts(merchant: str, pubs: List[dict], channels: List[dict]) -> Li
 # ─── Rules and their backtest ─────────────────────────────────────────────
 
 def build_rules(supply_rules: Optional[List[dict]]) -> List[dict]:
-    """supply's rules as the console's Rule, `id` the rule's code, its
-    approval beside."""
+    """supply's rules as the console's Rule: every word supply's, `id` the
+    code, `audience` the console's list of names (supply's is one string,
+    names joined with ", "), the approval with the demo's look beside."""
     out = []
     for r in supply_rules or []:
-        approval = r.get('approval') or {}
-        out.append({'id': r.get('code') or r.get('id'), 'name': r.get('name') or '', 'detail': r.get('detail') or '',
+        audience = r.get('audience')
+        names = [a.strip() for a in audience.split(',')] if isinstance(audience, str) else \
+            [a.get('name') if isinstance(a, dict) else str(a) for a in audience or []]
+        out.append({'id': r.get('code'), 'name': r.get('name') or '', 'detail': r.get('detail') or '',
                     'on': bool(r.get('on')), 'scope': r.get('scope') or '',
-                    'audience': [a if isinstance(a, dict) else {'name': str(a)} for a in r.get('audience') or []],
-                    'outcome': r.get('outcome') or '',
+                    'audience': [{'name': n} for n in names if n], 'outcome': r.get('outcome') or '',
                     # beside the typed fields
-                    'code': r.get('code') or r.get('id'),
-                    'approval': {k: approval.get(k) for k in ('state', 'by', 'at', 'note')} if approval else None})
+                    'code': r.get('code'), 'audience_text': audience if isinstance(audience, str) else None,
+                    'approval': r.get('approval'), 'approval_look': APPROVAL_LOOK.get(r.get('approval')),
+                    'approved_by': r.get('approved_by'), 'approved_at': r.get('approved_at'), 'note': r.get('note'),
+                    'compiled': r.get('compiled'), 'stored': r.get('stored'), 'history': r.get('history') or []})
     return out
 
 
@@ -619,28 +726,20 @@ def build_backtest(before: dict, before_cycle: dict, after: Optional[dict], afte
         return f"{c[0]} of {c[1]}" if c else T['backtest.not_measured']
 
     def after_value(key):
-        if after is None:
-            return T['backtest.next']
-        return value(after, key)
+        return T['backtest.next'] if after is None else value(after, key)
 
-    out = []
-    a = before.get('attribute')
-    out.append({'key': 'attribute', 'label': T['backtest.attribute'].format(size=BACKTEST_SIZE),
-                'before': value(before, 'attribute'), 'after': after_value('attribute'),
-                'note': ((T['backtest.attribute.note'].format(lines=_and(a[2]) or 'None', day=day) + '. ') if a else '') + rule,
-                'cycle': before_cycle['cycle_code'], 'after_cycle': (after_cycle or {}).get('cycle_code') if after else None})
-    r = before.get('retired')
-    out.append({'key': 'retired', 'label': T['backtest.retired'].format(line=r[2] if r else 'the retired line'),
-                'before': value(before, 'retired'), 'after': after_value('retired'),
-                'note': ((T['backtest.retired.note'].format(successor=r[3], k=r[4] or 0, day=day) + '. ')
-                         if r and r[3] else '') + rule,
-                'cycle': before_cycle['cycle_code'], 'after_cycle': (after_cycle or {}).get('cycle_code') if after else None})
-    p = before.get('promo')
-    out.append({'key': 'promo', 'label': T['backtest.promo'], 'before': value(before, 'promo'),
-                'after': after_value('promo'),
-                'note': ((T['backtest.promo.note'].format(deals=p[2], day=day) + '. ') if p and p[2] else '') + rule,
-                'cycle': before_cycle['cycle_code'], 'after_cycle': (after_cycle or {}).get('cycle_code') if after else None})
-    return out
+    def row(key, label, note):
+        return {'key': key, 'label': label, 'before': value(before, key), 'after': after_value(key),
+                'note': (note + '. ' if note else '') + rule, 'cycle': before_cycle['cycle_code'],
+                'after_cycle': (after_cycle or {}).get('cycle_code') if after else None}
+    a, r, p = before.get('attribute'), before.get('retired'), before.get('promo')
+    return [
+        row('attribute', T['backtest.attribute'].format(size=BACKTEST_SIZE),
+            T['backtest.attribute.note'].format(lines=_and(a[2]) or 'None', day=day) if a else None),
+        row('retired', T['backtest.retired'].format(line=r[2] if r else 'the retired line'),
+            T['backtest.retired.note'].format(successor=r[3], k=r[4] or 0, day=day) if r and r[3] else None),
+        row('promo', T['backtest.promo'], T['backtest.promo.note'].format(deals=p[2], day=day) if p and p[2] else None),
+    ]
 
 
 def around_send(cycles: List[dict], sent: Optional[dict]) -> tuple:

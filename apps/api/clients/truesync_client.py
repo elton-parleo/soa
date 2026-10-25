@@ -339,10 +339,10 @@ class TrueSyncClient:
     async def get_provenance(self, merchant_slug: str) -> ForwardResult:
         return await self.get(f"/api/truesync/merchants/{_slug(merchant_slug)}/provenance")
 
-    # ─── 2R-2: manufacturer mode (supply 2R-1) ──────────────────────────
-    # The merchant's compliance rules, the brand's statement that it sent a
-    # held file, and the compiled file itself. Shapes in docs/console-read-
-    # models.md, "2R-2".
+    # ─── 2R-2: manufacturer mode (supply 2R-1, parleo-supply-app#33) ────
+    # Compile and hold, the brand's compliance rules, its statement that it
+    # sent a held file, and the files. Contract: supply's
+    # docs/truesync/manufacturer-mode.md; soa's read: docs/console-read-models.md "2R-2".
 
     async def get_rules(self, merchant_slug: str) -> ForwardResult:
         return await self.get(f"/api/truesync/merchants/{_slug(merchant_slug)}/rules")
@@ -352,16 +352,18 @@ class TrueSyncClient:
             "PUT", f"/api/truesync/merchants/{_slug(merchant_slug)}/rules/{_slug(code)}", json=body)
 
     async def post_sent(self, merchant_slug: str, body: dict) -> ForwardResult:
-        """Journal `sent_by_merchant` on the channel's held publications."""
+        """One sent_by_merchant journal row per held publication on the channel."""
         return await self.forward(
             "POST", f"/api/truesync/merchants/{_slug(merchant_slug)}/publications/sent", json=body)
 
-    async def get_artifact(self, merchant_slug: str, channel: str,
-                           publication_id: Optional[int] = None) -> ForwardResult:
-        """The compiled file for a channel, carried raw (its bytes, filename, type)."""
+    async def get_merchant_artifacts(self, merchant_slug: str, channel: str) -> ForwardResult:
+        """Every held product's file for one channel, carried raw (its bytes and headers)."""
         return await self.forward(
-            "GET", f"/api/truesync/merchants/{_slug(merchant_slug)}/artifacts/{_slug(channel)}",
-            params={"publication_id": publication_id} if publication_id is not None else None, raw=True)
+            "GET", f"/api/truesync/merchants/{_slug(merchant_slug)}/artifacts", params={"channel": channel}, raw=True)
+
+    async def get_publication_artifact(self, publication_id: int) -> ForwardResult:
+        """One publication's payload as a file, carried raw."""
+        return await self.forward("GET", f"/api/truesync/publications/{int(publication_id)}/artifact", raw=True)
 
     async def link_tenant(self, soa_org_id: str) -> ForwardResult:
         """Tell supply which soa org this tenant is — after soa has committed it."""
