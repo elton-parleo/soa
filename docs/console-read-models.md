@@ -8133,3 +8133,11 @@ Tests: `apps/api/tests/test_console_2q1_copy.py` (on 2P-1's pair, four quotes at
 58 ct pack: the signal and the issue line; the rule by hand on FL15's shape, 11 of 18; on 2M-2's deals, the
 Rollback beside "Out of stock": its row, the pass-through 5 of 50 to 3 of 50; `live_for` per variant; against the
 previous cycle, out of stock and ended).
+
+### A's samples
+
+`apps/api/tests/test_console_2q1_samples.py`: 2P-1's pair with what FL15 showed (cycle 1's reference refreshed after
+its score was stored; cycle 2's Size 4, 120 ct at Amazon quoted at its own price for a 58 ct pack by four agents;
+cycle 2's Amazon multi-buy beside "Out of stock"). `SOA_2Q1_SAMPLE_DUMP=<dir>` writes `score-2q1`, `overview-2q1`,
+`visibility-2q1`, `visibility-2q1-c1`, `true-value-2q1`, `prove-2q1`, `revenue-2q1`, `revenue-history-2q1`,
+`runs-2q1`, `answers-summary-2q1`, `answers-summary-2q1-c1`, unedited.
