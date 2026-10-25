@@ -81,7 +81,7 @@ def test_a_brand_s_products_read_its_retailer_cells_together(http, db):
                            '$27.97 at amazon.com, our own fetch, Oct 19')
     # the worst cell's status; the issue over every quote: Gemini and Perplexity at Walmart, ChatGPT at Amazon
     assert row['status'] == 'wrong' and row['cell_status'] == 'wrong'
-    assert row['issue'] == 'Quoted a wrong price in 3 of 12 runs.' and row['wrong_runs'] == 3
+    assert row['issue'] == 'Quoted a wrong price in 3 of 12 runs, most often $27.97 against $24.97.' and row['wrong_runs'] == 3
     assert row['runs'] == 12 and row['read_across'] is True
     assert [(r['name'], r['runs'], r['quote'], r['live_price'], r['cell_status']) for r in row['retailers']] == [
         ('Walmart', 6, '$27.97', '$24.97', 'wrong'), ('Amazon', 6, '$24.97', '$27.97', 'wrong')]

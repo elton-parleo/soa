@@ -52,7 +52,7 @@ def test_fl14_re_scored_is_not_comparable_to_a_cycle_on_version_2():
 
 def test_the_coder_count_names_the_oldest_version():
     rows = [{'tier': 'brand_direct', 'outcome': 'echoed', 'coder_version': v} for v in (3, 3, 2, None)]
-    assert score_svc.brand_coder(rows) == {'version': ea.BRAND_CODER_VERSION, 'coded': 0, 'of': 4, 'oldest': 1}
+    assert score_svc.brand_coder(rows) == {'version': ea.BRAND_CODER_VERSION, 'coded': 0, 'of': 4, 'oldest': 1, 'unanswered': 0}
 
 
 CLAIM = {'version': 3, 'index': {'version': 1, 'digest': 'abc123', 'size': 40, 'types_read': ['weight']},

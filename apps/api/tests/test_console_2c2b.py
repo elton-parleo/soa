@@ -111,7 +111,7 @@ def test_swap_runs_are_listed_with_their_quote(http, upstream, db):
         _run(db, rid, 4, 'chatgpt', 'catalog_accuracy', 'absent', [])
     body = _overview(http, upstream)
     s3 = next(p for p in body['by_surface']['grounded_api']['products'] if p['sku'] == 'snug-fit-diapers-s3-small')
-    assert s3['issue'] == 'Quoted a wrong price in 4 of 6 runs.'
+    assert s3['issue'] == 'Quoted a wrong price in 4 of 6 runs, most often $6.99 against $22.99.'
     assert s3['quoted'] == ('$6.99 for Snug-Fit Trial Pack, 3 of 6 runs (Gemini 3). $9.99, 1 of 6 runs (ChatGPT 1). '
                             'No price, 2 of 6 runs (ChatGPT 2)')
 

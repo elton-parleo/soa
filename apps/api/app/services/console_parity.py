@@ -68,6 +68,8 @@ TEMPLATES = {
     'agent.none': "No price scored.",
     'product.other_brand': "Priced another brand's product in {n} of {runs} {runs_word}.",
     'product.wrong': "Quoted a wrong price in {n} of {runs} {runs_word}.",
+    # 2Q-2 (B2): and the most common wrong amount, never the most quoted (FL15's was an exact one)
+    'product.wrong_quote': "Quoted a wrong price in {n} of {runs} {runs_word}, most often {quote} against {live}.",
     # 2Q-1 (B4): the wrong quotes were for another pack, the reason the price check already has
     'product.wrong_pack': "Quoted {quote} for a {pack} ct pack against {live} for the {asked} in {n} of {runs} {runs_word}.",
     'product.left_out': "No price quoted in {n} of {runs} {runs_word}.",
@@ -565,10 +567,25 @@ def pack_mismatch(quotes: List[dict], product: Optional[str]) -> Optional[dict]:
             'live': live if isinstance(live, str) and live.startswith('$') else 'the reference', 'n': n}
 
 
+def wrong_quote(quotes: List[dict]) -> Optional[dict]:
+    """2Q-2 (B2): {quote, live, n}, the most common wrong amount among the
+    quotes and the reference it was judged against, or None (no wrong quote
+    stated an amount). FL15's lead signal read "Quoted $44.99 against
+    $44.99.": the cell's most quoted amount, an exact one (Amazon's), while
+    the wrong quotes were $25, $27.97 and $23.79."""
+    wrong = [q for q in quotes if q.get('outcome') in ('wrong', 'stale') and q.get('stated') not in (None, '')]
+    if not wrong:
+        return None
+    (stated, live), n = Counter((q['stated'], q.get('live')) for q in wrong).most_common(1)[0]
+    return {'quote': rm.money(stated), 'live': live if isinstance(live, str) and live.startswith('$') else 'the reference',
+            'n': n}
+
+
 def _pack_field(quotes: List[dict], product: Optional[str]) -> dict:
-    """{'pack_mismatch': ...} beside a product's typed fields, only when there is one."""
-    pack = pack_mismatch(quotes, product)
-    return {'pack_mismatch': pack} if pack else {}
+    """{'pack_mismatch': ...} beside a product's typed fields, only when there
+    is one; 2Q-2 (B2): and {'wrong_quote': ...}, the signal's amount."""
+    pack, wrong = pack_mismatch(quotes, product), wrong_quote(quotes)
+    return {**({'pack_mismatch': pack} if pack else {}), **({'wrong_quote': wrong} if wrong else {})}
 
 
 def product_issue(quotes: List[dict], product: Optional[str] = None) -> tuple:
@@ -600,7 +617,10 @@ def product_issue(quotes: List[dict], product: Optional[str] = None) -> tuple:
         # the runs quoted for the other pack, never every wrong run beside them
         issue = TEMPLATES['product.wrong_pack'].format(**pack, runs=asked, runs_word=word)
     elif n:
-        issue = TEMPLATES[rule].format(n=n, runs=asked, runs_word=word)
+        wrong = wrong_quote(checked) if rule == 'product.wrong' else None
+        issue = (TEMPLATES['product.wrong_quote'].format(n=n, runs=asked, runs_word=word, quote=wrong['quote'], live=wrong['live'])
+                 if wrong else
+                 TEMPLATES[rule].format(n=n, runs=asked, runs_word=word))
     else:
         rule = 'product.right'
         right = sum(1 for q in checked if q.get('outcome') == 'exact')
@@ -792,11 +812,12 @@ def build_signals(metrics: dict, products: List[dict], *, surface: str, brand: s
     worst = max(products, key=lambda p: (p['wrong_runs'], p['name']), default=None)
     if worst and worst['wrong_runs'] >= 3:
         title, detail = TEMPLATES['signal.wrong_product']
-        pack = worst.get('pack_mismatch')
+        pack, wrong = worst.get('pack_mismatch'), worst.get('wrong_quote') or {}
         out.append({'id': f"wrong:{worst['sku']}", 'title': title.format(product=worst['name'], n=worst['wrong_runs']),
                     # 2Q-1 (B4): a quote for another pack says so, with both packs
                     'detail': TEMPLATES['signal.wrong_product_pack'].format(**pack, split=worst['quoted']) if pack else
-                    detail.format(quote=worst['quote'] or 'a price', live=worst['live_price'] or 'the reference',
+                    # 2Q-2 (B2): the most common wrong amount, never the most quoted one
+                    detail.format(quote=wrong.get('quote') or 'a price', live=wrong.get('live') or 'the reference',
                                   split=worst['quoted']),
                     'tag': 'Missed pool', 'tone': 'bad', 'route': 'true-value', 'rule': 'wrong_product',
                     'count': worst['wrong_runs'], **({'answerId': worst['answer_ids'][0]} if worst['answer_ids'] else {})})
@@ -1644,6 +1665,13 @@ def prompt_counts(prompts: List[dict]) -> dict:
 
 # ─── loaders ───────────────────────────────────────────────────────────────
 
+def answered(run_status, has_text, answer_status) -> bool:
+    """2Q-2: an answer arrived and the surface returned it, the scorer's own
+    test (expectation_scorer._answered): a run with none is scored absent on
+    every coder version, so the coder that stamped it says nothing."""
+    return run_status == 'success' and bool(has_text) and answer_status not in surfaces.NO_ANSWER_STATUSES
+
+
 def load_overview_rows(conn, cycle: dict, features: Optional[List[str]] = None) -> List[dict]:
     """features (2K-3): the merchant's catalog feature terms, which extend
     claim_kind's fact lexicon (app/services/console_claims.py). None, the
@@ -1651,12 +1679,15 @@ def load_overview_rows(conn, cycle: dict, features: Optional[List[str]] = None) 
     rows = []
     for r in conn.execute(text("""
         SELECT r.id AS run_id, r.platform, r.surface, r.answer_status,
+               r.status AS run_status, (r.raw_response IS NOT NULL AND TRIM(r.raw_response) <> '') AS has_text,
                q.tier, q.stage, q.query_code, q.query_text, q.source_ref, o.outcome, o.reason_code, o.extraction
         FROM soa_runs r JOIN soa_queries q ON q.id = r.query_id
         LEFT JOIN soa_expectation_outcomes o ON o.run_id = r.id
         WHERE r.cycle_id = :c
     """), {'c': cycle['id']}).mappings():
         row = dict(r)
+        # 2Q-2: whether an answer arrived (a wall, an empty answer or a failed run did not)
+        row['answered'] = answered(row.pop('run_status', None), row.pop('has_text', None), row.get('answer_status'))
         ref = _json(row.pop('source_ref')) or {}
         row['variant_id'] = ref.get('variant_id')
         # 2N-1: a catalog-built brand-direct question carries its own verdict, never the brand-claim rule's

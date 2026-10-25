@@ -162,7 +162,8 @@ def _and(names: List[str]) -> str:
 
 
 def catalog_verdict(intent: str, source_ref: dict, extraction: Optional[dict], answer: Optional[str], *,
-                    attribute: Optional[dict] = None, deals: Optional[dict] = None) -> dict:
+                    attribute: Optional[dict] = None, deals: Optional[dict] = None,
+                    expectation: Optional[dict] = None) -> dict:
     """
     2N-1: a catalog-built brand-direct answer's own verdict (never the
     brand-claim rule's): {verdict, line, severity, tone}.
@@ -174,7 +175,13 @@ def catalog_verdict(intent: str, source_ref: dict, extraction: Optional[dict], a
                       the SKU that day (`deals`, the cycle's cached rows').
                       named_deal, missed_deal, no_deal_live.
       attribute       the weight range (attribute_accuracy.answer_attribute).
-      retired         still sold / successor: not coded (RETIRED_STILL_SOLD_NOTE).
+      retired         2Q-2 (B2): whether it named the successor. grounded
+                      (named it, unflagged), no_successor (Medium, "did not
+                      name AMORE, its successor"); a line with no successor,
+                      or an answer with no text, is not judged. Still sold is
+                      not coded (RETIRED_STILL_SOLD_NOTE, 2L-2). The successor
+                      is the question's expectation's (catalog_tiers.
+                      build_retired_line_questions), named by its terms.
     """
     ref = source_ref or {}
     if intent == claim_kinds.ATTRIBUTE_INTENT:
@@ -183,9 +190,20 @@ def catalog_verdict(intent: str, source_ref: dict, extraction: Optional[dict], a
                 'severity': {'match': 'ok', 'mismatch': 'high', 'absent': 'low'}.get(v, 'low'),
                 'tone': {'match': 'ok', 'mismatch': 'bad', 'absent': 'bad'}.get(v, 'neu')}
     if intent == claim_kinds.RETIRED:
-        line = (ref.get('retired_line') or {}).get('line') or 'the line'
-        return {'verdict': None, 'line': f"asked about {line}, which the brand retired. Whether the answer called it "
-                                         f"still sold is not coded", 'severity': 'low', 'tone': 'neu'}
+        retired, expected = ref.get('retired_line') or {}, expectation or {}
+        line, successor = retired.get('line') or 'the line', retired.get('successor') or expected.get('successor') or {}
+        if not successor or not (answer or '').strip():
+            return {'verdict': None, 'line': f"asked about {line}, which the brand retired. Whether the answer called it "
+                                             f"still sold is not coded", 'severity': 'low', 'tone': 'neu'}
+        # 2Q-2 (B2): FL15's retired-line question read every answer High and red, the four that named AMORE too
+        label = successor.get('label') or successor.get('line') or 'the successor'
+        still = f"Whether it called {line} still sold is not coded"
+        terms = successor.get('terms') or retired_lines.terms(successor.get('product_name') or label,
+                                                              expected.get('brand') or ref.get('brand'))
+        if retired_lines.names(answer, terms):
+            return {'verdict': 'grounded', 'line': f"named {label}, its successor. {still}", 'severity': 'ok', 'tone': 'ok'}
+        return {'verdict': 'no_successor', 'line': f"did not name {label}, its successor. {still}",
+                'severity': 'medium', 'tone': 'warn'}
     stores = stores_in_order(extraction)
     if stores is None:
         return {'verdict': None, 'line': None, 'severity': 'low', 'tone': 'neu'}
@@ -477,7 +495,11 @@ def build_answer(run: dict, query: dict, outcome: Optional[dict], mentions: List
     if attribute is not None and attribute['stated'] is not None:
         kind = claim_kinds.ATTRIBUTE
     own = catalog_verdict(intent, source_ref, extraction, run.get('raw_response'), attribute=attribute,
-                          deals=deals) if intent and outcome is not None else None
+                          deals=deals, expectation=expectation) if intent and outcome is not None else None
+    if intent == claim_kinds.RETIRED and own is not None:
+        # 2Q-2 (B2): where a retired line is sold is its "still sold" clause, which is not
+        # coded (2L-2): the store check never flags it, nor makes it High
+        flags = [f for f in flags if f.get('flag') != 'fabricated_availability']
     if own is not None and flags and any(f.get('flag') == 'fabricated_availability' for f in flags):
         own = {**own, 'severity': 'high', 'tone': 'bad'}   # a store off the brand's list is coverage's miss
     named = [m['name'] for m in sorted(mentions, key=lambda m: m.get('position') or 99)]

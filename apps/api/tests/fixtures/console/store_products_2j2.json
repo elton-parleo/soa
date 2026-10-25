@@ -1,5 +1,5 @@
 {
- "_note": "2J-2: the Overview's products on every surface (all included) for the store fixtures, taken on main (d5a4f78) before build_products read a brand's retailer cells. test_console_2j2 pins them byte for byte. 2N-1: status follows the issue rule (console_parity.status_for).",
+ "_note": "2J-2: the Overview's products on every surface (all included) for the store fixtures, taken on main (d5a4f78) before build_products read a brand's retailer cells. test_console_2j2 pins them byte for byte. 2N-1: status follows the issue rule (console_parity.status_for). 2Q-2 (B2): a wrong row's issue names its most common wrong amount, and `wrong_quote` beside it.",
  "ws": {
   "all": [
    {
@@ -11,7 +11,7 @@
     "answered": 2,
     "cell_status": "wrong",
     "first": 2,
-    "issue": "Quoted a wrong price in 1 of 3 runs.",
+    "issue": "Quoted a wrong price in 1 of 3 runs, most often $14.99 against $12.99.",
     "issue_rule": "product.wrong",
     "live": "$12.99 at trueshopstore.com, the record of Aug 28, no page read yet",
     "live_price": "$12.99",
@@ -55,6 +55,11 @@
     "runs": 3,
     "sku": "bum-balm-4oz",
     "status": "wrong",
+    "wrong_quote": {
+     "live": "$12.99",
+     "n": 1,
+     "quote": "$14.99"
+    },
     "wrong_runs": 1
    },
    {
@@ -64,7 +69,7 @@
     "answered": 1,
     "cell_status": "wrong",
     "first": 1,
-    "issue": "Quoted a wrong price in 1 of 1 run.",
+    "issue": "Quoted a wrong price in 1 of 1 run, most often $14.99 against $11.99.",
     "issue_rule": "product.wrong",
     "live": "$11.99 at trueshopstore.com, the record of Aug 28, no page read yet",
     "live_price": "$11.99",
@@ -90,6 +95,11 @@
     "runs": 1,
     "sku": "cloud-wipes-3pack",
     "status": "wrong",
+    "wrong_quote": {
+     "live": "$11.99",
+     "n": 1,
+     "quote": "$14.99"
+    },
     "wrong_runs": 1
    },
    {
@@ -99,7 +109,7 @@
     "answered": 1,
     "cell_status": "wrong",
     "first": 1,
-    "issue": "Quoted a wrong price in 1 of 1 run.",
+    "issue": "Quoted a wrong price in 1 of 1 run, most often $16.99 against $29.99.",
     "issue_rule": "product.wrong",
     "live": "$29.99 at trueshopstore.com, the record of Aug 28, no page read yet",
     "live_price": "$29.99",
@@ -125,6 +135,11 @@
     "runs": 1,
     "sku": "snug-fit-overnight-s6",
     "status": "wrong",
+    "wrong_quote": {
+     "live": "$29.99",
+     "n": 1,
+     "quote": "$16.99"
+    },
     "wrong_runs": 1
    },
    {
@@ -134,7 +149,7 @@
     "answered": 1,
     "cell_status": "wrong",
     "first": 0,
-    "issue": "Quoted a wrong price in 1 of 1 run.",
+    "issue": "Quoted a wrong price in 1 of 1 run, most often $9.99 against $22.99.",
     "issue_rule": "product.wrong",
     "live": "$22.99 at trueshopstore.com, the record of Sep 4, no page read yet",
     "live_price": "$22.99",
@@ -160,6 +175,11 @@
     "runs": 1,
     "sku": "snug-fit-diapers-s3-small",
     "status": "wrong",
+    "wrong_quote": {
+     "live": "$22.99",
+     "n": 1,
+     "quote": "$9.99"
+    },
     "wrong_runs": 1
    }
   ],
@@ -209,7 +229,7 @@
     "answered": 2,
     "cell_status": "wrong",
     "first": 2,
-    "issue": "Quoted a wrong price in 1 of 2 runs.",
+    "issue": "Quoted a wrong price in 1 of 2 runs, most often $14.99 against $12.99.",
     "issue_rule": "product.wrong",
     "live": "$12.99 at trueshopstore.com, the record of Aug 28, no page read yet",
     "live_price": "$12.99",
@@ -244,6 +264,11 @@
     "runs": 2,
     "sku": "bum-balm-4oz",
     "status": "wrong",
+    "wrong_quote": {
+     "live": "$12.99",
+     "n": 1,
+     "quote": "$14.99"
+    },
     "wrong_runs": 1
    },
    {
@@ -253,7 +278,7 @@
     "answered": 1,
     "cell_status": "wrong",
     "first": 1,
-    "issue": "Quoted a wrong price in 1 of 1 run.",
+    "issue": "Quoted a wrong price in 1 of 1 run, most often $14.99 against $11.99.",
     "issue_rule": "product.wrong",
     "live": "$11.99 at trueshopstore.com, the record of Aug 28, no page read yet",
     "live_price": "$11.99",
@@ -279,6 +304,11 @@
     "runs": 1,
     "sku": "cloud-wipes-3pack",
     "status": "wrong",
+    "wrong_quote": {
+     "live": "$11.99",
+     "n": 1,
+     "quote": "$14.99"
+    },
     "wrong_runs": 1
    },
    {
@@ -288,7 +318,7 @@
     "answered": 1,
     "cell_status": "wrong",
     "first": 1,
-    "issue": "Quoted a wrong price in 1 of 1 run.",
+    "issue": "Quoted a wrong price in 1 of 1 run, most often $16.99 against $29.99.",
     "issue_rule": "product.wrong",
     "live": "$29.99 at trueshopstore.com, the record of Aug 28, no page read yet",
     "live_price": "$29.99",
@@ -314,6 +344,11 @@
     "runs": 1,
     "sku": "snug-fit-overnight-s6",
     "status": "wrong",
+    "wrong_quote": {
+     "live": "$29.99",
+     "n": 1,
+     "quote": "$16.99"
+    },
     "wrong_runs": 1
    },
    {
@@ -323,7 +358,7 @@
     "answered": 1,
     "cell_status": "wrong",
     "first": 0,
-    "issue": "Quoted a wrong price in 1 of 1 run.",
+    "issue": "Quoted a wrong price in 1 of 1 run, most often $9.99 against $22.99.",
     "issue_rule": "product.wrong",
     "live": "$22.99 at trueshopstore.com, the record of Sep 4, no page read yet",
     "live_price": "$22.99",
@@ -349,6 +384,11 @@
     "runs": 1,
     "sku": "snug-fit-diapers-s3-small",
     "status": "wrong",
+    "wrong_quote": {
+     "live": "$22.99",
+     "n": 1,
+     "quote": "$9.99"
+    },
     "wrong_runs": 1
    }
   ]
@@ -363,7 +403,7 @@
     "answered": 2,
     "cell_status": "wrong",
     "first": 1,
-    "issue": "Quoted a wrong price in 2 of 2 runs.",
+    "issue": "Quoted a wrong price in 2 of 2 runs, most often $16.99 against $29.99.",
     "issue_rule": "product.wrong",
     "live": "$29.99 at trueshopstore.com, the record of Aug 28, no page read yet",
     "live_price": "$29.99",
@@ -398,6 +438,11 @@
     "runs": 2,
     "sku": "snug-fit-overnight-s6",
     "status": "wrong",
+    "wrong_quote": {
+     "live": "$29.99",
+     "n": 1,
+     "quote": "$16.99"
+    },
     "wrong_runs": 2
    },
    {
@@ -410,7 +455,7 @@
     "answered": 3,
     "cell_status": "wrong",
     "first": 2,
-    "issue": "Quoted a wrong price in 1 of 4 runs.",
+    "issue": "Quoted a wrong price in 1 of 4 runs, most often $14.99 against $12.99.",
     "issue_rule": "product.wrong",
     "live": "$12.99 at trueshopstore.com, the record of Aug 28, no page read yet",
     "live_price": "$12.99",
@@ -454,6 +499,11 @@
     "runs": 4,
     "sku": "bum-balm-4oz",
     "status": "wrong",
+    "wrong_quote": {
+     "live": "$12.99",
+     "n": 1,
+     "quote": "$14.99"
+    },
     "wrong_runs": 1
    },
    {
@@ -464,7 +514,7 @@
     "answered": 2,
     "cell_status": "wrong",
     "first": 1,
-    "issue": "Quoted a wrong price in 1 of 2 runs.",
+    "issue": "Quoted a wrong price in 1 of 2 runs, most often $14.99 against $11.99.",
     "issue_rule": "product.wrong",
     "live": "$11.99 at trueshopstore.com, the record of Aug 28, no page read yet",
     "live_price": "$11.99",
@@ -499,6 +549,11 @@
     "runs": 2,
     "sku": "cloud-wipes-3pack",
     "status": "wrong",
+    "wrong_quote": {
+     "live": "$11.99",
+     "n": 1,
+     "quote": "$14.99"
+    },
     "wrong_runs": 1
    },
    {
@@ -508,7 +563,7 @@
     "answered": 1,
     "cell_status": "wrong",
     "first": 0,
-    "issue": "Quoted a wrong price in 1 of 1 run.",
+    "issue": "Quoted a wrong price in 1 of 1 run, most often $9.99 against $22.99.",
     "issue_rule": "product.wrong",
     "live": "$22.99 at trueshopstore.com, the record of Sep 4, no page read yet",
     "live_price": "$22.99",
@@ -534,6 +589,11 @@
     "runs": 1,
     "sku": "snug-fit-diapers-s3-small",
     "status": "wrong",
+    "wrong_quote": {
+     "live": "$22.99",
+     "n": 1,
+     "quote": "$9.99"
+    },
     "wrong_runs": 1
    }
   ],
@@ -654,7 +714,7 @@
     "answered": 2,
     "cell_status": "wrong",
     "first": 2,
-    "issue": "Quoted a wrong price in 1 of 2 runs.",
+    "issue": "Quoted a wrong price in 1 of 2 runs, most often $14.99 against $12.99.",
     "issue_rule": "product.wrong",
     "live": "$12.99 at trueshopstore.com, the record of Aug 28, no page read yet",
     "live_price": "$12.99",
@@ -689,6 +749,11 @@
     "runs": 2,
     "sku": "bum-balm-4oz",
     "status": "wrong",
+    "wrong_quote": {
+     "live": "$12.99",
+     "n": 1,
+     "quote": "$14.99"
+    },
     "wrong_runs": 1
    },
    {
@@ -698,7 +763,7 @@
     "answered": 1,
     "cell_status": "wrong",
     "first": 1,
-    "issue": "Quoted a wrong price in 1 of 1 run.",
+    "issue": "Quoted a wrong price in 1 of 1 run, most often $14.99 against $11.99.",
     "issue_rule": "product.wrong",
     "live": "$11.99 at trueshopstore.com, the record of Aug 28, no page read yet",
     "live_price": "$11.99",
@@ -724,6 +789,11 @@
     "runs": 1,
     "sku": "cloud-wipes-3pack",
     "status": "wrong",
+    "wrong_quote": {
+     "live": "$11.99",
+     "n": 1,
+     "quote": "$14.99"
+    },
     "wrong_runs": 1
    },
    {
@@ -733,7 +803,7 @@
     "answered": 1,
     "cell_status": "wrong",
     "first": 1,
-    "issue": "Quoted a wrong price in 1 of 1 run.",
+    "issue": "Quoted a wrong price in 1 of 1 run, most often $16.99 against $29.99.",
     "issue_rule": "product.wrong",
     "live": "$29.99 at trueshopstore.com, the record of Aug 28, no page read yet",
     "live_price": "$29.99",
@@ -759,6 +829,11 @@
     "runs": 1,
     "sku": "snug-fit-overnight-s6",
     "status": "wrong",
+    "wrong_quote": {
+     "live": "$29.99",
+     "n": 1,
+     "quote": "$16.99"
+    },
     "wrong_runs": 1
    },
    {
@@ -768,7 +843,7 @@
     "answered": 1,
     "cell_status": "wrong",
     "first": 0,
-    "issue": "Quoted a wrong price in 1 of 1 run.",
+    "issue": "Quoted a wrong price in 1 of 1 run, most often $9.99 against $22.99.",
     "issue_rule": "product.wrong",
     "live": "$22.99 at trueshopstore.com, the record of Sep 4, no page read yet",
     "live_price": "$22.99",
@@ -794,6 +869,11 @@
     "runs": 1,
     "sku": "snug-fit-diapers-s3-small",
     "status": "wrong",
+    "wrong_quote": {
+     "live": "$22.99",
+     "n": 1,
+     "quote": "$9.99"
+    },
     "wrong_runs": 1
    }
   ]

@@ -39,6 +39,8 @@ class ScoreBatchSummary:
     skipped: int
     retried: int
     by_outcome: dict = field(default_factory=dict)
+    #: 2Q-2: of the skipped, the runs with no answer (each still stored, absent)
+    no_answer: int = 0
     results: List[ScoreRunResult] = field(default_factory=list)
     failures: List[ScoreRunResult] = field(default_factory=list)
 
@@ -101,6 +103,7 @@ async def score_runs(run_ids: List[int], *, concurrency: int = 5,
         succeeded=succeeded,
         failed=len(failures),
         skipped=skipped,
+        no_answer=sum(1 for r in results if r.status == "skipped_no_answer"),
         retried=retried,
         by_outcome=by_outcome,
         results=list(results),

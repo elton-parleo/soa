@@ -44,11 +44,11 @@ def test_the_version():
 def test_the_coder_count_reads_the_scored_brand_direct_runs():
     v = ea.BRAND_CODER_VERSION
     # 2O-3: and the oldest coder version among them (1: one call, before 2O-1)
-    assert score_svc.brand_coder(_runs(258, 258)) == {'version': v, 'coded': 258, 'of': 258, 'oldest': v}
-    assert score_svc.brand_coder(_runs(258, 0)) == {'version': v, 'coded': 0, 'of': 258, 'oldest': 1}
+    assert score_svc.brand_coder(_runs(258, 258)) == {'version': v, 'coded': 258, 'of': 258, 'oldest': v, 'unanswered': 0}
+    assert score_svc.brand_coder(_runs(258, 0)) == {'version': v, 'coded': 0, 'of': 258, 'oldest': 1, 'unanswered': 0}
     # an unscored run is not counted; a cycle with no brand-direct tier is all coded
     unscored = [{'tier': 'brand_direct', 'outcome': None}]
-    assert score_svc.brand_coder(unscored) == {'version': v, 'coded': 0, 'of': 0, 'oldest': None}
+    assert score_svc.brand_coder(unscored) == {'version': v, 'coded': 0, 'of': 0, 'oldest': None, 'unanswered': 0}
 
 
 def test_the_overview_rows_carry_the_coder_that_scored_them():

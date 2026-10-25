@@ -459,6 +459,46 @@ def brand_direct_rows(conn, cid: int) -> list:
     return [(r[0], _as_json(r[1]), r[2], r[3]) for r in rows]
 
 
+def stamp_unanswered(conn, cid: int) -> int:
+    """2Q-2: every stored brand-direct row of the cycle whose run has no answer
+    (a wall, an empty answer, a run that failed) on the current brand-claim
+    coder, with no calls, and re-dated so the stored score recomputes
+    ('outcomes re-scored'). Such a run is absent on every coder version, so
+    stamping it is correct whatever skipped it. FL15's unanswered run kept
+    coder 6 after its `--tier brand_direct` rescore and held the cycle back.
+    Returns how many rows were re-stamped (0 when the scorer stamped them all)."""
+    from scoring.expectation_scorer import NO_ANSWER_STATUSES
+    stale = []
+    for oid, extraction, status, answer, answer_status in conn.execute(text("""
+        SELECT o.id, o.extraction, r.status, r.raw_response, r.answer_status
+        FROM soa_expectation_outcomes o JOIN soa_runs r ON r.id = o.run_id
+        WHERE o.cycle_id = :cid AND o.tier = 'brand_direct'
+    """), {"cid": cid}).fetchall():
+        if status == 'success' and (answer or '').strip() and answer_status not in NO_ANSWER_STATUSES:
+            continue
+        x = _as_json(extraction) or {}
+        if (x.get('coder') or {}).get('version') != ea.BRAND_CODER_VERSION:
+            stale.append((oid, {**x, 'coder': {'version': ea.BRAND_CODER_VERSION, 'calls': []}}))
+    for oid, x in stale:
+        conn.execute(text("UPDATE soa_expectation_outcomes SET extraction = :x, scored_at = :t WHERE id = :i"),
+                     {'x': json.dumps(x), 't': datetime.now(timezone.utc).isoformat(), 'i': oid})
+    conn.commit()
+    return len(stale)
+
+
+def _skipped_words(summary) -> str:
+    """2Q-2: "skipped 1 (no answer), stamped": a run with no answer still has
+    its row, on the current coder; a run with nothing to score has none."""
+    no_answer = getattr(summary, 'no_answer', 0)
+    other = summary.skipped - no_answer
+    parts = []
+    if no_answer:
+        parts.append(f"skipped {no_answer} (no answer), {'stamped' if getattr(summary, 'stamped', True) else 'to stamp'}")
+    if other or not parts:
+        parts.append(f"skipped {other}" + (" (nothing to score)" if other and no_answer else ""))
+    return ', '.join(parts)
+
+
 def print_brand_direct(before_rows, after_rows, runs=None) -> None:
     """The brand-direct block, the same for the real run (rows read back) and
     the dry run (rows planned): see selection_report and claim_sets_changed.
@@ -1163,7 +1203,7 @@ def _print_after(summary, before, after, after_secondary, before_rows, after_row
     """The lines after a re-score, the real run's and (2O-4) the dry run's
     for brand-direct alike. Returns the tiers whose primary counts moved."""
     print(f"\nscored {summary.succeeded}/{summary.total} "
-          f"(skipped {summary.skipped}, failed {summary.failed}, "
+          f"({_skipped_words(summary)}, failed {summary.failed}, "
           f"retried {summary.retried})")
     print("after:")
     print(_render(after))
@@ -1310,7 +1350,9 @@ def main(argv=None) -> int:
             after.setdefault('brand_direct', Counter())[outcome] += 1
         summary = SimpleNamespace(
             succeeded=sum(1 for p in planned if p[1] == 'success'), total=len(planned),
-            skipped=sum(1 for p in planned if p[1].startswith('skipped')), failed=0, retried=0, failures=[])
+            skipped=sum(1 for p in planned if p[1].startswith('skipped')),
+            no_answer=sum(1 for p in planned if p[1] == 'skipped_no_answer'), stamped=False,
+            failed=0, retried=0, failures=[])
         _print_after(summary, before, after, before_secondary, before_rows, after_rows)
         print_brand_direct(before_brand, after_brand, stores)
         return 0
@@ -1327,6 +1369,9 @@ def main(argv=None) -> int:
                                      **({'scorer': scorer} if scorer else {})))
 
     with engine.connect() as conn:
+        # 2Q-2: a brand-direct row with no answer on the current coder, whatever skipped it
+        if brand_ids:
+            stamp_unanswered(conn, cid)
         after = outcome_counts(conn, cid)
         after_secondary = secondary_counts(conn, cid)
         after_rows = row_outcomes(conn, cid)
