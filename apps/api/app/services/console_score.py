@@ -1087,12 +1087,18 @@ def build_score(cycle_code: str, *, runs: List[dict], mentions: List[dict], vis_
 def brand_coder(runs: List[dict]) -> dict:
     """2O-1: {version, coded, of}: of the cycle's scored brand-direct runs,
     how many the current brand-claim coder (BRAND_CODER_VERSION) coded.
-    2O-3: and `oldest`, the oldest coder version among them (None: one call)."""
-    scored = [r for r in runs if r.get('tier') == 'brand_direct' and r.get('outcome') is not None]
+    2O-3: and `oldest`, the oldest coder version among them (None: one call).
+    2Q-2: a run with no answer is not counted (`answered`, load_overview_rows'):
+    it is absent on every version, so the coder that stamped it never holds a
+    cycle back. FL15's one unanswered run, still on coder 6 after its
+    `--tier brand_direct` rescore, read "Scored under v16, re-score to compare"
+    on the score card and every tile. `unanswered` says how many were left out."""
+    brand = [r for r in runs if r.get('tier') == 'brand_direct' and r.get('outcome') is not None]
+    scored = [r for r in brand if r.get('answered', True)]
     versions = [r.get('coder_version') or 1 for r in scored]
     return {'version': BRAND_CODER_VERSION, 'of': len(scored),
             'coded': sum(1 for r in scored if r.get('coder_version') == BRAND_CODER_VERSION),
-            'oldest': min(versions) if versions else None}
+            'oldest': min(versions) if versions else None, 'unanswered': len(brand) - len(scored)}
 
 
 def comparable_version(body: Optional[dict]) -> Optional[str]:
@@ -1292,6 +1298,10 @@ def needs_recompute(body: Optional[dict], domain_checks: Optional[dict],
     if not is_current(body):
         return 'stale'
     # 2L-4: a score stored before the brand tiles were counted beside the five
+    # 2Q-2: a block counted before unanswered runs were left out, which held the cycle back
+    coder = body.get('brand_coder')
+    if isinstance(coder, dict) and 'unanswered' not in coder and coder.get('coded', 0) < coder.get('of', 0):
+        return 'brand coder recounted'
     if body.get('metric_surface') and 'presence' not in ((body.get('metric_counts') or {}).get(body['metric_surface']) or {}):
         return 'brand tiles not counted'
     was = [c for c in DOMAIN_CODES if c in (body.get('measured') or [])]

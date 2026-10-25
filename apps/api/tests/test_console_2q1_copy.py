@@ -66,7 +66,7 @@ def test_the_rule_by_hand():
         'product.wrong', 'Quoted $44.99 for a 58 ct pack against $44.99 for the 104 ct in 11 of 18 runs.')
     # a wrong price for the pack asked about reads as before
     plain = [q('41.99', 'wrong')] * 3 + [q('44.99', 'wrong', 58)] * 2
-    assert parity.product_issue(plain, name) == ('product.wrong', 'Quoted a wrong price in 5 of 5 runs.')
+    assert parity.product_issue(plain, name) == ('product.wrong', 'Quoted a wrong price in 5 of 5 runs, most often $41.99 against $44.99.')
     # no pack in the name: the line names the pack asked about
     assert parity.pack_mismatch([q('44.99', 'wrong', 58)], 'Zzz Size 4')['asked'] == 'pack asked about'
     # a reference that is not a price is not quoted as one

@@ -83,7 +83,7 @@ def test_fl14_s_sequence_leaves_the_score_on_the_current_versions(http, db, upst
     # the score stored before the rescores: brand-direct rows on coder 5 (2O-5)
     n = _coded(db, f2p1.ID_1, 5)
     first = _get(http, 'score', cycle=f2p1.CYCLE_1, merchant=WS)
-    assert first['brand_coder'] == {'version': ea.BRAND_CODER_VERSION, 'of': n, 'coded': 0, 'oldest': 5}
+    assert first['brand_coder'] == {'version': ea.BRAND_CODER_VERSION, 'of': n, 'coded': 0, 'oldest': 5, 'unanswered': 0}
     assert score_svc.comparable_version(_stored(db, f2p1.ID_1)) == '15'
 
     # --refresh-reference --classify-only: re-classified, the coder stamp kept
@@ -99,7 +99,7 @@ def test_fl14_s_sequence_leaves_the_score_on_the_current_versions(http, db, upst
         assert body['history'][-1]['replaced_because'] == 'outcomes re-scored'
     stored = _stored(db, f2p1.ID_1)
     assert stored['scorer_version'] == score_svc.SCORER_VERSION == '17'
-    assert stored['brand_coder'] == {'version': 7, 'of': n, 'coded': n, 'oldest': 7}
+    assert stored['brand_coder'] == {'version': 7, 'of': n, 'coded': n, 'oldest': 7, 'unanswered': 0}
     assert score_svc.comparable_version(stored) == '17'
     # and it is served as stored from then on
     assert _get(http, 'score', cycle=f2p1.CYCLE_1, merchant=WS)['inputs']['scored_at'] == stored['inputs']['scored_at']

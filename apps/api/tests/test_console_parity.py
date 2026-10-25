@@ -168,7 +168,7 @@ def test_overview_on_the_fixture_cycle(http, upstream):
     assert balm['status'] == 'wrong' and balm['quote'] == '$14.99'
     assert balm['quoted'] == '$12.99, 1 of 2 runs (Gemini 1). $14.99, 1 of 2 runs (ChatGPT 1)'
     assert balm['live'] == '$12.99 at trueshopstore.com, the record of Aug 28, no page read yet'
-    assert balm['issue'] == 'Quoted a wrong price in 1 of 2 runs.'
+    assert balm['issue'] == 'Quoted a wrong price in 1 of 2 runs, most often $14.99 against $12.99.'
     # the one access problem is a signal on every surface; Claude-User is not measured, not a problem
     assert [s['id'] for s in g['signals']] == ['access']
     assert g['signals'][0]['title'] == '1 agent identity could not read the pages.'

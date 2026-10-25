@@ -49,7 +49,7 @@ def test_fl14_re_scored_is_not_comparable_to_a_cycle_on_version_3():
 def test_the_coder_count():
     rows = [{'tier': 'brand_direct', 'outcome': 'echoed', 'coder_version': v} for v in (4, 4, 3)]
     # 2O-5: coded counts the current coder's (5) rows
-    assert score_svc.brand_coder(rows) == {'version': ea.BRAND_CODER_VERSION, 'coded': 0, 'of': 3, 'oldest': 3}
+    assert score_svc.brand_coder(rows) == {'version': ea.BRAND_CODER_VERSION, 'coded': 0, 'of': 3, 'oldest': 3, 'unanswered': 0}
 
 
 SPANS = [

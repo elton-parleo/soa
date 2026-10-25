@@ -206,7 +206,7 @@ def test_a_sibling_variant_s_quote_is_shown_and_the_page_read_is_the_reference(h
     as_('alice')
     body = http.get('/api/console/overview', params={'cycle': CYCLE, 'merchant': 'wiggle-and-snug'}).json()
     balm = next(p for p in body['by_surface']['grounded_api']['products'] if p['sku'] == 'bum-balm-4oz')
-    assert balm['issue'] == 'Quoted a wrong price in 4 of 5 runs.'
+    assert balm['issue'] == 'Quoted a wrong price in 4 of 5 runs, most often $6.99 against $12.49.'
     assert balm['quoted'] == ('$6.99 for Snug-Fit Trial Pack, 3 of 5 runs (ChatGPT 2, Gemini 1). '
                               '$12.99, 1 of 5 runs (Gemini 1). $14.99, 1 of 5 runs (ChatGPT 1)')
     assert balm['live'] == '$12.49 at trueshopstore.com, our own fetch, Oct 15'
