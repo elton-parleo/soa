@@ -78,12 +78,13 @@ def test_the_rule_by_hand():
 # ── 2: a deal beside "Out of stock" is not live ───────────────────────────
 
 def _out_of_stock(deals, title='Rollback'):
-    """supply's /deals with the Walmart Rollback's shelf words as FL15's read them: "… Out of stock …"."""
+    """supply's /deals with the deal's shelf words beside "Out of stock", as FL15's Walmart Rollback read
+    ("… Out of stock …"): the deal's own text and price, then the shelf's stock line."""
     out = json.loads(json.dumps(deals))
     for deal in out['deals']:
         if deal['text'] == title:
             for v in deal['variants']:
-                v['evidence'] = 'Rollback $49.77 was $59.77 Out of stock Get in-stock alert'
+                v['evidence'] = f"{deal['text']} ${v.get('price') or v.get('shelf_price')} Out of stock Get in-stock alert"
     return out
 
 
