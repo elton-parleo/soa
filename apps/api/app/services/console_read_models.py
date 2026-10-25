@@ -3700,13 +3700,14 @@ def build_prove(promo: Optional[dict], deals: Optional[dict], brand: Optional[st
         tally = per.get(ppt.title(deal)) or {'asked': 0, 'named': 0}
         where = ', '.join(dict.fromkeys(_variant_words(v) for v in variants))
         prices = '. '.join(dict.fromkeys(f"{_variant_words(v)} {_price_words(v)}" for v in variants if _price_words(v)))
-        detail = f"Live on {where}." + (f" {prices}." if prices else '')
+        gone = ppt.out_of_stock(deal)
+        # 2Q-1 (B4): a deal beside "Out of stock" was shown, never live
+        detail = f"{'Shown' if gone else 'Live'} on {where}." + (f" {prices}." if prices else '')
         # 2N-1: the shelf's own words, trimmed of its price-per-count noise, go here, never in the title
         said = ppt.evidence(next((v.get('evidence') for v in variants if v.get('evidence')), None) or deal.get('text'))
         if said and re.search(r"\d", said) and said.rstrip('.').lower() not in ppt.title(deal).lower():
             detail += f" The shelf said: {said.rstrip('.')}."
         asked, named = tally['asked'], tally['named']
-        gone = ppt.out_of_stock(deal)
         if gone:
             # 2Q-1 (B4): never live, so never asked about: the row says why
             detail = t['prove.out_of_stock'].format(date=day) + ' ' + detail

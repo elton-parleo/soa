@@ -8125,7 +8125,7 @@ again; a replaced outcome row moves the stamp).
   serves them) and `live_for` leaves such a variant out, so no answer is judged against it and the pass-through
   counts only live deals. Trade promotions keeps its row, last, with `live: false`, `not_live: 'out_of_stock'`,
   tone `neu`, agents "Not counted: out of stock", and the detail "Not live: the shelf said out of stock on <date>,
-  so no answer is counted against it." Against a compared cycle such a row's `change` is `out_of_stock` ("Out of
+  so no answer is counted against it. Shown on <variants>." Against a compared cycle such a row's `change` is `out_of_stock` ("Out of
   stock on <date>: <retailer> showed it beside "Out of stock". Live in <code>.") and an ended deal reads `ended`, as
   before. Supply's extractor (parleo-supply-app `truesync/fullloop/deals.py`, `accept_deal`) does not refuse such a
   deal yet; soa's rule holds for the deals supply already stored, FL15's among them.

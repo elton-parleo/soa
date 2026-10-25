@@ -99,7 +99,8 @@ def test_an_out_of_stock_deal_is_not_live_and_its_row_says_so(http, db, upstream
     row = next(r for r in after['rows'] if r['title'] == rollback['title'])
     assert (row['live'], row['not_live'], row['asked'], row['named'], row['tone']) == (False, 'out_of_stock', 0, 0, 'neu')
     assert row['agents'] == 'Not counted: out of stock'
-    assert row['detail'].startswith('Not live: the shelf said out of stock on Oct 14, so no answer is counted against it. ')
+    assert row['detail'].startswith('Not live: the shelf said out of stock on Oct 14, so no answer is counted against it. Shown on ')
+    assert 'Live on' not in row['detail']
     assert after['rows'][-1]['title'] == rollback['title']   # last
     # the answers about its SKUs are judged against the deals that were live (none for them): the aside moves
     # two answers named the Rollback: no longer a live deal named, out of the same 50
