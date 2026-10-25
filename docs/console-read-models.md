@@ -8115,7 +8115,8 @@ again; a replaced outcome row moves the stamp).
   (`console_parity.pack_mismatch`: the most common such quote, its pack, the asked pack from the row's name, the
   reference) the signal's detail reads `signal.wrong_product_pack`, "Quoted $44.99 for a 58 ct pack against $44.99
   for the 104 ct. …", and the products table's issue line `product.wrong_pack`, "Quoted $44.99 for a 58 ct pack
-  against $44.99 for the 104 ct in 11 of 18 runs." The product carries `pack_mismatch` beside its typed fields only
+  against $44.99 for the 104 ct in 11 of 18 runs." (the runs quoted for the other pack, never every wrong run beside
+  them). The product carries `pack_mismatch` beside its typed fields only
   when there is one. A product narrative's facts already name the product a quote was for (`for_variant`); they are
   unchanged, so no recorded narrative moves.
 * **A deal beside "Out of stock" is not live.** FL15's Walmart Rollback on Pure Protection Size 1 was read beside

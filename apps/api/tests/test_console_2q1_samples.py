@@ -63,7 +63,8 @@ def test_the_samples(http, db, upstream):
     signal = next(s for s in block['signals'] if s['rule'] == 'wrong_product')
     assert signal['detail'].startswith('Quoted $42.97 for a 58 ct pack against $42.97 for the 120 ct. ')
     product = next(p for p in block['products'] if p['name'] == 'Size 4, 120 ct')
-    assert product['issue'].startswith('Quoted $42.97 for a 58 ct pack against $42.97 for the 120 ct in ')
+    # four quotes for the 58 ct pack; the fifth wrong run (a stale Walmart quote) is not one of them
+    assert product['issue'] == 'Quoted $42.97 for a 58 ct pack against $42.97 for the 120 ct in 4 of 12 runs.'
     # B4: the multi-buy beside "Out of stock" is not live; its row says so
     gone = [r for r in prove['rows'] if r.get('not_live')]
     assert [(r['retailer'], r['agents'], r['change']) for r in gone] == \

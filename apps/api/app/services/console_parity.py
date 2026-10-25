@@ -597,7 +597,8 @@ def product_issue(quotes: List[dict], product: Optional[str] = None) -> tuple:
     word = _n(asked, 'run', 'runs')
     pack = pack_mismatch(checked, product) if rule == 'product.wrong' and n else None
     if pack:
-        issue = TEMPLATES['product.wrong_pack'].format(**{**pack, 'n': n}, runs=asked, runs_word=word)
+        # the runs quoted for the other pack, never every wrong run beside them
+        issue = TEMPLATES['product.wrong_pack'].format(**pack, runs=asked, runs_word=word)
     elif n:
         issue = TEMPLATES[rule].format(n=n, runs=asked, runs_word=word)
     else:
