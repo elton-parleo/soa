@@ -8066,3 +8066,42 @@ stored 61 of 79) while Impact read **−1** (against 63 of 79 live); now the til
 lines sum to the tile's −1; Retailer coverage; deals named), Visibility's coverage, Trade promotions' aside, Impact's
 four rows and True Value's drift (net against Prices right) all agree. `test_console_2e`'s hand-made prior now
 carries the domain-check record and inputs it was measured on, so the prior cycle's own read serves it.
+
+### B3: `/overview` is slow and the console gives up
+
+`/overview?cycle=FL15…` took 15.7 s on a warm API, and the console's first load showed "Couldn't load the overview —
+Failed to fetch". On 2P-1's pair one read made eleven supply calls in six sequential rounds (the merchant's kind
+four times, `/reference` and `/deals` twice, the catalog, `/retailers`, `/access`) and read the previous cycle in
+full (its rows, its Visibility, its deals, its attribute answers) on every request.
+
+* **One round.** The overview's supply reads (the catalog's features, the routing facts, the access run and the
+  reference, both cycles' deals) run together (`asyncio.gather`), the previous cycle found first.
+* **`app/services/console_cache.py`**, in the process (the API is a Vercel function: a warm instance keeps it),
+  bounded (256 entries, least recently used out), every hit a deep copy:
+  * supply: `reads(client, org)` wraps the client for `get_reference`, `get_retailers`, `get_deals`, `get_access`,
+    `get_merchant_catalog`, and `cached()` the merchant's kind; kept 300 s per org, method and arguments; a read
+    under way is shared (two asks, one call); a failed read is never kept. The merchant check (2H) still reads the
+    org's merchants every time.
+  * cycles: `cycle_read(conn, cycle, name, compute, *parts)` keeps one cycle's overview rows, Visibility, promo
+    answers and attribute answers under the cycle's stamp (`cycle_stamp`: its runs, outcomes and Layer 1 mentions,
+    each counted with the newest id and `scored_at`, and its reference's `refreshed_at`) and the inputs beside it
+    (the merchant's facts, the catalog's features, the reference). A rescore (rows replaced: new ids, a new
+    `scored_at`), a recode or a refresh is a new key, never a stale read; 1800 s as a backstop. A pair's read is its
+    two cycles' entries, so Visibility, True Value, Trade promotions and Impact (`_compared`) reuse them.
+  * `SOA_CONSOLE_CACHE=0` turns it off. The API's tests run with it off (their fixtures edit rows and supply's answers
+    between two reads); `tests/test_console_2q1_cache.py` runs with it on. With it on everywhere, the only tests that
+    differ are the three that turn a brand merchant into a seller mid-test (its kind is kept 300 s).
+* `overview.read` is logged per read: the cycle, the previous, `ms`, and the cache's entries, hits and misses.
+
+Timings on 2P-1's pair, local Postgres, every supply call delayed by the latency shown (simulated; production's
+15.7 s also carries FL15's larger cycle, which only the cycle cache shortens):
+
+| supply latency | before, every read | after, cold | after, warm |
+|---|---|---|---|
+| 1.0 s | 9.3 s (11 calls) | 3.3 s (8 calls, 3 rounds) | 1.1 s (1 call) |
+| 0.3 s | 3.0 s | 1.25 s | 0.42 s |
+
+Tests: `apps/api/tests/test_console_2q1_cache.py` (the overview, Visibility, True Value, Trade promotions and Impact
+bodies identical cached or not, cold or warm; a warm overview reads supply once and neither cycle's rows; a refresh
+of the previous cycle's reference is seen on the next read; a failed deals read is named and the next read tries
+again; a replaced outcome row moves the stamp).

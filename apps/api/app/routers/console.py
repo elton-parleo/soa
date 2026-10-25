@@ -54,6 +54,7 @@ from app.services import console_parity as parity
 from app.services import console_prompts
 from app.services import console_read_models as rm
 from app.services import console_revenue as revenue_svc
+from app.services import console_cache
 from app.services import console_score as score_svc
 from clients import truesync_client as supply_fields
 from clients.truesync_client import TrueSyncClient
@@ -104,7 +105,7 @@ async def _claim_features(row: dict, scope: CustomerScope, merchant: Optional[st
         (job['syndicated_merchant'] if job else None)
     if not slug:
         return [], None
-    status, catalog, error = await full_loop._client(scope).get_merchant_catalog(slug)
+    status, catalog, error = await _reads(scope).get_merchant_catalog(slug)
     if error is not None and status and 400 <= status < 500:
         return console_claims.feature_terms(None, terms), None   # a merchant with no catalog: nothing to read
     return console_claims.feature_terms(catalog if error is None else None, terms), error
@@ -152,7 +153,7 @@ async def get_visibility(cycle: str = Query(...), merchant: Optional[str] = Quer
         body = _visibility(conn, row, facts, errors)
         # 2P-1 (B3): first picks by brand, the routing table and the retired lines against
         # the previous cycle, when the two compare
-        compared = _compared(conn, row, parity.load_overview_rows(conn, row), body, facts)
+        compared = _compared(conn, row, _rows(conn, row), body, facts)
     body['previous'] = _previous_block(compared)
     if compared and compared['status'] == 'compared':
         body['moved'] = rm.visibility_movement(body, compared['visibility'], compared['code'])
@@ -160,12 +161,28 @@ async def get_visibility(cycle: str = Query(...), merchant: Optional[str] = Quer
 
 
 def _visibility(conn, row: dict, merchant: Optional[dict] = None, errors: Optional[dict] = None) -> dict:
-    """2C-1's read with 2C-2's headline, matrix and by-stage, per surface."""
-    body = rm.load_visibility(conn, row, merchant)
+    """2C-1's read with 2C-2's headline, matrix and by-stage, per surface.
+    2Q-1 (B3): kept per cycle state and merchant facts (console_cache)."""
+    def read():
+        body = rm.load_visibility(conn, row, merchant)
+        ours = next((r['name'] for r in (body.get('ranking') or {}).get('rows') or [] if r.get('you')), None)
+        return parity.extend_visibility(body, ours)
+    body = console_cache.cycle_read(conn, row, 'visibility', read, merchant)
     if body.get('routing') is not None:
         body['routing']['read_errors'] = errors or {}
-    ours = next((r['name'] for r in (body.get('ranking') or {}).get('rows') or [] if r.get('you')), None)
-    return parity.extend_visibility(body, ours)
+    return body
+
+
+def _rows(conn, row: dict, features=None) -> list:
+    """parity.load_overview_rows, kept per cycle state and catalog features (2Q-1, B3)."""
+    return console_cache.cycle_read(conn, row, 'overview_rows', lambda: parity.load_overview_rows(conn, row, features),
+                                    features)
+
+
+def _reads(scope: CustomerScope):
+    """2Q-1 (B3): supply's client for the console's reads, each read kept a few
+    minutes per org (console_cache.reads); a failed read is never kept."""
+    return console_cache.reads(full_loop._client(scope), scope.org.id)
 
 
 def _compared(conn, row: dict, rows: list, vis: dict, facts: Optional[dict] = None) -> Optional[dict]:
@@ -178,7 +195,7 @@ def _compared(conn, row: dict, rows: list, vis: dict, facts: Optional[dict] = No
     if prev is None:
         return None
     prev = {**prev, 'customer_org_id': row['customer_org_id']}
-    prev_rows = parity.load_overview_rows(conn, prev)
+    prev_rows = _rows(conn, prev)
     prev_vis = _visibility(conn, prev, facts)
     now_m = {**parity.surface_metrics(rows, vis.get('byQuestion') or [], surfaces.ALL), **rm.study_identity(conn, row),
              'scorer_version': score_svc.outcomes_version(rows)}
@@ -208,13 +225,14 @@ async def _promo_inputs(scope: CustomerScope, row: dict, slug: Optional[str]) ->
     with engine.connect() as conn:
         asks = rm.asks_cheapest_place(conn, row)
         slug = slug or (score_svc.cycle_merchant(conn, row) if asks else None)
-        answers = rm.promo_answers(conn, row) if asks else []
+        answers = console_cache.cycle_read(conn, row, 'promo_answers', lambda: rm.promo_answers(conn, row)) \
+            if asks else []
     if not asks or not slug:
         return None, None, as_of, None
     kind = await _tenant_kind(scope, slug)
     if kind and kind != 'brand':
         return None, None, as_of, None
-    _, deals, error = await full_loop._client(scope).get_deals(slug, as_of)
+    _, deals, error = await _reads(scope).get_deals(slug, as_of)
     if error is not None:
         return None, None, as_of, error
     return rm.build_promo_pass_through(answers, deals, as_of), deals, as_of, None
@@ -234,7 +252,7 @@ async def _routing_inputs(scope: CustomerScope, row: dict, merchant: Optional[st
     kind = await _tenant_kind(scope, slug)
     if kind and kind != 'brand':
         return {'kind': kind}, {}
-    client = full_loop._client(scope)
+    client = _reads(scope)
     (_, retailers, r_err), (_, reference, f_err) = await asyncio.gather(client.get_retailers(slug),
                                                                       client.get_reference(slug))
     with engine.connect() as conn:
@@ -245,10 +263,14 @@ async def _routing_inputs(scope: CustomerScope, row: dict, merchant: Optional[st
 
 async def _tenant_kind(scope: CustomerScope, slug: str) -> Optional[str]:
     """2L-4: the merchant's kind ('brand' | 'seller') from supply's /tenant;
-    None when it cannot be read or does not list the merchant."""
+    None when it cannot be read or does not list the merchant. 2Q-1 (B3): kept
+    a few minutes per org (an overview asked it four times)."""
     from app.console_merchants import org_merchants
-    merchants, _error = await org_merchants(scope.org)
-    return next((m.get('kind') for m in merchants if m.get('slug') == slug), None)
+
+    async def read():
+        merchants, _error = await org_merchants(scope.org)
+        return next((m.get('kind') for m in merchants if m.get('slug') == slug), None)
+    return await console_cache.cached(('kind', scope.org.id, slug), read)
 
 
 @router.get("/overview")
@@ -261,21 +283,39 @@ async def get_overview(cycle: str = Query(...), merchant: Optional[str] = Query(
     reused. Every sentence is a template filled from counts (console_parity.
     TEMPLATES). With `merchant`, the last access run feeds the access signal;
     a failed read leaves it out and is named in `read_errors`."""
+    started = time.monotonic()
     if merchant:
         await check_merchant(scope, merchant)   # 2H: a slug that is not the org's is a 404
     row = dict(cycle_in_scope(cycle, scope))
-    features, f_err = await _claim_features(row, scope, merchant)   # 2K-3
-    facts, routing_errors = await _routing_inputs(scope, row, merchant)   # 2L-4
     with engine.connect() as conn:
-        rows = parity.load_overview_rows(conn, row, features)
+        prev, n_scored = parity.previous_scored_cycle(conn, row, cycle_customer_org_sql())
+        asks_promo = rm.asks_cheapest_place(conn, row)
+    if prev is not None:
+        prev = {**prev, 'customer_org_id': row['customer_org_id']}
+
+    async def merchant_reads():
+        if not merchant:
+            return None
+        client = _reads(scope)
+        return await asyncio.gather(client.get_access(merchant), client.get_reference(merchant))
+
+    async def no_promo():
+        return None, None, None, None
+
+    # 2Q-1 (B3): supply's reads in one round, not six: the catalog's features (2K-3), the
+    # routing facts (2L-4), the access run and the reference, and both cycles' deals (2M-2)
+    (features, f_err), (facts, routing_errors), supply_pair, promo_now, promo_prev = await asyncio.gather(
+        _claim_features(row, scope, merchant), _routing_inputs(scope, row, merchant), merchant_reads(),
+        _promo_inputs(scope, row, merchant),
+        _promo_inputs(scope, prev, merchant) if prev is not None and asks_promo else no_promo())
+    with engine.connect() as conn:
+        rows = _rows(conn, row, features)
         vis = _visibility(conn, row, facts, routing_errors)
         own_domain, variants, scored = _true_value_inputs(conn, row)
-        prev, n_scored = parity.previous_scored_cycle(conn, row, cycle_customer_org_sql())
         previous = None
         if prev is not None:
-            prev = {**prev, 'customer_org_id': row['customer_org_id']}
             # 2N-1: with the merchant's facts, so its routing (Retailer coverage) compares
-            prev_rows = parity.load_overview_rows(conn, prev, features)
+            prev_rows = _rows(conn, prev, features)
             # 2P-1 (B2): with the version its outcomes compare under, as the score's previous is
             previous = {'code': prev['cycle_code'], 'rows': prev_rows, 'visibility': _visibility(conn, prev, facts),
                         'study': {**rm.study_identity(conn, prev), 'scorer_version': score_svc.outcomes_version(prev_rows)}}
@@ -291,9 +331,7 @@ async def get_overview(cycle: str = Query(...), merchant: Optional[str] = Query(
     if f_err is not None:
         errors['catalog'] = f_err
     if merchant:
-        client = full_loop._client(scope)
-        (_, payload, error), (_, reference, r_err) = await asyncio.gather(client.get_access(merchant),
-                                                                          client.get_reference(merchant))
+        (_, payload, error), (_, reference, r_err) = supply_pair
         if error is None:
             access = rm.accessibility_from_supply(payload)
         else:
@@ -327,14 +365,16 @@ async def get_overview(cycle: str = Query(...), merchant: Optional[str] = Query(
         slug = merchant or (score_svc.cycle_merchant(conn, row) if asks else None)
     attr_reference = reference if merchant and 'reference' not in errors else None
     if asks and attr_reference is None and slug and not merchant:
-        (_, attr_reference, a_err) = await full_loop._client(scope).get_reference(slug)
+        (_, attr_reference, a_err) = await _reads(scope).get_reference(slug)
         if a_err is not None:
             attr_reference = None
             body.setdefault('read_errors', {})['reference'] = a_err
     with engine.connect() as conn:
-        answers = rm.attribute_answers(conn, row, attr_reference) if asks else []
+        answers = console_cache.cycle_read(conn, row, 'attribute_answers', lambda: rm.attribute_answers(
+            conn, row, attr_reference), console_cache.digest(attr_reference)) if asks else []
         accuracy = rm.build_attribute_accuracy(answers, attr_reference) if asks or attr_reference else None
-        prev_answers = rm.attribute_answers(conn, prev) if asks and prev is not None else None
+        prev_answers = console_cache.cycle_read(conn, prev, 'attribute_answers', lambda: rm.attribute_answers(conn, prev)) \
+            if asks and prev is not None else None
     if accuracy is not None:   # absent, as routing and retired_named are, when there is nothing to count
         body['attribute_accuracy'] = accuracy
     # 2M-1: "Size 4 weight range right" in Changes, per size an accuracy answer missed
@@ -359,14 +399,12 @@ async def get_overview(cycle: str = Query(...), merchant: Optional[str] = Query(
     # 2M-2: the Promo pass-through tile's input (the fifth brand tile) and its
     # Changes line, "Deals named, cheapest-place answers"; absent when the
     # cycle asked no cheapest-place question
-    promo, _deals, _as_of, p_err = await _promo_inputs(scope, row, merchant)
+    promo, _deals, _as_of, p_err = promo_now
     if p_err is not None:
         body.setdefault('read_errors', {})['deals'] = p_err
     if promo is not None:
         body['promo_pass_through'] = {k: v for k, v in promo.items() if k != 'judged'}
-        prev_promo = None
-        if prev is not None:
-            prev_promo, _pd, _pa, _pe = await _promo_inputs(scope, prev, merchant)
+        prev_promo = promo_prev[0] if prev is not None else None
         for s, block in lined.items():
             block['changes'] = list(block.get('changes') or []) + rm.promo_changes(
                 promo, prev_promo, (previous or {}).get('code'), s,
@@ -374,6 +412,9 @@ async def get_overview(cycle: str = Query(...), merchant: Optional[str] = Query(
     # 2L-3: the products' and the signals' example answers' narratives
     with engine.connect() as conn:
         narratives_svc.with_overview(body, narratives_svc.lines_for(conn, row['id']))
+    # 2Q-1 (B3): how long the read took, and what the cache served
+    score_svc.log_event('overview.read', cycle=row['cycle_code'], previous=prev['cycle_code'] if prev else None,
+                        ms=int((time.monotonic() - started) * 1000), cache=console_cache.describe())
     return body
 
 
@@ -1295,7 +1336,7 @@ async def _baseline_rows(scope: CustomerScope, row: dict, ms: MerchantScope, met
         asks = rm.asks_attribute(conn, row)
     reference = None
     if asks:
-        _, reference, r_err = await full_loop._client(scope).get_reference(ms.slug)
+        _, reference, r_err = await _reads(scope).get_reference(ms.slug)
         if r_err is not None:
             errors['reference'], reference = r_err, None
     with engine.connect() as conn:
