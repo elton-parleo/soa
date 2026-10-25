@@ -8005,3 +8005,42 @@ assistant said, then what was true". Production rows were not read to confirm it
 The 2L-3 fixture's 131 FL14 subjects keep their facts digests and decisions; 2P-1's two recordings replay
 unchanged (no model call, no re-recording). `narratives_fixture.fl14_beside` adds the three shapes, tested without a
 writer. Tests: `apps/api/tests/test_narratives_2p2.py`.
+
+## 2Q-1: what the first week-over-week cycle showed (console scorer 17)
+
+### B1: retailer coding for where-to-buy and cheapest-place answers, by rule
+
+After 2O-4 the brand-direct record's store pass (`brand_claim_selector.select`) kept a store only from a unit that
+also carried a buy word ("buy", "sold", "in stock"), and never the brand's own site. A where-to-buy answer lists
+stores with a price after each ("**Target** - $28.49", "Costco also has a bulk box for $44.99"), so FL14's Retailer
+coverage read 49 of 60 before the 2O-4 rescore and 36 of 60 after, on the same answers; routing's base fell from 119
+to 103 answers; FL15 read 31 of 60 and 103.
+
+* **The coding** (`soa_shared/retailers.named_stores`, sync copies in apps/api and apps/pipeline): one pass over the
+  whole answer. Every alias of the retailer lexicon (`KNOWN_RETAILERS`, which gains Instacart, DoorDash, Uber Eats,
+  Shipt, Gopuff and Thrive Market), every domain of the merchant's retailer list (supply's `/retailers`) written or
+  named by its label, and the merchant's own site as the brand's row: an own domain written ("pampers.com") or the
+  site in words ("the Pampers website", "directly from Pampers"). An alias that is an everyday word ("target",
+  "chewy", "rollback") names the store only written with a capital; a cited domain that is no store is not one.
+  Each store `{name, domain, position, at, role, own, listed}`: `position` 1..n in order of first appearance, `at`
+  its character offset, `role` `unavailable` when every mention sits in a clause saying the store does not have
+  it ("Costco doesn't carry this size"), `recommendation` otherwise.
+* **Stored** on the outcome's extraction as `named_stores` (`expectation_scorer.code_stores`, beside 2M-1's
+  `code_attribute`), on an answered where-to-buy or cheapest-place run only, in `plan()` and in `_store()` (so
+  `--dry-run` prints what the real run writes, and `--classify-only` codes it too). No model call.
+* **Read by** `console_read_models.stores_in_order` (Retailer coverage, routing, the where-to-buy verdict) and
+  `narratives.sent_to` (the promo line's "sent the shopper to"). A row scored before 2Q-1 reads its
+  `retailer_mentions` as it did. `ROUTING_RULE` names `named_stores`.
+* **The printout.** `rescore_cycle --tier brand_direct` (and its dry run) prints the stored coding's coverage and
+  routing base against 2Q-1's: `retailer coverage  36 of 60 -> 49 of 60 (...)`, `routing base  41 -> 60`.
+
+Brand-claim coder version **7** (three copies); console `SCORER_VERSION` **17**, `SCORER_CHANGES['17']` "where-to-buy
+stores coded over the whole answer", which never explains a moved score (Retailer coverage is a tile, never a
+dimension). `CODER_SCORER_VERSIONS` gains 6 → "16" and 7 → "17"; a score stored under 16 compares as its oldest
+outcome's version. FL14 and FL15 compare once both are rescored with `--tier brand_direct`.
+
+Tests: `apps/pipeline/tests/test_retailer_coding_2q1.py` (a list with a price after each store, prose and a table;
+the own-site alias; unavailable; everyday words; through the scorer with no model call, twice identical; the
+FL14-shaped fixture 36 → 49; the printout, dry and real) on `fixtures/retailer_coding/fl14_where_to_buy.json` built
+by `fixtures/build_where_to_buy_2q1.py` (hand-written in FL14's shapes, mixed to give the printout's two figures; not
+FL14's text); `apps/api/tests/test_console_2q1_stores.py`.

@@ -221,12 +221,12 @@ def test_what_is_a_claim(answer, question, outcome, code):
 def test_the_record_stores_every_judged_sentence_and_how_it_was_chosen():
     one = next(a for a in ANSWERS['answers'] if a['id'] == 8)
     record, decided = judge(one['answer'], one['question'])
-    assert record['coder'] == {'version': 6, 'question': one['question'], 'calls': []}
+    assert record['coder'] == {'version': 7, 'question': one['question'], 'calls': []}
     assert record['selector']['units'] == 5 and record['selector']['about_brand'] == 4
     assert [c['via'] for c in record['selector']['claims']] == ['named', 'lead_in', 'lead_in', 'lead_in']
     assert record['selector']['vocabulary']['lines'][:2] == ['Swaddlers', 'Baby Dry']
     claim = decided['brand_claim']
-    assert claim['version'] == 6 and len(claim['spans']) == 4
+    assert claim['version'] == 7 and len(claim['spans']) == 4
     # 2O-5: under a lead-in naming no line, Size 7 is unverified (the chart is Swaddlers', Baby Dry's ...)
     assert claim['spans'][3]['facts_unverified'][0] == {'type': 'size', 'text': 'Size 7'}
     assert claim['index']['by_source'] == {'record': 3, 'catalog': 34, 'brand_pages': 154}

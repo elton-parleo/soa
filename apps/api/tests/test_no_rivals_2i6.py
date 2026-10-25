@@ -41,7 +41,7 @@ def _score(http, db, upstream, *, rivals=True, load=True):
 
 
 def test_the_versions(http, db, upstream):
-    assert score_svc.SCORER_VERSION == '16' and FULL_CYCLE_SCORER_VERSION == '7'
+    assert score_svc.SCORER_VERSION == '17' and FULL_CYCLE_SCORER_VERSION == '7'
     assert score_svc.SCORER_CHANGES['8'] == 'share of mentions not measured without a tracked competitor'
 
 
@@ -80,6 +80,6 @@ def test_the_recompute_line_names_the_change_when_it_applies(http, db, upstream)
     alone = _score(http, db, upstream, rivals=False)
     old = {'scorer_version': '7', 'score': (alone['score'] or 0) + 9}
     assert score_svc.recompute_line(old, alone, 'stale') == \
-        'scorer 7 → 16: share of mentions not measured without a tracked competitor'
+        'scorer 7 → 17: share of mentions not measured without a tracked competitor'
     tracked = {'scorer_version': '8', 'score': 31, 'pillars': [], 'coverage': {}}
     assert score_svc.recompute_line({'scorer_version': '7', 'score': 30}, tracked, 'stale') == 'scorer 7 → 8'

@@ -2490,7 +2490,10 @@ def build_retired_named(retired: List[dict], *, rows: List[dict], runs: List[dic
 # ─── Where agents send shoppers first (2L-4) ───────────────────────────────
 #
 # Visibility's "Where agents send <brand> shoppers first" and the brand
-# Overview's Retailer coverage tile. Read from the stores each answer's
+# Overview's Retailer coverage tile. 2Q-1: read from the stores the scorer
+# coded over the whole answer (`named_stores`, soa_shared/retailers.
+# named_stores: the merchant's retailers, the retailer lexicon and its own
+# site, in the answer's order). A row scored before 2Q-1 reads the stores its
 # Layer 2 extraction coded (`retailer_mentions`, on every scored run), in the
 # order the answer names them: the record's stored `spans` are the answer cut
 # verbatim and in order, so the earliest span naming a store places it, as
@@ -2516,8 +2519,9 @@ ROUTING_FOOTNOTE = ('A brand wants agents to show every retailer the same way. T
                     'is whichever page it happened to read.')
 ROUTING_RULE = (
     "First store named: the first store each where-to-buy or cheapest-place answer names, from the stores coded "
-    "when it was scored (retailer_mentions), placed by where the answer first names each. Counted over the "
-    "answers that name a store. A store the answer says is unavailable there is not counted as sent to.")
+    "over the whole answer when it was scored (named_stores: the merchant's retailers, the retailer lexicon and "
+    "the brand's own site), in the order the answer names them. Counted over the answers that name a store. A "
+    "store the answer says is unavailable there is not counted as sent to.")
 COVERAGE_RULE = (
     "Retailer coverage: where-to-buy answers naming two or more of the merchant's retailers (supply's retailer "
     "list), of the answered where-to-buy answers whose stores were coded.")
@@ -2547,9 +2551,19 @@ def _store_names(written: str, display: str, domain: Optional[str]) -> List[str]
 
 def stores_in_order(extraction: Optional[dict]) -> Optional[List[dict]]:
     """The stores an answer sends the shopper to, first named first:
-    [{key, name, domain}]. None when the answer has no coding (not scored)."""
+    [{key, name, domain}]. None when the answer has no coding (not scored).
+    2Q-1: the scorer's `named_stores` when the row carries it."""
     if not isinstance(extraction, dict):
         return None
+    coded = extraction.get('named_stores')
+    if isinstance(coded, list):
+        out = []
+        for st in sorted((st for st in coded if isinstance(st, dict)), key=lambda st: st.get('position') or 0):
+            if st.get('role') in ROUTING_NOT_SENT or not (st.get('domain') or st.get('name')):
+                continue
+            out.append({'key': st.get('domain') or _brand_key(st['name']), 'name': st.get('name') or st['domain'],
+                        'domain': st.get('domain')})
+        return out
     spans = extraction.get('spans') or []
     found: Dict[str, tuple] = {}
     for i, m in enumerate(extraction.get('retailer_mentions') or []):

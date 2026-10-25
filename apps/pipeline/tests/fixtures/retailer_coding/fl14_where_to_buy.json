@@ -1,0 +1,497 @@
+{
+ "_note": "Hand-written in FL14's shapes: see tests/fixtures/build_where_to_buy_2q1.py. Not FL14's text.",
+ "answers": [
+  {
+   "agent": "chatgpt",
+   "answer": "You can buy Pampers Swaddlers Size 1 at Walmart, Target and Amazon. Prices run about $27.97 for the 96 ct box.",
+   "query_code": "PAM_230",
+   "question": "Where can I buy Pampers Swaddlers Size 1?",
+   "run": "run-15200",
+   "shape": "prose"
+  },
+  {
+   "agent": "gemini",
+   "answer": "Pampers Swaddlers Size 1 (96 ct):\n- Amazon: $26.99\n- Target: $28.49\n- Walmart: $27.97",
+   "query_code": "PAM_230",
+   "question": "Where can I buy Pampers Swaddlers Size 1?",
+   "run": "run-15201",
+   "shape": "list"
+  },
+  {
+   "agent": "perplexity",
+   "answer": "Most shoppers buy Pampers Swaddlers Size 1 at Target or Costco; Walmart carries it as well.",
+   "query_code": "PAM_230",
+   "question": "Where can I buy Pampers Swaddlers Size 1?",
+   "run": "run-15202",
+   "shape": "prose"
+  },
+  {
+   "agent": "claude",
+   "answer": "Pampers Swaddlers Size 1 is sold at Amazon and Walmart, and you can order it on the Pampers website too.",
+   "query_code": "PAM_230",
+   "question": "Where can I buy Pampers Swaddlers Size 1?",
+   "run": "run-15203",
+   "shape": "prose"
+  },
+  {
+   "agent": "google_ai_mode",
+   "answer": "Your best bet for Pampers Swaddlers Size 1 is Walmart, where the 96 ct box runs $27.97.",
+   "query_code": "PAM_230",
+   "question": "Where can I buy Pampers Swaddlers Size 1?",
+   "run": "run-15204",
+   "shape": "one"
+  },
+  {
+   "agent": "copilot",
+   "answer": "Where to get Pampers Swaddlers Size 1\n\n| Store | Price |\n|---|---|\n| Walmart | $27.97 |\n| Sam's Club | $44.75 |\n| Amazon | $26.99 |",
+   "query_code": "PAM_230",
+   "question": "Where can I buy Pampers Swaddlers Size 1?",
+   "run": "run-15205",
+   "shape": "list"
+  },
+  {
+   "agent": "chatgpt",
+   "answer": "Most shoppers buy Pampers Cruisers 360 Size 4 at Target or Costco; Walmart carries it as well.",
+   "query_code": "PAM_231",
+   "question": "Where can I buy Pampers Cruisers 360 Size 4?",
+   "run": "run-15206",
+   "shape": "prose"
+  },
+  {
+   "agent": "gemini",
+   "answer": "Pampers Cruisers 360 Size 4 is sold at Amazon and Walmart, and you can order it on the Pampers website too.",
+   "query_code": "PAM_231",
+   "question": "Where can I buy Pampers Cruisers 360 Size 4?",
+   "run": "run-15207",
+   "shape": "prose"
+  },
+  {
+   "agent": "perplexity",
+   "answer": "Where to get Pampers Cruisers 360 Size 4\n\n| Store | Price |\n|---|---|\n| Walmart | $44.99 |\n| Sam's Club | $71.98 |\n| Amazon | $44.01 |",
+   "query_code": "PAM_231",
+   "question": "Where can I buy Pampers Cruisers 360 Size 4?",
+   "run": "run-15208",
+   "shape": "list"
+  },
+  {
+   "agent": "claude",
+   "answer": "You'll find Pampers Cruisers 360 Size 4 available at Walmart, Amazon and Sam's Club, usually around $44.99.",
+   "query_code": "PAM_231",
+   "question": "Where can I buy Pampers Cruisers 360 Size 4?",
+   "run": "run-15209",
+   "shape": "prose"
+  },
+  {
+   "agent": "google_ai_mode",
+   "answer": "Most shoppers buy Pampers Cruisers 360 Size 4 at Target or Costco; Walmart carries it as well.",
+   "query_code": "PAM_231",
+   "question": "Where can I buy Pampers Cruisers 360 Size 4?",
+   "run": "run-15210",
+   "shape": "prose"
+  },
+  {
+   "agent": "copilot",
+   "answer": "Your best bet for Pampers Cruisers 360 Size 4 is Walmart, where the 104 ct box runs $44.99.",
+   "query_code": "PAM_231",
+   "question": "Where can I buy Pampers Cruisers 360 Size 4?",
+   "run": "run-15211",
+   "shape": "one"
+  },
+  {
+   "agent": "chatgpt",
+   "answer": "Here are the best places to buy Pampers Baby Dry Size 3:\n\n1. **Walmart**: $36.49, in stock\n2. **Target** - $37.01\n3. **Amazon** \u2014 $35.51 with Subscribe & Save\n\nCostco also has a bulk box for $58.38.",
+   "query_code": "PAM_232",
+   "question": "Where can I buy Pampers Baby Dry Size 3?",
+   "run": "run-15212",
+   "shape": "list"
+  },
+  {
+   "agent": "gemini",
+   "answer": "You'll find Pampers Baby Dry Size 3 available at Walmart, Amazon and Sam's Club, usually around $36.49.",
+   "query_code": "PAM_232",
+   "question": "Where can I buy Pampers Baby Dry Size 3?",
+   "run": "run-15213",
+   "shape": "prose"
+  },
+  {
+   "agent": "perplexity",
+   "answer": "Most shoppers buy Pampers Baby Dry Size 3 at Target or Costco; Walmart carries it as well.",
+   "query_code": "PAM_232",
+   "question": "Where can I buy Pampers Baby Dry Size 3?",
+   "run": "run-15214",
+   "shape": "prose"
+  },
+  {
+   "agent": "claude",
+   "answer": "Here are the best places to buy Pampers Baby Dry Size 3:\n\n1. **Walmart**: $36.49, in stock\n2. **Target** - $37.01\n3. **Amazon** \u2014 $35.51 with Subscribe & Save\n\nCostco also has a bulk box for $58.38.",
+   "query_code": "PAM_232",
+   "question": "Where can I buy Pampers Baby Dry Size 3?",
+   "run": "run-15215",
+   "shape": "list"
+  },
+  {
+   "agent": "google_ai_mode",
+   "answer": "You can buy Pampers Baby Dry Size 3 at Walmart, Target and Amazon. Prices run about $36.49 for the 136 ct box.",
+   "query_code": "PAM_232",
+   "question": "Where can I buy Pampers Baby Dry Size 3?",
+   "run": "run-15216",
+   "shape": "prose"
+  },
+  {
+   "agent": "copilot",
+   "answer": "You'll find Pampers Baby Dry Size 3 available at Walmart, Amazon and Sam's Club, usually around $36.49.",
+   "query_code": "PAM_232",
+   "question": "Where can I buy Pampers Baby Dry Size 3?",
+   "run": "run-15217",
+   "shape": "prose"
+  },
+  {
+   "agent": "chatgpt",
+   "answer": "Your best bet for Pampers Pure Protection Size 1 is Walmart, where the 82 ct box runs $29.97.",
+   "query_code": "PAM_233",
+   "question": "Where can I buy Pampers Pure Protection Size 1?",
+   "run": "run-15218",
+   "shape": "one"
+  },
+  {
+   "agent": "gemini",
+   "answer": "Pampers Pure Protection Size 1 (82 ct):\n- Amazon: $28.99\n- Target: $30.49\n- Walmart: $29.97",
+   "query_code": "PAM_233",
+   "question": "Where can I buy Pampers Pure Protection Size 1?",
+   "run": "run-15219",
+   "shape": "list"
+  },
+  {
+   "agent": "perplexity",
+   "answer": "You can buy Pampers Pure Protection Size 1 at Walmart, Target and Amazon. Prices run about $29.97 for the 82 ct box.",
+   "query_code": "PAM_233",
+   "question": "Where can I buy Pampers Pure Protection Size 1?",
+   "run": "run-15220",
+   "shape": "prose"
+  },
+  {
+   "agent": "claude",
+   "answer": "You'll find Pampers Pure Protection Size 1 available at Walmart, Amazon and Sam's Club, usually around $29.97.",
+   "query_code": "PAM_233",
+   "question": "Where can I buy Pampers Pure Protection Size 1?",
+   "run": "run-15221",
+   "shape": "prose"
+  },
+  {
+   "agent": "google_ai_mode",
+   "answer": "Pampers Pure Protection Size 1 (82 ct):\n- Amazon: $28.99\n- Target: $30.49\n- Walmart: $29.97",
+   "query_code": "PAM_233",
+   "question": "Where can I buy Pampers Pure Protection Size 1?",
+   "run": "run-15222",
+   "shape": "list"
+  },
+  {
+   "agent": "copilot",
+   "answer": "Pampers Pure Protection Size 1 is sold at Amazon and Walmart, and you can order it on the Pampers website too.",
+   "query_code": "PAM_233",
+   "question": "Where can I buy Pampers Pure Protection Size 1?",
+   "run": "run-15223",
+   "shape": "prose"
+  },
+  {
+   "agent": "chatgpt",
+   "answer": "You can buy Pampers Zzz Overnight Size 4 at Walmart, Target and Amazon. Prices run about $44.99 for the 104 ct box.",
+   "query_code": "PAM_234",
+   "question": "Where can I buy Pampers Zzz Overnight Size 4?",
+   "run": "run-15224",
+   "shape": "prose"
+  },
+  {
+   "agent": "gemini",
+   "answer": "Your best bet for Pampers Zzz Overnight Size 4 is Walmart, where the 104 ct box runs $44.99.",
+   "query_code": "PAM_234",
+   "question": "Where can I buy Pampers Zzz Overnight Size 4?",
+   "run": "run-15225",
+   "shape": "one"
+  },
+  {
+   "agent": "perplexity",
+   "answer": "Where to get Pampers Zzz Overnight Size 4\n\n| Store | Price |\n|---|---|\n| Walmart | $44.99 |\n| Sam's Club | $71.98 |\n| Amazon | $44.01 |",
+   "query_code": "PAM_234",
+   "question": "Where can I buy Pampers Zzz Overnight Size 4?",
+   "run": "run-15226",
+   "shape": "list"
+  },
+  {
+   "agent": "claude",
+   "answer": "Pampers Zzz Overnight Size 4 is sold at Amazon and Walmart, and you can order it on the Pampers website too.",
+   "query_code": "PAM_234",
+   "question": "Where can I buy Pampers Zzz Overnight Size 4?",
+   "run": "run-15227",
+   "shape": "prose"
+  },
+  {
+   "agent": "google_ai_mode",
+   "answer": "You can buy Pampers Zzz Overnight Size 4 at Walmart, Target and Amazon. Prices run about $44.99 for the 104 ct box.",
+   "query_code": "PAM_234",
+   "question": "Where can I buy Pampers Zzz Overnight Size 4?",
+   "run": "run-15228",
+   "shape": "prose"
+  },
+  {
+   "agent": "copilot",
+   "answer": "Where to get Pampers Zzz Overnight Size 4\n\n| Store | Price |\n|---|---|\n| Walmart | $44.99 |\n| Sam's Club | $71.98 |\n| Amazon | $44.01 |",
+   "query_code": "PAM_234",
+   "question": "Where can I buy Pampers Zzz Overnight Size 4?",
+   "run": "run-15229",
+   "shape": "list"
+  },
+  {
+   "agent": "chatgpt",
+   "answer": "Most shoppers buy Pampers Swaddlers Newborn at Target or Costco; Walmart carries it as well.",
+   "query_code": "PAM_235",
+   "question": "Where can I buy Pampers Swaddlers Newborn?",
+   "run": "run-15230",
+   "shape": "prose"
+  },
+  {
+   "agent": "gemini",
+   "answer": "Pampers Swaddlers Newborn is sold at Amazon and Walmart, and you can order it on the Pampers website too.",
+   "query_code": "PAM_235",
+   "question": "Where can I buy Pampers Swaddlers Newborn?",
+   "run": "run-15231",
+   "shape": "prose"
+  },
+  {
+   "agent": "perplexity",
+   "answer": "For Pampers Swaddlers Newborn, Instacart delivers from Kroger, and CVS keeps the 84 ct box near the front.",
+   "query_code": "PAM_235",
+   "question": "Where can I buy Pampers Swaddlers Newborn?",
+   "run": "run-15232",
+   "shape": "other"
+  },
+  {
+   "agent": "claude",
+   "answer": "Here are the best places to buy Pampers Swaddlers Newborn:\n\n1. **Walmart**: $26.97, in stock\n2. **Target** - $27.49\n3. **Amazon** \u2014 $25.99 with Subscribe & Save\n\nCostco also has a bulk box for $43.15.",
+   "query_code": "PAM_235",
+   "question": "Where can I buy Pampers Swaddlers Newborn?",
+   "run": "run-15233",
+   "shape": "list"
+  },
+  {
+   "agent": "google_ai_mode",
+   "answer": "Most shoppers buy Pampers Swaddlers Newborn at Target or Costco; Walmart carries it as well.",
+   "query_code": "PAM_235",
+   "question": "Where can I buy Pampers Swaddlers Newborn?",
+   "run": "run-15234",
+   "shape": "prose"
+  },
+  {
+   "agent": "copilot",
+   "answer": "Pampers Swaddlers Newborn is sold at Amazon and Walmart, and you can order it on the Pampers website too.",
+   "query_code": "PAM_235",
+   "question": "Where can I buy Pampers Swaddlers Newborn?",
+   "run": "run-15235",
+   "shape": "prose"
+  },
+  {
+   "agent": "chatgpt",
+   "answer": "Here are the best places to buy Pampers Easy Ups Size 5:\n\n1. **Walmart**: $32.99, in stock\n2. **Target** - $33.51\n3. **Amazon** \u2014 $32.01 with Subscribe & Save\n\nCostco also has a bulk box for $52.78.",
+   "query_code": "PAM_236",
+   "question": "Where can I buy Pampers Easy Ups Size 5?",
+   "run": "run-15236",
+   "shape": "list"
+  },
+  {
+   "agent": "gemini",
+   "answer": "You'll find Pampers Easy Ups Size 5 available at Walmart, Amazon and Sam's Club, usually around $32.99.",
+   "query_code": "PAM_236",
+   "question": "Where can I buy Pampers Easy Ups Size 5?",
+   "run": "run-15237",
+   "shape": "prose"
+  },
+  {
+   "agent": "perplexity",
+   "answer": "Most shoppers buy Pampers Easy Ups Size 5 at Target or Costco; Walmart carries it as well.",
+   "query_code": "PAM_236",
+   "question": "Where can I buy Pampers Easy Ups Size 5?",
+   "run": "run-15238",
+   "shape": "prose"
+  },
+  {
+   "agent": "claude",
+   "answer": "For Pampers Easy Ups Size 5, Instacart delivers from Kroger, and CVS keeps the 66 ct box near the front.",
+   "query_code": "PAM_236",
+   "question": "Where can I buy Pampers Easy Ups Size 5?",
+   "run": "run-15239",
+   "shape": "other"
+  },
+  {
+   "agent": "google_ai_mode",
+   "answer": "Pampers Easy Ups Size 5 (66 ct):\n- Amazon: $32.01\n- Target: $33.51\n- Walmart: $32.99",
+   "query_code": "PAM_236",
+   "question": "Where can I buy Pampers Easy Ups Size 5?",
+   "run": "run-15240",
+   "shape": "list"
+  },
+  {
+   "agent": "copilot",
+   "answer": "You'll find Pampers Easy Ups Size 5 available at Walmart, Amazon and Sam's Club, usually around $32.99.",
+   "query_code": "PAM_236",
+   "question": "Where can I buy Pampers Easy Ups Size 5?",
+   "run": "run-15241",
+   "shape": "prose"
+  },
+  {
+   "agent": "chatgpt",
+   "answer": "Most shoppers buy Pampers Cruisers Size 6 at Target or Costco; Walmart carries it as well.",
+   "query_code": "PAM_237",
+   "question": "Where can I buy Pampers Cruisers Size 6?",
+   "run": "run-15242",
+   "shape": "prose"
+  },
+  {
+   "agent": "gemini",
+   "answer": "Pampers Cruisers Size 6 is sold at Walmart for $39.97. Costco doesn't carry this size.",
+   "query_code": "PAM_237",
+   "question": "Where can I buy Pampers Cruisers Size 6?",
+   "run": "run-15243",
+   "shape": "gone"
+  },
+  {
+   "agent": "perplexity",
+   "answer": "You can buy Pampers Cruisers Size 6 at Walmart, Target and Amazon. Prices run about $39.97 for the 84 ct box.",
+   "query_code": "PAM_237",
+   "question": "Where can I buy Pampers Cruisers Size 6?",
+   "run": "run-15244",
+   "shape": "prose"
+  },
+  {
+   "agent": "claude",
+   "answer": "You'll find Pampers Cruisers Size 6 available at Walmart, Amazon and Sam's Club, usually around $39.97.",
+   "query_code": "PAM_237",
+   "question": "Where can I buy Pampers Cruisers Size 6?",
+   "run": "run-15245",
+   "shape": "prose"
+  },
+  {
+   "agent": "google_ai_mode",
+   "answer": "For Pampers Cruisers Size 6, Instacart delivers from Kroger, and CVS keeps the 84 ct box near the front.",
+   "query_code": "PAM_237",
+   "question": "Where can I buy Pampers Cruisers Size 6?",
+   "run": "run-15246",
+   "shape": "other"
+  },
+  {
+   "agent": "copilot",
+   "answer": "Where to get Pampers Cruisers Size 6\n\n| Store | Price |\n|---|---|\n| Walmart | $39.97 |\n| Sam's Club | $63.95 |\n| Amazon | $38.99 |",
+   "query_code": "PAM_237",
+   "question": "Where can I buy Pampers Cruisers Size 6?",
+   "run": "run-15247",
+   "shape": "list"
+  },
+  {
+   "agent": "chatgpt",
+   "answer": "You can buy Pampers Swaddlers 360 Size 2 at Walmart, Target and Amazon. Prices run about $29.49 for the 84 ct box.",
+   "query_code": "PAM_238",
+   "question": "Where can I buy Pampers Swaddlers 360 Size 2?",
+   "run": "run-15248",
+   "shape": "prose"
+  },
+  {
+   "agent": "gemini",
+   "answer": "You'll find Pampers Swaddlers 360 Size 2 available at Walmart, Amazon and Sam's Club, usually around $29.49.",
+   "query_code": "PAM_238",
+   "question": "Where can I buy Pampers Swaddlers 360 Size 2?",
+   "run": "run-15249",
+   "shape": "prose"
+  },
+  {
+   "agent": "perplexity",
+   "answer": "Pampers Swaddlers 360 Size 2 is sold at Walmart for $29.49. Costco doesn't carry this size.",
+   "query_code": "PAM_238",
+   "question": "Where can I buy Pampers Swaddlers 360 Size 2?",
+   "run": "run-15250",
+   "shape": "gone"
+  },
+  {
+   "agent": "claude",
+   "answer": "Pampers Swaddlers 360 Size 2 is sold at Amazon and Walmart, and you can order it on the Pampers website too.",
+   "query_code": "PAM_238",
+   "question": "Where can I buy Pampers Swaddlers 360 Size 2?",
+   "run": "run-15251",
+   "shape": "prose"
+  },
+  {
+   "agent": "google_ai_mode",
+   "answer": "You can buy Pampers Swaddlers 360 Size 2 at Walmart, Target and Amazon. Prices run about $29.49 for the 84 ct box.",
+   "query_code": "PAM_238",
+   "question": "Where can I buy Pampers Swaddlers 360 Size 2?",
+   "run": "run-15252",
+   "shape": "prose"
+  },
+  {
+   "agent": "copilot",
+   "answer": "For Pampers Swaddlers 360 Size 2, Instacart delivers from Kroger, and CVS keeps the 84 ct box near the front.",
+   "query_code": "PAM_238",
+   "question": "Where can I buy Pampers Swaddlers 360 Size 2?",
+   "run": "run-15253",
+   "shape": "other"
+  },
+  {
+   "agent": "chatgpt",
+   "answer": "Here are the best places to buy Pampers Baby Dry Size 7:\n\n1. **Walmart**: $41.99, in stock\n2. **Target** - $42.51\n3. **Amazon** \u2014 $41.01 with Subscribe & Save\n\nCostco also has a bulk box for $67.18.",
+   "query_code": "PAM_239",
+   "question": "Where can I buy Pampers Baby Dry Size 7?",
+   "run": "run-15254",
+   "shape": "list"
+  },
+  {
+   "agent": "gemini",
+   "answer": "Pampers Baby Dry Size 7 is sold at Amazon and Walmart, and you can order it on the Pampers website too.",
+   "query_code": "PAM_239",
+   "question": "Where can I buy Pampers Baby Dry Size 7?",
+   "run": "run-15255",
+   "shape": "prose"
+  },
+  {
+   "agent": "perplexity",
+   "answer": "You can buy Pampers Baby Dry Size 7 at Walmart, Target and Amazon. Prices run about $41.99 for the 88 ct box.",
+   "query_code": "PAM_239",
+   "question": "Where can I buy Pampers Baby Dry Size 7?",
+   "run": "run-15256",
+   "shape": "prose"
+  },
+  {
+   "agent": "claude",
+   "answer": "Your best bet for Pampers Baby Dry Size 7 is Walmart, where the 88 ct box runs $41.99.",
+   "query_code": "PAM_239",
+   "question": "Where can I buy Pampers Baby Dry Size 7?",
+   "run": "run-15257",
+   "shape": "one"
+  },
+  {
+   "agent": "google_ai_mode",
+   "answer": "Pampers Baby Dry Size 7 (88 ct):\n- Amazon: $41.01\n- Target: $42.51\n- Walmart: $41.99",
+   "query_code": "PAM_239",
+   "question": "Where can I buy Pampers Baby Dry Size 7?",
+   "run": "run-15258",
+   "shape": "list"
+  },
+  {
+   "agent": "copilot",
+   "answer": "Pampers Baby Dry Size 7 is sold at Amazon and Walmart, and you can order it on the Pampers website too.",
+   "query_code": "PAM_239",
+   "question": "Where can I buy Pampers Baby Dry Size 7?",
+   "run": "run-15259",
+   "shape": "prose"
+  }
+ ],
+ "brand": "Pampers",
+ "cycle_code": "FL14-pampers-20261023",
+ "own_domains": [
+  "pampers.com"
+ ],
+ "retailers": [
+  "walmart.com",
+  "target.com",
+  "amazon.com",
+  "costco.com",
+  "samsclub.com"
+ ]
+}

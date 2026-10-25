@@ -2,7 +2,7 @@
 2P-1 (B2): the comparability audit, on a cycle that went through FL14's
 sequence, sqlite and Postgres.
 
-FL14 was rescored under scorer versions 12 -> 16 (2O-1 to 2O-6), with
+FL14 was rescored under scorer versions 12 -> 16 (2O-1 to 2O-6), and 17 (2Q-1), with
 `--tier brand_direct` runs (which re-select the claims by rule and stamp the
 current brand-claim coder on every brand-direct row) and `--classify-only`
 refreshes (which re-classify the stored extraction and leave its coder
@@ -98,9 +98,9 @@ def test_fl14_s_sequence_leaves_the_score_on_the_current_versions(http, db, upst
         body = _get(http, 'score', cycle=f2p1.CYCLE_1, merchant=WS)
         assert body['history'][-1]['replaced_because'] == 'outcomes re-scored'
     stored = _stored(db, f2p1.ID_1)
-    assert stored['scorer_version'] == score_svc.SCORER_VERSION == '16'
-    assert stored['brand_coder'] == {'version': 6, 'of': n, 'coded': n, 'oldest': 6}
-    assert score_svc.comparable_version(stored) == '16'
+    assert stored['scorer_version'] == score_svc.SCORER_VERSION == '17'
+    assert stored['brand_coder'] == {'version': 7, 'of': n, 'coded': n, 'oldest': 7}
+    assert score_svc.comparable_version(stored) == '17'
     # and it is served as stored from then on
     assert _get(http, 'score', cycle=f2p1.CYCLE_1, merchant=WS)['inputs']['scored_at'] == stored['inputs']['scored_at']
 
@@ -157,8 +157,8 @@ def test_a_previous_cycle_on_an_older_coder_is_never_compared(http, db, upstream
 
 
 def test_the_outcomes_version_is_the_score_s_rule():
-    rows = [{'tier': 'brand_direct', 'outcome': 'grounded', 'coder_version': v} for v in (6, 6, 5)]
+    rows = [{'tier': 'brand_direct', 'outcome': 'grounded', 'coder_version': v} for v in (7, 7, 5)]
     assert score_svc.outcomes_version(rows) == '15'
-    assert score_svc.outcomes_version(rows[:2]) == '16'
-    assert score_svc.outcomes_version([{'tier': 'catalog_accuracy', 'outcome': 'exact'}]) == '16'
+    assert score_svc.outcomes_version(rows[:2]) == '17'
+    assert score_svc.outcomes_version([{'tier': 'catalog_accuracy', 'outcome': 'exact'}]) == '17'
     assert score_svc.outcomes_version([{'tier': 'brand_direct', 'outcome': 'grounded', 'coder_version': None}]) == '11'

@@ -136,7 +136,7 @@ def test_the_w_s_fixture_scores_60_on_34_applicable_points(http, upstream):
     body = _score(http)
     assert (body['score'], body['earned'], body['applicable_max']) == (60, 20.3, 34.0)
     # 2I-6: the console's scorer is 8, the full-cycle scorer it reuses still 7
-    assert body['scorer_version'] == '16' and FULL_CYCLE_SCORER_VERSION == '7'
+    assert body['scorer_version'] == '17' and FULL_CYCLE_SCORER_VERSION == '7'
     assert body['readiness_bar'] == 60 and body['total_max'] == 100.0
     assert body['verdict'] is None
     assert body['verdict_note'] == ('No readiness verdict while 63 of 100 points are not measured. '
@@ -362,7 +362,7 @@ def test_the_score_is_stored_with_its_version_and_served_from_the_row(http, upst
     assert first['stored'] is True
     with db.connect() as c:
         raw, version = c.execute(text("SELECT share_of_algorithm, share_of_algorithm_version FROM soa_cycles WHERE id = 1")).one()
-    assert version == '16' and json.loads(raw)['score'] == 60
+    assert version == '17' and json.loads(raw)['score'] == 60
     calls = len(upstream.calls)
     again = _score(http)
     assert len(upstream.calls) == calls          # served from the row: no supply read
@@ -377,7 +377,7 @@ def test_a_score_stored_under_another_version_is_recomputed(http, upstream, db):
     _supply(upstream)
     as_('alice')
     body = _score(http)
-    assert (body['score'], body['scorer_version'], body['stored']) == (60, '16', True)
+    assert (body['score'], body['scorer_version'], body['stored']) == (60, '17', True)
 
 
 def test_a_previous_cycle_scored_under_another_version_is_not_comparable(http, upstream, db):

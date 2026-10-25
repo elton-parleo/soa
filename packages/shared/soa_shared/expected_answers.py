@@ -161,7 +161,10 @@ BRAND_OUTCOMES = BRAND_ASSESSMENTS + ['absent', 'unscoreable']
 # not list is UNVERIFIED (a club-only pack), never contradicted; the brand's
 # line list contradicts only when the payload says it is complete; a line's
 # page bullets are read for its attributes.
-BRAND_CODER_VERSION = 6
+# 2Q-1: version 7. A where-to-buy or cheapest-place answer's stores are
+# coded over the whole answer (soa_shared/retailers.named_stores, the
+# extraction's `named_stores`), never only from a unit with a buy word.
+BRAND_CODER_VERSION = 7
 UNVERIFIED = 'unverified'
 UNVERIFIED_NOTE = 'not on the pages read; nothing contradicts it'
 CODER_DISAGREED = 'coder_disagreed'
