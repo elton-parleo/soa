@@ -784,6 +784,16 @@ def deciding_swap(claims: List[dict], outcome: Optional[str]) -> Optional[dict]:
             or (swaps[0] if swaps else None))
 
 
+def clash_named(claim: Optional[dict], reason_code: Optional[str]) -> Optional[str]:
+    """2R-2 (B5): the product words a quote named ("Pampers ZZZ Size 3,
+    116-count") when the price check judged it wrong for naming a variant
+    the record does not have (reason variant_clash) and not for its pack
+    count (pack_conflict's), else None."""
+    if reason_code != 'variant_clash' or not claim or pack_conflict(claim) is not None:
+        return None
+    return str(claim.get('product') or '').strip() or None
+
+
 def pack_conflict(claim: Optional[dict]) -> Optional[int]:
     """2Q-1 (B4): the pack count a quote was for, when the price check moved
     it off the asked variant for that count (the claim's `conflict`, "pack
@@ -1117,7 +1127,8 @@ def build_true_value(reference: Optional[dict], scored: List[dict], *, own_domai
                         'stated': None if r.get('stated') in (None, '') else str(r['stated']),
                         'run': r.get('run'), **({'swap_product': r['swap_product']} if r.get('swap_product') else {}),
                         **({'swap_variant': r['swap_variant']} if r.get('swap_variant') else {}),
-                        **({'pack': r['pack']} if r.get('pack') else {})}
+                        **({'pack': r['pack']} if r.get('pack') else {}),
+                        **({'clash': r['clash']} if r.get('clash') else {})}
                        for r in runs],
         }
 

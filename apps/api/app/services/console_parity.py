@@ -72,6 +72,8 @@ TEMPLATES = {
     'product.wrong_quote': "Quoted a wrong price in {n} of {runs} {runs_word}, most often {quote} against {live}.",
     # 2Q-1 (B4): the wrong quotes were for another pack, the reason the price check already has
     'product.wrong_pack': "Quoted {quote} for a {pack} ct pack against {live} for the {asked} in {n} of {runs} {runs_word}.",
+    # 2R-2 (B5): the quotes named another variant the record does not have (variant_clash)
+    'product.wrong_clash': "Quoted {quote} for {named} against {live} for the {asked} in {n} of {runs} {runs_word}.",
     'product.left_out': "No price quoted in {n} of {runs} {runs_word}.",
     'product.unverifiable': "The page could not be read, so {n} of {runs} {runs_word} are not scored.",
     # 2N-1: after the issue, the retailers whose every quote could not be checked
@@ -89,6 +91,8 @@ TEMPLATES = {
                              "Quoted {quote} against {live}. {split}."),
     # 2Q-1 (B4): FL15's "Quoted $44.99 against $44.99." was a quote for the 58 ct pack
     'signal.wrong_product_pack': "Quoted {quote} for a {pack} ct pack against {live} for the {asked}. {split}.",
+    # 2R-2 (B5): FL15's "most often $44.99 against $44.99" was ChatGPT's quote for Zzz Size 3, 116-count
+    'signal.wrong_product_clash': "Quoted {quote} for {named} against {live} for the {asked}. {split}.",
     'signal.unverifiable': ("{n} {prices} could not be checked.",
                             "The page blocked both readers. These are counted on their own and never in an accuracy. {split}."),
     'signal.access': ("{n} agent {identities} could not read the pages.",
@@ -581,11 +585,54 @@ def wrong_quote(quotes: List[dict]) -> Optional[dict]:
             'n': n}
 
 
+_SIZE_WORDS = re.compile(r"\b(size\s*\d+\+?|newborn|preemie)\b", re.I)
+_COUNT_WORDS = re.compile(r"(\d+)\s*-?\s*(?:ct|count)\b", re.I)
+
+
+def variant_words(text: Optional[str]) -> Optional[str]:
+    """2R-2 (B5): "Pampers ZZZ Size 3, 116-count" -> "Size 3, 116 ct": the size
+    and the count a product's words name, None when they name neither."""
+    size = _SIZE_WORDS.search(text or '')
+    count = _COUNT_WORDS.findall(text or '')
+    words = []
+    if size:
+        word = re.sub(r'\s+', ' ', size.group(1))
+        words.append('Size ' + word[4:].strip() if word.lower().startswith('size') else word.capitalize())
+    if count:
+        words.append(f"{count[-1]} ct")
+    return ', '.join(words) or None
+
+
+def variant_clash(quotes: List[dict], product: Optional[str]) -> Optional[dict]:
+    """2R-2 (B5): {quote, named, asked, live, n} when the top wrong quote
+    (wrong_quote's amount) was judged wrong because it named a variant the
+    record does not have (reason variant_clash, the claim's own words on the
+    quote's `clash`): the variant it named ("Size 3, 116 ct"), the variant
+    asked about from the row's name ("Size 4, 104 ct", else "variant asked
+    about"). None otherwise; a quote for another pack is pack_mismatch's."""
+    top = wrong_quote(quotes)
+    if top is None:
+        return None
+    wrong = [q for q in quotes if q.get('outcome') in ('wrong', 'stale') and q.get('stated') not in (None, '')]
+    (stated, live), _n = Counter((q['stated'], q.get('live')) for q in wrong).most_common(1)[0]
+    group = [q for q in wrong if (q['stated'], q.get('live')) == (stated, live)]
+    clashed = [q for q in group if q.get('clash')]
+    if not clashed or len(clashed) * 2 <= len(group):
+        return None
+    named, n = Counter(q['clash'] for q in clashed).most_common(1)[0]
+    return {'quote': top['quote'], 'named': variant_words(named) or named,
+            'asked': variant_words(product) or 'variant asked about', 'live': top['live'], 'n': n}
+
+
 def _pack_field(quotes: List[dict], product: Optional[str]) -> dict:
     """{'pack_mismatch': ...} beside a product's typed fields, only when there
-    is one; 2Q-2 (B2): and {'wrong_quote': ...}, the signal's amount."""
+    is one; 2Q-2 (B2): and {'wrong_quote': ...}, the signal's amount; 2R-2
+    (B5): and {'variant_clash': ...} when the top wrong quote named another
+    variant (never beside a pack_mismatch, which reads first)."""
     pack, wrong = pack_mismatch(quotes, product), wrong_quote(quotes)
-    return {**({'pack_mismatch': pack} if pack else {}), **({'wrong_quote': wrong} if wrong else {})}
+    clash = None if pack else variant_clash(quotes, product)
+    return {**({'pack_mismatch': pack} if pack else {}), **({'wrong_quote': wrong} if wrong else {}),
+            **({'variant_clash': clash} if clash else {})}
 
 
 def product_issue(quotes: List[dict], product: Optional[str] = None) -> tuple:
@@ -613,9 +660,13 @@ def product_issue(quotes: List[dict], product: Optional[str] = None) -> tuple:
     asked = len(checked)
     word = _n(asked, 'run', 'runs')
     pack = pack_mismatch(checked, product) if rule == 'product.wrong' and n else None
+    clash = variant_clash(checked, product) if rule == 'product.wrong' and n and not pack else None
     if pack:
         # the runs quoted for the other pack, never every wrong run beside them
         issue = TEMPLATES['product.wrong_pack'].format(**pack, runs=asked, runs_word=word)
+    elif clash:
+        # 2R-2 (B5): the runs that quoted it for the variant they named
+        issue = TEMPLATES['product.wrong_clash'].format(**clash, runs=asked, runs_word=word)
     elif n:
         wrong = wrong_quote(checked) if rule == 'product.wrong' else None
         issue = (TEMPLATES['product.wrong_quote'].format(n=n, runs=asked, runs_word=word, quote=wrong['quote'], live=wrong['live'])
@@ -813,9 +864,12 @@ def build_signals(metrics: dict, products: List[dict], *, surface: str, brand: s
     if worst and worst['wrong_runs'] >= 3:
         title, detail = TEMPLATES['signal.wrong_product']
         pack, wrong = worst.get('pack_mismatch'), worst.get('wrong_quote') or {}
+        clash = worst.get('variant_clash')
         out.append({'id': f"wrong:{worst['sku']}", 'title': title.format(product=worst['name'], n=worst['wrong_runs']),
                     # 2Q-1 (B4): a quote for another pack says so, with both packs
                     'detail': TEMPLATES['signal.wrong_product_pack'].format(**pack, split=worst['quoted']) if pack else
+                    # 2R-2 (B5): a quote for a variant the record does not have says which
+                    TEMPLATES['signal.wrong_product_clash'].format(**clash, split=worst['quoted']) if clash else
                     # 2Q-2 (B2): the most common wrong amount, never the most quoted one
                     detail.format(quote=wrong.get('quote') or 'a price', live=wrong.get('live') or 'the reference',
                                   split=worst['quoted']),
