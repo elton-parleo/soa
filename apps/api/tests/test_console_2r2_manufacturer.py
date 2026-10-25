@@ -290,6 +290,29 @@ def test_a_send_after_the_newest_cycle_waits_for_the_next_read(http, db, upstrea
     assert rows[0]['note'].endswith('After is the first cycle scored after the send on Oct 23. None has run yet.')
 
 
+# ── A2: the compile trigger ───────────────────────────────────────────────
+
+def test_compiling_is_operator_only_forwarded_and_says_what_was_not_compiled(http, db, upstream):
+    _shape(db, http, upstream)
+    as_('alice')
+    assert http.post('/api/console/publishing/compile', params={'merchant': SLUG}).status_code == 403
+    as_('op')
+    r = http.post('/api/console/publishing/compile', params={'merchant': SLUG, 'org': 10})
+    assert r.status_code == 200, r.text
+    [call] = [c for c in upstream.calls if c['method'] == 'POST']
+    assert (call['path'], call['token'], call['params']) == (f'{BASE}/publish', TOKEN_A, None)
+    compiled = r.json()['compile']
+    assert compiled['dry_run'] is False and compiled['rows'] == 12
+    assert compiled['by_channel'] == {'schema_org': {'held_for_merchant': 4}, 'manufacturer_center': {'held_for_merchant': 4},
+                                      'acp': {'blocked': 4}}
+    assert compiled['not_compiled'] == f2r2.body('publish')['skipped']
+    assert r.json()['surfaces'][0]['records'] == '2 of 4 valid'   # the re-read Publishing
+    upstream.answer('POST', f'{BASE}/publish', body=f2r2.body('publish-dry-run'), token=TOKEN_A)
+    r = http.post('/api/console/publishing/compile', params={'merchant': SLUG, 'org': 10, 'dry_run': 'true'})
+    assert r.status_code == 200 and r.json()['compile']['dry_run'] is True
+    assert [c for c in upstream.calls if c['method'] == 'POST'][-1]['params'] == {'dry_run': 'true'}
+
+
 # ── B4: the file through soa ──────────────────────────────────────────────
 
 def test_the_artifact_comes_through_soa_with_33_s_headers(http, db, upstream):

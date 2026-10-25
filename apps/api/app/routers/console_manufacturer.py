@@ -6,6 +6,7 @@ the brand's own team sends them.
     GET  /api/console/rules?merchant=<slug>              the compliance rules, their approval, the backtest (B2)
     PUT  /api/console/rules/{code}?merchant=<slug>        on / approval / note, forwarded to supply (operator only) (B2)
     GET  /api/console/publishing?merchant=<slug>          surfaces, diff, preview, artifacts (B1's objects) (B2)
+    POST /api/console/publishing/compile?merchant=&dry_run=  compile and hold the brand's records (operator only) (2R-2a A2)
     POST /api/console/publishing/sent?merchant=<slug>     the brand states it sent a held file (B3)
     GET  /api/console/truesync/artifact?merchant=&channel=[&publication_id=]  the compiled file, through soa (B4)
 
@@ -201,6 +202,34 @@ async def get_publishing(merchant: str = Query(...), scope: CustomerScope = Depe
         body['read_errors']['catalog'] = k_err
     body['merchant'] = merchant
     return body
+
+
+@router.post("/publishing/compile")
+async def post_compile(merchant: str = Query(...), dry_run: bool = Query(False),
+                       scope: CustomerScope = Depends(operator_scope), user: dict = Depends(verify_token)):
+    """2R-2a (A2): compile the brand's current SKU feed in manufacturer mode
+    and hold it (supply's POST /merchants/{slug}/publish, with the tenant
+    token). Operator only. This is the one call here that changes supply's
+    state, and what it writes is held rows only: every row
+    compiled_not_published (held_for_merchant, or blocked). Nothing is sent
+    anywhere, to Google or a retailer. `dry_run` writes nothing. The answer
+    is the re-read Publishing with `compile`: {dry_run, rows, by_channel,
+    not_compiled: supply's notes per channel it did not compile}."""
+    await _manufacturer(scope, merchant)
+    body = _unwrap(*await full_loop._client(scope).publish_merchant(merchant, dry_run=dry_run))
+    rows = (body or {}).get('rows') or []
+    by_channel: dict = {}
+    for r in rows:
+        counts = by_channel.setdefault(r.get('channel_slug') or r.get('channel'), {})
+        reason = r.get('reason') or r.get('status')
+        counts[reason] = counts.get(reason, 0) + 1
+    by = user.get('email') or user.get('sub')
+    score_svc.log_event('publishing.compile', org=scope.org.id, merchant=merchant, dry_run=dry_run, rows=len(rows),
+                        by=by)
+    out = await get_publishing(merchant=merchant, scope=scope)
+    out['compile'] = {'dry_run': dry_run, 'rows': len(rows), 'by_channel': by_channel,
+                      'not_compiled': (body or {}).get('skipped') or []}
+    return out
 
 
 # ─── Rules ────────────────────────────────────────────────────────────────

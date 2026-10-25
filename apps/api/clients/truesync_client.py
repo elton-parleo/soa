@@ -344,6 +344,12 @@ class TrueSyncClient:
     # sent a held file, and the files. Contract: supply's
     # docs/truesync/manufacturer-mode.md; soa's read: docs/console-read-models.md "2R-2".
 
+    async def publish_merchant(self, merchant_slug: str, dry_run: bool = False) -> ForwardResult:
+        """Compile the brand's SKU feed and hold every row (`dry_run` writes nothing)."""
+        return await self.forward(
+            "POST", f"/api/truesync/merchants/{_slug(merchant_slug)}/publish",
+            params={"dry_run": "true"} if dry_run else None)
+
     async def get_rules(self, merchant_slug: str) -> ForwardResult:
         return await self.get(f"/api/truesync/merchants/{_slug(merchant_slug)}/rules")
 
