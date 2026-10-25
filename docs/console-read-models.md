@@ -7976,3 +7976,32 @@ set by whether the cycle asked a comparison question (2K-1); it now names the un
 one way (`console_parity._answers`, `_tier_words`; the revenue model's `set`, `counts.lost_set`): with no comparison
 question asked the two sets are the same answers. The `tier` fields (`unprompted` | `brand_choice`) are unchanged.
 `test_console_2i8`'s and `test_console_2k1_score_pin`'s pins map the word back to what main served.
+
+## 2P-2: a brand-claim narrative is written about the contradicted sentence only
+
+FL14's `--narratives` run after 2P-1 accepted 13 lines about a sentence the scorer had grounded, written as if it
+were a contradiction ("Gemini said Target is a place to buy Pampers Baby-Dry but Pampers' record includes
+target.com", run-15090; also 14982, 14991, 15078, 15095, 15220, 15239, 15247, 15299, 15428, 15432, 15437, 15439).
+Every name and number in them was in the facts, so the checks passed. On a contradicted claim's facts, main's
+checks already refuse all 13 (`quote_not_in_facts`, `contradiction_not_said`), so they were written from facts with
+no contradiction. The fixture's shape for that is a grounded or unverified answer flagged for a store off the
+brand's list (`fabricated_availability`): its facts handed the writer the grounded sentence, the scorer's grounded
+reason ("on Pampers' record or pages: 'target.com'") and `claim_facts.published`, under the prompt's "what the
+assistant said, then what was true". Production rows were not read to confirm it.
+
+* **The facts.** A brand-direct answer's `answer_spans` are only its contradicted or misattributed sentences
+  (`narratives.flagged_sentences`, from `extraction.brand_claim.spans`); `claim_facts` and `scorer_note` only when
+  the verdict is fabricated or misattributed; `claim_facts.published` is gone. The drawer still lists every judged
+  sentence.
+* **Who is a subject.** A brand-direct answer's flags count only beside a fabricated or misattributed verdict; an
+  answer stored unverified is never a subject, flag or none (2P-1 held this only for an answer with no flag).
+* **The check** (`narratives.contradicted_check`, every brand-direct line): with a contradiction, each quote is the
+  contradicted value (`contradicted.claimed`, or `claim_facts.stated_otherwise` as the answer wrote it) or the
+  brand's, and the line states that value, else `claim_not_contradicted`; a "but" has the brand's value after it,
+  else `but_without_brand_value`.
+* **The prompt** is 2P-1 B4's `CONTRADICTED_PROMPT`, unchanged: `<assistant> said "<claimed>" for <for>. <source>
+  says <says>.`
+
+The 2L-3 fixture's 131 FL14 subjects keep their facts digests and decisions; 2P-1's two recordings replay
+unchanged (no model call, no re-recording). `narratives_fixture.fl14_beside` adds the three shapes, tested without a
+writer. Tests: `apps/api/tests/test_narratives_2p2.py`.
