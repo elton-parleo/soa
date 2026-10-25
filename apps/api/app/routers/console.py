@@ -635,6 +635,8 @@ def _true_value_inputs(conn, row) -> tuple:
                        # 2C-2c: the sibling resolved to its record name, once
                        'swap_product': rm.sibling_name(swap, names) if swap else None,
                        'swap_variant': swap.get('variant_id') if swap else None,
+                       # 2Q-1 (B4): the pack the quote was for, when the check moved it off the asked one for its count
+                       'pack': rm.pack_conflict(deciding),
                        'run': f"run-{o['run_id']}", 'platform': o['platform'],
                        'agent': surfaces.agent_of(o['platform']) or o['platform'],
                        'surface': o['surface'] or surfaces.surface_of(o['platform']) or 'unlabelled'})

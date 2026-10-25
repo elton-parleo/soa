@@ -68,6 +68,8 @@ TEMPLATES = {
     'agent.none': "No price scored.",
     'product.other_brand': "Priced another brand's product in {n} of {runs} {runs_word}.",
     'product.wrong': "Quoted a wrong price in {n} of {runs} {runs_word}.",
+    # 2Q-1 (B4): the wrong quotes were for another pack, the reason the price check already has
+    'product.wrong_pack': "Quoted {quote} for a {pack} ct pack against {live} for the {asked} in {n} of {runs} {runs_word}.",
     'product.left_out': "No price quoted in {n} of {runs} {runs_word}.",
     'product.unverifiable': "The page could not be read, so {n} of {runs} {runs_word} are not scored.",
     # 2N-1: after the issue, the retailers whose every quote could not be checked
@@ -83,6 +85,8 @@ TEMPLATES = {
     'signal.fabricated_caveat': "Sources were not captured before Oct 14, so some of these may rest on a page we did not see.",
     'signal.wrong_product': ("Wrong price on {product} in {n} runs.",
                              "Quoted {quote} against {live}. {split}."),
+    # 2Q-1 (B4): FL15's "Quoted $44.99 against $44.99." was a quote for the 58 ct pack
+    'signal.wrong_product_pack': "Quoted {quote} for a {pack} ct pack against {live} for the {asked}. {split}.",
     'signal.unverifiable': ("{n} {prices} could not be checked.",
                             "The page blocked both readers. These are counted on their own and never in an accuracy. {split}."),
     'signal.access': ("{n} agent {identities} could not read the pages.",
@@ -542,7 +546,32 @@ PRODUCT_STATUS = {'exact': 'exact', 'wrong': 'wrong', 'stale': 'wrong', 'partial
                   'missed': 'none', 'none': 'none', 'unverifiable': 'none'}
 
 
-def product_issue(quotes: List[dict]) -> tuple:
+_ASKED_PACK = re.compile(r"(\d+)\s*(?:ct|count)\b", re.I)
+
+
+def pack_mismatch(quotes: List[dict], product: Optional[str]) -> Optional[dict]:
+    """2Q-1 (B4): {quote, pack, asked, live, n} when most of the wrong quotes
+    were for another pack (the price check's own reason, the quote's `pack`):
+    the most common such quote, its pack, the asked pack ("104 ct", from the
+    row's name, else "pack asked about") and the reference it was judged
+    against. None otherwise."""
+    wrong = [q for q in quotes if q.get('outcome') in ('wrong', 'stale')]
+    packed = [q for q in wrong if q.get('pack') and q.get('stated') not in (None, '')]
+    if not packed or len(packed) * 2 <= len(wrong):
+        return None
+    (stated, pack, live), n = Counter((q['stated'], q['pack'], q.get('live')) for q in packed).most_common(1)[0]
+    counts = _ASKED_PACK.findall(product or '')
+    return {'quote': rm.money(stated), 'pack': pack, 'asked': f"{counts[-1]} ct" if counts else 'pack asked about',
+            'live': live if isinstance(live, str) and live.startswith('$') else 'the reference', 'n': n}
+
+
+def _pack_field(quotes: List[dict], product: Optional[str]) -> dict:
+    """{'pack_mismatch': ...} beside a product's typed fields, only when there is one."""
+    pack = pack_mismatch(quotes, product)
+    return {'pack_mismatch': pack} if pack else {}
+
+
+def product_issue(quotes: List[dict], product: Optional[str] = None) -> tuple:
     """(rule, issue sentence). 2N-1: product.unverifiable only when every
     retailer the row was asked at could not be read; otherwise the rule over
     the quotes at the retailers that were, those that were not named after
@@ -566,7 +595,10 @@ def product_issue(quotes: List[dict]) -> tuple:
     rule, n = max(counts.items(), key=lambda kv: kv[1])
     asked = len(checked)
     word = _n(asked, 'run', 'runs')
-    if n:
+    pack = pack_mismatch(checked, product) if rule == 'product.wrong' and n else None
+    if pack:
+        issue = TEMPLATES['product.wrong_pack'].format(**{**pack, 'n': n}, runs=asked, runs_word=word)
+    elif n:
         issue = TEMPLATES[rule].format(n=n, runs=asked, runs_word=word)
     else:
         rule = 'product.right'
@@ -639,8 +671,8 @@ def build_products(true_value: dict, vis_rows: List[dict], surface: str, *, vari
     vis_by_run = {v['run']: v for v in vis_rows}
 
     def quotes_of(cell, col):
-        return [{**q, 'reason': reason_of_run.get(q.get('run')), 'retailer': col} for q in cell.get('quotes') or []
-                if _on(q.get('surface'), surface)]
+        return [{**q, 'reason': reason_of_run.get(q.get('run')), 'retailer': col, 'live': cell.get('live')}
+                for q in cell.get('quotes') or [] if _on(q.get('surface'), surface)]
 
     def counts(quotes):
         runs = [vis_by_run[q['run']] for q in quotes if q.get('run') in vis_by_run]
@@ -668,7 +700,7 @@ def build_products(true_value: dict, vis_rows: List[dict], surface: str, *, vari
                 continue
             sc = (cell.get('by_surface') or {}).get(surface) or {}
             answered, nf = counts(quotes)
-            rule, issue = product_issue(quotes)
+            rule, issue = product_issue(quotes, row['product'])
             status = sc.get('status') or 'none'
             out.append({
                 'name': row['product'], 'sku': row['sku'],
@@ -683,6 +715,7 @@ def build_products(true_value: dict, vis_rows: List[dict], surface: str, *, vari
                 'live_price': cell.get('live'),
                 'answer_ids': [q['run'] for q in quotes if q.get('run')],
                 'quote_groups': quote_groups(quotes),
+                **_pack_field(quotes, row['product']),
             })
     out.sort(key=lambda p: (_PRODUCT_SEVERITY.get(p['status'], 4), -p['wrong_runs'], -p['named'], p['name']))
     return out
@@ -699,7 +732,7 @@ def _product_across(row: dict, across: List[tuple], surface: str, counts) -> dic
     worst_col, worst_cell, _ = min(across, key=lambda a: _PRODUCT_SEVERITY.get(PRODUCT_STATUS.get(status_of(a[1]), 'none'), 4))
     quotes = [q for _col, _cell, qs in across for q in qs]
     answered, nf = counts(quotes)
-    rule, issue = product_issue(quotes)
+    rule, issue = product_issue(quotes, row['product'])
     status = status_of(worst_cell)
     return {
         'name': row['product'], 'sku': row['sku'],
@@ -715,6 +748,7 @@ def _product_across(row: dict, across: List[tuple], surface: str, counts) -> dic
         'live_price': worst_cell.get('live'),
         'answer_ids': [q['run'] for q in quotes if q.get('run')],
         'quote_groups': quote_groups(quotes),
+        **_pack_field(quotes, row['product']),
         'read_across': True,
         'retailers': [{'retailer': col, 'name': rm._retailer_name(col), 'runs': len(qs),
                        'quote': ((cell.get('by_surface') or {}).get(surface) or {}).get('quoted'),
@@ -757,9 +791,12 @@ def build_signals(metrics: dict, products: List[dict], *, surface: str, brand: s
     worst = max(products, key=lambda p: (p['wrong_runs'], p['name']), default=None)
     if worst and worst['wrong_runs'] >= 3:
         title, detail = TEMPLATES['signal.wrong_product']
+        pack = worst.get('pack_mismatch')
         out.append({'id': f"wrong:{worst['sku']}", 'title': title.format(product=worst['name'], n=worst['wrong_runs']),
-                    'detail': detail.format(quote=worst['quote'] or 'a price', live=worst['live_price'] or 'the reference',
-                                            split=worst['quoted']),
+                    # 2Q-1 (B4): a quote for another pack says so, with both packs
+                    'detail': TEMPLATES['signal.wrong_product_pack'].format(**pack, split=worst['quoted']) if pack else
+                    detail.format(quote=worst['quote'] or 'a price', live=worst['live_price'] or 'the reference',
+                                  split=worst['quoted']),
                     'tag': 'Missed pool', 'tone': 'bad', 'route': 'true-value', 'rule': 'wrong_product',
                     'count': worst['wrong_runs'], **({'answerId': worst['answer_ids'][0]} if worst['answer_ids'] else {})})
     if t['unverifiable'] > 0:

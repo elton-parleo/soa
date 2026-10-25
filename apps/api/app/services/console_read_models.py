@@ -762,6 +762,14 @@ def deciding_swap(claims: List[dict], outcome: Optional[str]) -> Optional[dict]:
             or (swaps[0] if swaps else None))
 
 
+def pack_conflict(claim: Optional[dict]) -> Optional[int]:
+    """2Q-1 (B4): the pack count a quote was for, when the price check moved
+    it off the asked variant for that count (the claim's `conflict`, "pack
+    count 58", scoring/record_variants.conflicts), else None."""
+    m = re.match(r'pack count (\d+)', str((claim or {}).get('conflict') or ''))
+    return int(m.group(1)) if m else None
+
+
 def other_pack(reads: Optional[List[dict]], variant: dict, domain: Optional[str]) -> Optional[dict]:
     """2N-1: {price, pack, text} when supply's newest read of the variant's
     page at `domain` found the page's pack is not the variant's (its
@@ -1086,7 +1094,8 @@ def build_true_value(reference: Optional[dict], scored: List[dict], *, own_domai
             'quotes': [{'agent': r.get('agent'), 'surface': surface_of_run(r), 'outcome': r.get('outcome'),
                         'stated': None if r.get('stated') in (None, '') else str(r['stated']),
                         'run': r.get('run'), **({'swap_product': r['swap_product']} if r.get('swap_product') else {}),
-                        **({'swap_variant': r['swap_variant']} if r.get('swap_variant') else {})}
+                        **({'swap_variant': r['swap_variant']} if r.get('swap_variant') else {}),
+                        **({'pack': r['pack']} if r.get('pack') else {})}
                        for r in runs],
         }
 
@@ -3498,6 +3507,9 @@ PROMO_TEMPLATES = {
     'prove.note.walled': ' {names} walled every read, so their deals could not be checked.',
     'prove.none': 'No deals read this cycle: supply found no deal live on a retailer shelf for these SKUs on {date}.',
     'prove.agents': 'Named {k} of {n}',
+    # 2Q-1 (B4): a deal beside "Out of stock" on the shelf
+    'prove.out_of_stock': 'Not live: the shelf said out of stock on {date}, so no answer is counted against it.',
+    'prove.agents.out_of_stock': 'Not counted: out of stock',
     'baseline.label': 'Promo pass-through',
     'baseline.note': 'Named a deal live that day',
 }
@@ -3694,14 +3706,19 @@ def build_prove(promo: Optional[dict], deals: Optional[dict], brand: Optional[st
         if said and re.search(r"\d", said) and said.rstrip('.').lower() not in ppt.title(deal).lower():
             detail += f" The shelf said: {said.rstrip('.')}."
         asked, named = tally['asked'], tally['named']
+        gone = ppt.out_of_stock(deal)
+        if gone:
+            # 2Q-1 (B4): never live, so never asked about: the row says why
+            detail = t['prove.out_of_stock'].format(date=day) + ' ' + detail
         rows.append({'retailer': af.retailer_name(deal.get('retailer_domain')), 'retailer_domain': deal.get('retailer_domain'),
                      'title': ppt.title(deal), 'detail': detail, 'terms': _deal_terms(deal),
-                     'agents': t['prove.agents'].format(k=named, n=asked) if asked else 'Not asked this cycle',
+                     'agents': t['prove.agents.out_of_stock'] if gone else
+                     t['prove.agents'].format(k=named, n=asked) if asked else 'Not asked this cycle',
                      'value': _deal_value(deal), 'kind': deal.get('kind'), 'kind_label': ppt.kind_words(deal),
                      'asked': asked, 'named': named,
-                     'tone': 'ok' if asked and named * 2 >= asked else ('warn' if named else 'bad'),
-                     'skus': len(variants)})
-    rows.sort(key=lambda r: (-r['asked'], r['named'], r['retailer'] or ''))
+                     'tone': 'neu' if gone else 'ok' if asked and named * 2 >= asked else ('warn' if named else 'bad'),
+                     'skus': len(variants), **({'live': False, 'not_live': 'out_of_stock'} if gone else {})})
+    rows.sort(key=lambda r: (r.get('live') is False, -r['asked'], r['named'], r['retailer'] or ''))
     who = brand or 'the brand'
     if promo is None or deals is None:
         state = 'not_measured'
@@ -3877,6 +3894,8 @@ MOVED_TEMPLATES = {
     'prove.new': 'New since {code}.',
     'prove.ended': 'Ended since {code}. {retailer} was read on {date} and no longer ran it.',
     'prove.not_read': 'Not read on {date}: {retailer} walled every read. Live in {code}.',
+    # 2Q-1 (B4): live last cycle, beside "Out of stock" this one
+    'prove.out_of_stock': 'Out of stock on {date}: {retailer} showed it beside "Out of stock". Live in {code}.',
     'prove.delta': '{k} of {n} this cycle against {b} of {m} in {code}.',
     'tv.drift': '{product} at {column}: {was} in {code}, {now} this cycle.',
     'vis.first': '{name} first in {now} of {n} brand-choice answers, {then} in {code}.',
@@ -3905,11 +3924,17 @@ def prove_changes(body: dict, deals: Optional[dict], prev_deals: Optional[dict],
     from soa_shared import retailers as af
     t = MOVED_TEMPLATES
     day = _read_day(deals, None) or 'the read date'
-    before = {ppt.deal_id(d): d for d in (prev_deals or {}).get('deals') or []}
+    before = {ppt.deal_id(d): d for d in (prev_deals or {}).get('deals') or [] if not ppt.out_of_stock(d)}
     now = {ppt.deal_id(d) for d in (deals or {}).get('deals') or []}
     titles = {ppt.title(d): ppt.deal_id(d) for d in (deals or {}).get('deals') or []}
     for row in body.get('rows') or []:
         new = titles.get(row['title']) not in before
+        if row.get('not_live') == 'out_of_stock':
+            # 2Q-1 (B4): the row's own note says why; against the previous cycle it is out of stock, or new
+            row['change'] = 'new' if new else 'out_of_stock'
+            if not new:
+                row['change_note'] = t['prove.out_of_stock'].format(date=day, retailer=row['retailer'], code=prev_code)
+            continue
         row['change'] = 'new' if new else 'kept'
         if new:
             row['change_note'] = t['prove.new'].format(code=prev_code)

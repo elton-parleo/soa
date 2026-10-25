@@ -8105,3 +8105,31 @@ Tests: `apps/api/tests/test_console_2q1_cache.py` (the overview, Visibility, Tru
 bodies identical cached or not, cold or warm; a warm overview reads supply once and neither cycle's rows; a refresh
 of the previous cycle's reference is seen on the next read; a failed deals read is named and the next read tries
 again; a replaced outcome row moves the stamp).
+
+### B4: two copy items on reads
+
+* **A quote for another pack says so.** FL15's lead signal read "Wrong price on Pampers Zzz overnight, Size 4, 104 ct
+  in 11 runs. Quoted $44.99 against $44.99." The price check had moved each quote off the asked variant for its
+  count (the claim's `conflict`, "pack count 58", `variant_clash`). True Value's quotes now carry it (`pack`,
+  `console_read_models.pack_conflict`), and when most of a product's wrong quotes are for another pack
+  (`console_parity.pack_mismatch`: the most common such quote, its pack, the asked pack from the row's name, the
+  reference) the signal's detail reads `signal.wrong_product_pack`, "Quoted $44.99 for a 58 ct pack against $44.99
+  for the 104 ct. …", and the products table's issue line `product.wrong_pack`, "Quoted $44.99 for a 58 ct pack
+  against $44.99 for the 104 ct in 11 of 18 runs." The product carries `pack_mismatch` beside its typed fields only
+  when there is one. A product narrative's facts already name the product a quote was for (`for_variant`); they are
+  unchanged, so no recorded narrative moves.
+* **A deal beside "Out of stock" is not live.** FL15's Walmart Rollback on Pure Protection Size 1 was read beside
+  "Out of stock". `promo_pass_through.out_of_stock` (the shelf's words beside the deal: "out of stock", "sold out",
+  "currently unavailable"; or supply's `excluded: out_of_stock` / a variant's `availability: out_of_stock` when it
+  serves them) and `live_for` leaves such a variant out, so no answer is judged against it and the pass-through
+  counts only live deals. Trade promotions keeps its row, last, with `live: false`, `not_live: 'out_of_stock'`,
+  tone `neu`, agents "Not counted: out of stock", and the detail "Not live: the shelf said out of stock on <date>,
+  so no answer is counted against it." Against a compared cycle such a row's `change` is `out_of_stock` ("Out of
+  stock on <date>: <retailer> showed it beside "Out of stock". Live in <code>.") and an ended deal reads `ended`, as
+  before. Supply's extractor (parleo-supply-app `truesync/fullloop/deals.py`, `accept_deal`) does not refuse such a
+  deal yet; soa's rule holds for the deals supply already stored, FL15's among them.
+
+Tests: `apps/api/tests/test_console_2q1_copy.py` (on 2P-1's pair, four quotes at the reference's own price for a
+58 ct pack: the signal and the issue line; the rule by hand on FL15's shape, 11 of 18; on 2M-2's deals, the
+Rollback beside "Out of stock": its row, the pass-through 5 of 50 to 3 of 50; `live_for` per variant; against the
+previous cycle, out of stock and ended).
