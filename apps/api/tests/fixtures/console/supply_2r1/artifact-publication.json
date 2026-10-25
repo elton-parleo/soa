@@ -1,0 +1,14 @@
+{
+ "body_base64": "ewogICJhcGlWZXJzaW9uIjogIm1hbnVmYWN0dXJlcnMvdjEiLAogICJwcm9kdWN0cyI6IFsKICAgIHsKICAgICAgIm5hbWUiOiAiVVM6ZW46MDAwMzcwMDA4MzM5NzAiLAogICAgICAiYXR0cmlidXRlcyI6IHsKICAgICAgICAiZ3RpbiI6IFsKICAgICAgICAgICIwMzcwMDA4MzM5NzAiCiAgICAgICAgXSwKICAgICAgICAiYnJhbmQiOiAiUGFtcGVycyIsCiAgICAgICAgInRpdGxlIjogIlBhbXBlcnMgWnp6IFNpemUgNCwgMTA0IGN0IiwKICAgICAgICAicHJvZHVjdE5hbWUiOiAiUGFtcGVycyBaenoiLAogICAgICAgICJkZXNjcmlwdGlvbiI6ICJTYXkgZ29vZG5pZ2h0IHRvIG92ZXJuaWdodCB3YWtldXBzIGFuZCBoZWxsbyB0byBQYW1wZXJzIFpaWiwgdGhlIG92ZXJuaWdodCBkaWFwZXIgZGVzaWduZWQgd2l0aCBleHRyYSBhYnNvcmJlbmN5IGZvciBtb3JlIHBlYWNlZnVsIG5pZ2h0cy4iLAogICAgICAgICJpbWFnZUxpbmsiOiB7CiAgICAgICAgICAiaW1hZ2VVcmwiOiAiaHR0cHM6Ly9pbWFnZXMuY3RmYXNzZXRzLm5ldC9wZmVnNzN0MjNlc3cvNDJKSTdtNVg5dnBMWmxwT21XeHNrOS8xNDc0MzE4YjU5M2EzMzk4OGFiNDJkMzgxZDMxODdmYy8zNzAwMDgzMzk4N19Td2FkZGxlcnNaWlpzX0NMRUFOLmpwZyIKICAgICAgICB9LAogICAgICAgICJjb3VudCI6IHsKICAgICAgICAgICJ2YWx1ZSI6ICIxMDQiLAogICAgICAgICAgInVuaXQiOiAiY291bnQiCiAgICAgICAgfSwKICAgICAgICAicHJvZHVjdFBhZ2VVcmwiOiAiaHR0cHM6Ly93d3cucGFtcGVycy5jb20vZW4tdXMvcHJvZHVjdHMvcGFtcGVycy16enoiCiAgICAgIH0KICAgIH0KICBdCn0K",
+ "headers": {
+  "content-disposition": "attachment; filename=\"pampers-2r1-manufacturer_center-00037000833970-11.json\"",
+  "content-type": "application/json",
+  "x-truesync-compiled-at": "2026-10-25T22:02:33+00:00",
+  "x-truesync-merchant-kind": "brand",
+  "x-truesync-mode": "manufacturer",
+  "x-truesync-reason": "held_for_merchant",
+  "x-truesync-record-count": "1",
+  "x-truesync-validator": "ok=1; failed=0"
+ },
+ "status": 200
+}

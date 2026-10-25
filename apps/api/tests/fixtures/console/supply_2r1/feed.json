@@ -1,0 +1,246 @@
+{
+ "body": {
+  "merchant": "pampers-2r1",
+  "rows": [
+   {
+    "brand_name": "Pampers",
+    "currency": null,
+    "description": null,
+    "gtin": null,
+    "gtin14": null,
+    "image_url": null,
+    "messages": [
+     {
+      "code": "gtin_missing",
+      "field": "gtin",
+      "message": "no GTIN: this variant is identified by sku sku_pg_swd_nb_84 and https://www.pampers.com/en-us/diapers-wipes/swaddlers-diapers. It is readable and scorable, and reference reads match it by SKU and URL. Google Merchant Center can carry it only as identifier_exists=false, when the publisher is told to include unidentified items; Manufacturer Center, which keys by GTIN, skips it.",
+      "severity": "warning"
+     }
+    ],
+    "multipack": null,
+    "pack_count": 84,
+    "price": null,
+    "product_name": "Pampers Swaddlers",
+    "provenance": null,
+    "retailers": [
+     {
+      "domain": "pampers.com",
+      "url": "https://www.pampers.com/en-us/diapers-wipes/swaddlers-diapers"
+     }
+    ],
+    "row_number": 2,
+    "size_unit": null,
+    "size_value": null,
+    "sku": "sku_pg_swd_nb_84",
+    "status": "warning",
+    "variant_key": "sku:sku_pg_swd_nb_84",
+    "variant_label": "Newborn, 84 ct"
+   },
+   {
+    "brand_name": "Pampers",
+    "currency": null,
+    "description": null,
+    "gtin": null,
+    "gtin14": null,
+    "image_url": null,
+    "messages": [
+     {
+      "code": "gtin_missing",
+      "field": "gtin",
+      "message": "no GTIN: this variant is identified by sku sku_pg_swd_s1_96 and https://www.pampers.com/en-us/diapers-wipes/swaddlers-diapers-size-1. It is readable and scorable, and reference reads match it by SKU and URL. Google Merchant Center can carry it only as identifier_exists=false, when the publisher is told to include unidentified items; Manufacturer Center, which keys by GTIN, skips it.",
+      "severity": "warning"
+     }
+    ],
+    "multipack": null,
+    "pack_count": 96,
+    "price": null,
+    "product_name": "Pampers Swaddlers",
+    "provenance": null,
+    "retailers": [
+     {
+      "domain": "pampers.com",
+      "url": "https://www.pampers.com/en-us/diapers-wipes/swaddlers-diapers-size-1"
+     }
+    ],
+    "row_number": 3,
+    "size_unit": null,
+    "size_value": null,
+    "sku": "sku_pg_swd_s1_96",
+    "status": "warning",
+    "variant_key": "sku:sku_pg_swd_s1_96",
+    "variant_label": "Size 1, 96 ct"
+   },
+   {
+    "brand_name": "Pampers",
+    "currency": null,
+    "description": null,
+    "gtin": null,
+    "gtin14": null,
+    "image_url": null,
+    "lifecycle": "retired",
+    "messages": [
+     {
+      "code": "gtin_missing",
+      "field": "gtin",
+      "message": "no GTIN: this variant is identified by sku sku_pg_pure_s1 and https://www.pampers.com/en-us/diapers-wipes/pure-protection-diapers. It is readable and scorable, and reference reads match it by SKU and URL. Google Merchant Center can carry it only as identifier_exists=false, when the publisher is told to include unidentified items; Manufacturer Center, which keys by GTIN, skips it.",
+      "severity": "warning"
+     },
+     {
+      "code": "no_pack_or_size",
+      "field": null,
+      "message": "neither pack_count nor a size is given",
+      "severity": "warning"
+     }
+    ],
+    "multipack": null,
+    "pack_count": null,
+    "price": null,
+    "product_name": "Pampers Pure Protection",
+    "provenance": null,
+    "retailers": [
+     {
+      "domain": "amazon.com",
+      "url": "https://www.amazon.com/dp/PURE-S1-198"
+     },
+     {
+      "domain": "pampers.com",
+      "url": "https://www.pampers.com/en-us/diapers-wipes/pure-protection-diapers"
+     },
+     {
+      "domain": "samsclub.com",
+      "url": "https://www.samsclub.com/p/pampers-pure-protection-size-1"
+     }
+    ],
+    "row_number": 4,
+    "size_unit": null,
+    "size_value": null,
+    "sku": "sku_pg_pure_s1",
+    "status": "warning",
+    "successor_variant_key": "sku:sku_pg_amore_s1_132",
+    "variant_key": "sku:sku_pg_pure_s1",
+    "variant_label": "Size 1"
+   },
+   {
+    "brand_name": "Pampers",
+    "currency": null,
+    "description": null,
+    "gtin": null,
+    "gtin14": null,
+    "image_url": null,
+    "messages": [
+     {
+      "code": "gtin_missing",
+      "field": "gtin",
+      "message": "no GTIN: this variant is identified by sku sku_pg_amore_s1_132 and https://www.pampers.com/en-us/diapers-wipes/amore-diapers. It is readable and scorable, and reference reads match it by SKU and URL. Google Merchant Center can carry it only as identifier_exists=false, when the publisher is told to include unidentified items; Manufacturer Center, which keys by GTIN, skips it.",
+      "severity": "warning"
+     }
+    ],
+    "multipack": null,
+    "pack_count": 132,
+    "price": null,
+    "product_name": "Pampers AMORE",
+    "provenance": null,
+    "retailers": [
+     {
+      "domain": "pampers.com",
+      "url": "https://www.pampers.com/en-us/diapers-wipes/amore-diapers"
+     }
+    ],
+    "row_number": 5,
+    "size_unit": null,
+    "size_value": null,
+    "sku": "sku_pg_amore_s1_132",
+    "status": "warning",
+    "variant_key": "sku:sku_pg_amore_s1_132",
+    "variant_label": "Size 1, 132 ct"
+   },
+   {
+    "brand_name": "Pampers",
+    "currency": null,
+    "description": null,
+    "gtin": "037000799818",
+    "gtin14": "00037000799818",
+    "image_url": null,
+    "messages": [
+     {
+      "code": "no_pack_or_size",
+      "field": null,
+      "message": "neither pack_count nor a size is given",
+      "severity": "warning"
+     }
+    ],
+    "multipack": null,
+    "pack_count": null,
+    "price": null,
+    "product_name": "Pampers Swaddlers",
+    "provenance": null,
+    "retailers": [
+     {
+      "domain": "pampers.com",
+      "url": "https://www.pampers.com/en-us/products/pampers-swaddlers-diapers"
+     }
+    ],
+    "row_number": 6,
+    "size_unit": null,
+    "size_value": null,
+    "status": "warning",
+    "variant_label": "Size 4"
+   },
+   {
+    "brand_name": "Pampers",
+    "currency": null,
+    "description": null,
+    "gtin": "037000833970",
+    "gtin14": "00037000833970",
+    "image_url": null,
+    "messages": [],
+    "multipack": null,
+    "pack_count": 104,
+    "price": null,
+    "product_name": "Pampers Zzz",
+    "provenance": null,
+    "retailers": [
+     {
+      "domain": "amazon.com",
+      "url": "https://www.amazon.com/dp/B08PX2V97T"
+     },
+     {
+      "domain": "pampers.com",
+      "url": "https://www.pampers.com/en-us/products/pampers-zzz"
+     },
+     {
+      "domain": "target.com",
+      "url": "https://www.target.com/p/-/-/A-81041953"
+     },
+     {
+      "domain": "walmart.com",
+      "url": "https://www.walmart.com/ip/Pampers-Swaddlers-Overnight-Diapers-Size-4-104-Count/989998624"
+     }
+    ],
+    "row_number": 7,
+    "size_unit": null,
+    "size_value": null,
+    "status": "ready",
+    "variant_label": "Size 4, 104 ct"
+   }
+  ],
+  "version": {
+   "committed_at": "2026-10-25T22:02:32.846516",
+   "counts": {
+    "left_out": 0,
+    "ready": 1,
+    "warning": 5
+   },
+   "id": 1,
+   "mode": "all_valid_rows",
+   "row_count": 6,
+   "superseded_at": null,
+   "upload_id": "fd5c640f527e4f10b3637872df31225a",
+   "version_number": 1
+  }
+ },
+ "headers": {
+  "content-type": "application/json"
+ },
+ "status": 200
+}

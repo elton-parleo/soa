@@ -1,0 +1,324 @@
+{
+ "swaddlers": {
+  "brand_page": {
+   "bullets": [
+    "Perfect for Newborn",
+    "Fragrance Free",
+    "#1 Brand.* For Sleep",
+    "Wetness Indicator",
+    "Diapers",
+    "Dryness & Comfort",
+    "OEKO-TEX\u00ae STANDARD 100 Certification",
+    "Gentle on Delicate Skin",
+    "Babylist\u2019s Best Diaper for Sensitive Skin in 2024",
+    "Accredited as skin safe by the Skin Health Alliance",
+    "Pampers Swaddlers are designed to keep baby\u2019s skin dry and comfortable.",
+    "Pampers Swaddlers are designed to help create a snug, secure fit for newborns, reducing gaps that can lead to leaks. Soft leg cuffs gently seal around the legs, while the contoured shape hugs your baby\u2019s body for added protection. In sizes 1 and up, the Blowout Barrier helps stop messes from traveling up the back. When sized and fastened correctly, these features work together to provide up to 100% blowout and leak protection .",
+    "These hypoallergenic baby diapers feature an absorbent KeepDry\u2122 liner that locks away wetness and help keep your baby drier than the luxury diaper brand.",
+    "Free of fragrance, parabens and latex (no natural rubber), Pampers Swaddlers are trusted by experts and parents alike and are recognized by Best of Babylist and Newsweek Brandspark Most Trusted by American Shoppers 2024.",
+    "Pair Pampers Swaddlers with Pampers Sensitive Baby Wipes for clinically proven protection.",
+    "Pampers Swaddlers diapers were named Best Overall for Newborns by Parents in 2026.",
+    "Pampers Swaddlers were named Overall Best Diapers Available in Stores by The Bump in 2026.",
+    "Pampers Swaddlers were named a Babylist Pick for Best Disposable Diapers in 2026."
+   ],
+   "image": [
+    "https://images.ctfassets.net/pfeg73t23esw/1RKbw0c8rZttOQ1c7tCCOG/055e51318eafad9844bc07a4297a0be3/Swaddlers_New_Clean.png"
+   ],
+   "json_ld": {
+    "@type": "ProductGroup",
+    "additionalProperty": [
+     {
+      "@type": "PropertyValue",
+      "name": "Size Range",
+      "value": "Preemie, Newborn, 1, 2, 3, 4, 5, 6, 7, 8"
+     },
+     {
+      "@type": "PropertyValue",
+      "name": "Age Range",
+      "value": "Newborn, Baby"
+     },
+     {
+      "@type": "PropertyValue",
+      "name": "Baby Weight",
+      "value": "<6 lbs, <10 lbs, 8 - 14 lbs, 10 - 22 lbs, 13 - 26 lbs, 15 - 34 lbs, 27+ lbs, 35+ lbs, 41+ lbs, 46+ lbs"
+     },
+     {
+      "@type": "PropertyValue",
+      "name": "Pack Count",
+      "value": "19, 27, 29, 38, 44, 58, 60, 70, 72, 84, 88, 100, 104, 108, 112, 120, 132, 136, 140, 148, 150, 164, 168, 186, 198"
+     }
+    ],
+    "category": "Taped Diapers",
+    "description": "Pampers Swaddlers\u2122 for babies and newborns offer gentle care for sensitive skin and stop blowouts with trusted leak protection. Find out and shop now!",
+    "hasVariant": [
+     {
+      "@type": "Product",
+      "description": "<6 lb",
+      "gtin13": "037000863403",
+      "name": "Preemie",
+      "size": "Preemie",
+      "sku": "037000863403"
+     },
+     {
+      "@type": "Product",
+      "description": "<10 lbs",
+      "gtin13": "037000772552",
+      "name": "Newborn",
+      "size": "Newborn",
+      "sku": "037000772552"
+     },
+     {
+      "@type": "Product",
+      "description": "8 - 14 lbs",
+      "gtin13": "037000799788",
+      "name": "1",
+      "size": "1",
+      "sku": "037000799788"
+     },
+     {
+      "@type": "Product",
+      "description": "10-22 lbs",
+      "gtin13": "037000833109",
+      "name": "2",
+      "size": "2",
+      "sku": "037000833109"
+     },
+     {
+      "@type": "Product",
+      "description": "13-26 lbs",
+      "gtin13": "037000833178",
+      "name": "3",
+      "size": "3",
+      "sku": "037000833178"
+     },
+     {
+      "@type": "Product",
+      "description": "15-34 lbs",
+      "gtin13": "037000799818",
+      "name": "4",
+      "size": "4",
+      "sku": "037000799818"
+     },
+     {
+      "@type": "Product",
+      "description": "20-37 lbs",
+      "gtin13": "037000799825",
+      "name": "5",
+      "size": "5",
+      "sku": "037000799825"
+     },
+     {
+      "@type": "Product",
+      "description": "23-44 lbs",
+      "gtin13": "037000833086",
+      "name": "6",
+      "size": "6",
+      "sku": "037000833086"
+     },
+     {
+      "@type": "Product",
+      "description": "26-50 lbs",
+      "gtin13": "030772098141",
+      "name": "7",
+      "size": "7",
+      "sku": "030772098141"
+     },
+     {
+      "@type": "Product",
+      "description": "30+ lbs",
+      "gtin13": "030772098639",
+      "name": "8",
+      "size": "8",
+      "sku": "030772098639"
+     }
+    ],
+    "name": "Pampers\u00ae Swaddlers\u2122 Diapers for Babies and Newborns",
+    "url": "https://www.pampers.com/en-us/products/pampers-swaddlers-diapers"
+   },
+   "line": "Pampers Swaddlers",
+   "linked_lines": [
+    "Pampers Swaddlers 360",
+    "Pampers Zzz",
+    "Pampers Sensitive"
+   ],
+   "size_chart": [
+    {
+     "evidence": "Preemie <6 lb",
+     "max": 6.0,
+     "min": null,
+     "size": "preemie"
+    },
+    {
+     "evidence": "Newborn <10 lbs",
+     "max": 10.0,
+     "min": null,
+     "size": "newborn"
+    },
+    {
+     "evidence": "1 8 - 14 lbs",
+     "max": 14.0,
+     "min": 8.0,
+     "size": "1"
+    },
+    {
+     "evidence": "2 10-22 lbs",
+     "max": 22.0,
+     "min": 10.0,
+     "size": "2"
+    },
+    {
+     "evidence": "3 13-26 lbs",
+     "max": 26.0,
+     "min": 13.0,
+     "size": "3"
+    },
+    {
+     "evidence": "4 15-34 lbs",
+     "max": 34.0,
+     "min": 15.0,
+     "size": "4"
+    },
+    {
+     "evidence": "5 20-37 lbs",
+     "max": 37.0,
+     "min": 20.0,
+     "size": "5"
+    },
+    {
+     "evidence": "6 23-44 lbs",
+     "max": 44.0,
+     "min": 23.0,
+     "size": "6"
+    },
+    {
+     "evidence": "7 26-50 lbs",
+     "max": 50.0,
+     "min": 26.0,
+     "size": "7"
+    },
+    {
+     "evidence": "8 30+ lbs",
+     "max": null,
+     "min": 30.0,
+     "size": "8"
+    }
+   ],
+   "version": 2
+  },
+  "observed_at": "2026-10-20T02:55:36.303818+00:00",
+  "url": "https://www.pampers.com/en-us/products/pampers-swaddlers-diapers"
+ },
+ "zzz": {
+  "brand_page": {
+   "bullets": [
+    "#1 Brand. For Sleep.",
+    "Peaceful Nights",
+    "All-Around LeakGuard",
+    "More Absorbent",
+    "Overnight Diapers",
+    "OEKO-TEX\u00ae STANDARD 100 Certification",
+    "Gentle on Delicate Skin",
+    "Accredited by the Skin Health Alliance",
+    "Experience the peace of mind that comes with Pampers ZZZ overnight diapers, designed with your baby's comfort in mind.",
+    "With 50% more absorbent zones vs. everyday-of-the-year brand, these diapers gently cradle your little one, ensuring that wetness is distributed evenly to keep their delicate skin dry. The Blowout Barrier and soft, gentle leg protection create a secure fit that shields your baby from leaks at every angle, allowing them to dream peacefully.",
+    "Recognized as the Best Overall Overnight Diaper in 2025 by What to Expect and proudly recommended by pediatricians, Pampers ZZZ is here to support your family\u2019s journey through the night, so you can focus on what truly matters\u2014creating beautiful memories with your baby."
+   ],
+   "image": [
+    "https://images.ctfassets.net/pfeg73t23esw/42JI7m5X9vpLZlpOmWxsk9/1474318b593a33988ab42d381d3187fc/37000833987_SwaddlersZZZs_CLEAN.jpg"
+   ],
+   "json_ld": {
+    "@type": "ProductGroup",
+    "additionalProperty": [
+     {
+      "@type": "PropertyValue",
+      "name": "Size Range",
+      "value": "3, 4, 5, 6"
+     },
+     {
+      "@type": "PropertyValue",
+      "name": "Baby Weight",
+      "value": "13 - 26 lbs, 15 - 34 lbs, 27+ lbs, 35+ lbs"
+     },
+     {
+      "@type": "PropertyValue",
+      "name": "Pack Count",
+      "value": "72, 88, 104, 116"
+     }
+    ],
+    "category": "Taped Diapers",
+    "description": "Say goodnight to overnight wakeups and hello to Pampers ZZZ, the overnight diaper designed with extra absorbency for more peaceful nights. ",
+    "hasVariant": [
+     {
+      "@type": "Product",
+      "description": "16 - 28 lbs",
+      "gtin13": "037000833963",
+      "name": "3",
+      "size": "3",
+      "sku": "037000833963"
+     },
+     {
+      "@type": "Product",
+      "description": "22-37 lbs",
+      "gtin13": "037000833970",
+      "name": "4",
+      "size": "4",
+      "sku": "037000833970"
+     },
+     {
+      "@type": "Product",
+      "description": "27+ lbs",
+      "gtin13": "037000833987",
+      "name": "5",
+      "size": "5",
+      "sku": "037000833987"
+     },
+     {
+      "@type": "Product",
+      "description": "35+ lbs",
+      "gtin13": "037000834021",
+      "name": "6",
+      "size": "6",
+      "sku": "037000834021"
+     }
+    ],
+    "name": "Pampers\u00ae Zzz | Pampers",
+    "url": "https://www.pampers.com/en-us/products/pampers-zzz"
+   },
+   "line": "Pampers Zzz",
+   "linked_lines": [
+    "Pampers Swaddlers",
+    "Pampers Swaddlers 360",
+    "Pampers Sensitive"
+   ],
+   "size_chart": [
+    {
+     "evidence": "3 16 - 28 lbs",
+     "max": 28.0,
+     "min": 16.0,
+     "size": "3"
+    },
+    {
+     "evidence": "4 22-37 lbs",
+     "max": 37.0,
+     "min": 22.0,
+     "size": "4"
+    },
+    {
+     "evidence": "5 27+ lbs",
+     "max": null,
+     "min": 27.0,
+     "size": "5"
+    },
+    {
+     "evidence": "6 35+ lbs",
+     "max": null,
+     "min": 35.0,
+     "size": "6"
+    }
+   ],
+   "version": 2
+  },
+  "observed_at": "2026-10-20T04:00:06.882849+00:00",
+  "url": "https://www.pampers.com/en-us/products/pampers-zzz"
+ }
+}

@@ -1,0 +1,701 @@
+{
+ "body": {
+  "actor": "alice@test",
+  "channel": "manufacturer_center",
+  "merchant": "pampers-2r1",
+  "note": "uploaded in Manufacturer Center",
+  "publications": [
+   {
+    "channel": "manufacturer_center",
+    "channel_slug": "manufacturer_center",
+    "compiled_at": "2026-10-25T22:02:33",
+    "error": null,
+    "expressiveness": [
+     {
+      "field": "percent_off",
+      "note": "Manufacturer Center: no sale-price or discount attribute; suggestedRetailPrice is MSRP and lowering it to encode a discount would misstate it (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+      "severity": "dropped"
+     },
+     {
+      "field": "amount_off",
+      "note": "Manufacturer Center: no sale-price or discount attribute; suggestedRetailPrice is MSRP and lowering it to encode a discount would misstate it (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+      "severity": "dropped"
+     },
+     {
+      "field": "member_price",
+      "note": "Manufacturer Center: no price attribute but MSRP and no membership concept (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+      "severity": "dropped"
+     },
+     {
+      "field": "subscribe_and_save",
+      "note": "Manufacturer Center: no subscription attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+      "severity": "dropped"
+     },
+     {
+      "field": "points_earn",
+      "note": "Manufacturer Center: no loyalty attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+      "severity": "dropped"
+     },
+     {
+      "field": "free_shipping",
+      "note": "Manufacturer Center: no shipping attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+      "severity": "dropped"
+     },
+     {
+      "field": "gift_with_purchase",
+      "note": "Manufacturer Center: no promotion attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+      "severity": "dropped"
+     },
+     {
+      "field": "mfr_coupon",
+      "note": "Manufacturer Center: no promotion or code attribute, even for the manufacturer's own coupon (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+      "severity": "dropped"
+     },
+     {
+      "field": "member",
+      "note": "Manufacturer Center: no eligibility attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+      "severity": "dropped"
+     },
+     {
+      "field": "tier",
+      "note": "Manufacturer Center: no eligibility attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+      "severity": "dropped"
+     },
+     {
+      "field": "subscription",
+      "note": "Manufacturer Center: no eligibility attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+      "severity": "dropped"
+     },
+     {
+      "field": "new_customer",
+      "note": "Manufacturer Center: no eligibility attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+      "severity": "dropped"
+     },
+     {
+      "field": "retailer_availability",
+      "note": "Manufacturer Center has no field for who sells the product or where; retailer URLs and the retailer list are not sent (MC-0 \u00a74b).",
+      "severity": "dropped"
+     },
+     {
+      "field": "availability",
+      "note": "No stock or availability attribute; 'availability' is n/a for Manufacturer Center (answer/7073012).",
+      "severity": "dropped"
+     },
+     {
+      "field": "shelf_price",
+      "note": "No price or sale_price attribute; only suggestedRetailPrice (MSRP) exists (answer/7073012, discovery Attributes).",
+      "severity": "dropped"
+     },
+     {
+      "field": "provenance",
+      "note": "No provenance attribute; the brand's verified account is itself the provenance claim (MC-0 \u00a74a).",
+      "severity": "dropped"
+     },
+     {
+      "field": "validity_dates",
+      "note": "No offer validity; disclosureDate and releaseDate are product-lifecycle dates, not offer windows (MC-0 \u00a74b).",
+      "severity": "dropped"
+     },
+     {
+      "field": "gtin",
+      "note": "2 variant(s) without a GTIN not compiled (sku:sku_pg_swd_nb_84, sku:sku_pg_swd_s1_96): Manufacturer Center keys every product by GTIN and has no identifier_exists=false (answer/6358237).",
+      "severity": "dropped"
+     },
+     {
+      "field": "rule_r1",
+      "note": "rule r1 off: nothing in this compile (publish_msrp is off, so no MSRP is sent either way).",
+      "severity": "info"
+     },
+     {
+      "field": "price",
+      "note": "Manufacturer mode: no shelf price; MSRP only on Manufacturer Center with publish_msrp.",
+      "severity": "dropped"
+     },
+     {
+      "field": "rule_r5",
+      "note": "rule r5 off: no size chart rows; on, 3 weight-range row(s) from the brand page's chart.",
+      "severity": "info"
+     },
+     {
+      "field": "image_from_brand_page",
+      "note": "Pampers Swaddlers Size 4: no image_url in the feed; imageLink is the line's image on the brand's own page (https://images.ctfassets.net/pfeg73t23esw/1RKbw0c8rZttOQ1c7tCCOG/055e51318eafad9844bc07a4297a0be3/Swaddlers_New_Clean.png).",
+      "severity": "info"
+     },
+     {
+      "field": "description_from_brand_page",
+      "note": "Pampers Swaddlers Size 4: no description in the feed; description is the line's on the brand's own page.",
+      "severity": "info"
+     },
+     {
+      "field": "lint",
+      "note": "US:en:00037000799818: description is not ASCII; the spec asks for ASCII only",
+      "severity": "info"
+     }
+    ],
+    "external_ref": null,
+    "held": true,
+    "id": 2,
+    "journal": [
+     {
+      "at": "2026-10-25T22:02:33+00:00",
+      "by": "parleo",
+      "event": "compiled",
+      "note": null
+     },
+     {
+      "at": "2026-10-25T22:02:33+00:00",
+      "by": "parleo",
+      "event": "held_for_merchant",
+      "note": "compiled; the brand's own team sends it"
+     },
+     {
+      "at": "2026-10-25T22:02:33+00:00",
+      "by": "alice@test",
+      "event": "sent_by_merchant",
+      "note": "uploaded in Manufacturer Center",
+      "sent_at": "2026-10-17T15:30:00+00:00",
+      "stated_by": "P&G content team"
+     }
+    ],
+    "listing_id": null,
+    "mode": "manufacturer",
+    "payload": {
+     "apiVersion": "manufacturers/v1",
+     "products": [
+      {
+       "attributes": {
+        "brand": "Pampers",
+        "description": "Pampers Swaddlers\u2122 for babies and newborns offer gentle care for sensitive skin and stop blowouts with trusted leak protection. Find out and shop now!",
+        "gtin": [
+         "037000799818"
+        ],
+        "imageLink": {
+         "imageUrl": "https://images.ctfassets.net/pfeg73t23esw/1RKbw0c8rZttOQ1c7tCCOG/055e51318eafad9844bc07a4297a0be3/Swaddlers_New_Clean.png"
+        },
+        "itemGroupId": "feed:pampers-2r1:sku:sku_pg_swd_nb_84",
+        "productName": "Pampers Swaddlers",
+        "productPageUrl": "https://www.pampers.com/en-us/products/pampers-swaddlers-diapers",
+        "title": "Pampers Swaddlers Size 4"
+       },
+       "name": "US:en:00037000799818"
+      }
+     ]
+    },
+    "published_at": null,
+    "reason": "held_for_merchant",
+    "record_ref": "feed:pampers-2r1:sku:sku_pg_swd_nb_84",
+    "spec_clause": null,
+    "spec_version": "manufacturers-v1-2026-10-05",
+    "status": "compiled_not_published",
+    "validation": {
+     "errors": [],
+     "ok": true
+    }
+   },
+   {
+    "channel": "manufacturer_center",
+    "channel_slug": "manufacturer_center",
+    "compiled_at": "2026-10-25T22:02:33",
+    "error": "no variant carries a GTIN; Manufacturer Center keys every product by GTIN",
+    "expressiveness": [
+     {
+      "field": "percent_off",
+      "note": "Manufacturer Center: no sale-price or discount attribute; suggestedRetailPrice is MSRP and lowering it to encode a discount would misstate it (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+      "severity": "dropped"
+     },
+     {
+      "field": "amount_off",
+      "note": "Manufacturer Center: no sale-price or discount attribute; suggestedRetailPrice is MSRP and lowering it to encode a discount would misstate it (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+      "severity": "dropped"
+     },
+     {
+      "field": "member_price",
+      "note": "Manufacturer Center: no price attribute but MSRP and no membership concept (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+      "severity": "dropped"
+     },
+     {
+      "field": "subscribe_and_save",
+      "note": "Manufacturer Center: no subscription attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+      "severity": "dropped"
+     },
+     {
+      "field": "points_earn",
+      "note": "Manufacturer Center: no loyalty attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+      "severity": "dropped"
+     },
+     {
+      "field": "free_shipping",
+      "note": "Manufacturer Center: no shipping attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+      "severity": "dropped"
+     },
+     {
+      "field": "gift_with_purchase",
+      "note": "Manufacturer Center: no promotion attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+      "severity": "dropped"
+     },
+     {
+      "field": "mfr_coupon",
+      "note": "Manufacturer Center: no promotion or code attribute, even for the manufacturer's own coupon (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+      "severity": "dropped"
+     },
+     {
+      "field": "member",
+      "note": "Manufacturer Center: no eligibility attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+      "severity": "dropped"
+     },
+     {
+      "field": "tier",
+      "note": "Manufacturer Center: no eligibility attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+      "severity": "dropped"
+     },
+     {
+      "field": "subscription",
+      "note": "Manufacturer Center: no eligibility attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+      "severity": "dropped"
+     },
+     {
+      "field": "new_customer",
+      "note": "Manufacturer Center: no eligibility attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+      "severity": "dropped"
+     },
+     {
+      "field": "retailer_availability",
+      "note": "Manufacturer Center has no field for who sells the product or where; retailer URLs and the retailer list are not sent (MC-0 \u00a74b).",
+      "severity": "dropped"
+     },
+     {
+      "field": "availability",
+      "note": "No stock or availability attribute; 'availability' is n/a for Manufacturer Center (answer/7073012).",
+      "severity": "dropped"
+     },
+     {
+      "field": "shelf_price",
+      "note": "No price or sale_price attribute; only suggestedRetailPrice (MSRP) exists (answer/7073012, discovery Attributes).",
+      "severity": "dropped"
+     },
+     {
+      "field": "provenance",
+      "note": "No provenance attribute; the brand's verified account is itself the provenance claim (MC-0 \u00a74a).",
+      "severity": "dropped"
+     },
+     {
+      "field": "validity_dates",
+      "note": "No offer validity; disclosureDate and releaseDate are product-lifecycle dates, not offer windows (MC-0 \u00a74b).",
+      "severity": "dropped"
+     },
+     {
+      "field": "gtin",
+      "note": "1 variant(s) without a GTIN not compiled (sku:sku_pg_pure_s1): Manufacturer Center keys every product by GTIN and has no identifier_exists=false (answer/6358237).",
+      "severity": "dropped"
+     },
+     {
+      "field": "rule_r1",
+      "note": "rule r1 off: nothing in this compile (publish_msrp is off, so no MSRP is sent either way).",
+      "severity": "info"
+     },
+     {
+      "field": "price",
+      "note": "Manufacturer mode: no shelf price; MSRP only on Manufacturer Center with publish_msrp.",
+      "severity": "dropped"
+     },
+     {
+      "field": "rule_r5",
+      "note": "rule r5 off: no size chart rows; on, 0 weight-range row(s) from the brand page's chart.",
+      "severity": "info"
+     },
+     {
+      "field": "rule_r6",
+      "note": "rule r6 off: the successor is not stated; on, the record names it (Pampers Pure Protection Size 1 -> Pampers AMORE Size 1, 132 ct).",
+      "severity": "info"
+     }
+    ],
+    "external_ref": null,
+    "held": true,
+    "id": 5,
+    "journal": [
+     {
+      "at": "2026-10-25T22:02:33+00:00",
+      "by": "parleo",
+      "event": "compiled",
+      "note": null
+     },
+     {
+      "at": "2026-10-25T22:02:33+00:00",
+      "by": "parleo",
+      "event": "held_for_merchant",
+      "note": "compiled; the brand's own team sends it"
+     },
+     {
+      "at": "2026-10-25T22:02:33+00:00",
+      "by": "alice@test",
+      "event": "sent_by_merchant",
+      "note": "uploaded in Manufacturer Center",
+      "sent_at": "2026-10-17T15:30:00+00:00",
+      "stated_by": "P&G content team"
+     }
+    ],
+    "listing_id": null,
+    "mode": "manufacturer",
+    "payload": {
+     "apiVersion": "manufacturers/v1",
+     "products": []
+    },
+    "published_at": null,
+    "reason": "held_for_merchant",
+    "record_ref": "feed:pampers-2r1:sku:sku_pg_pure_s1",
+    "spec_clause": null,
+    "spec_version": "manufacturers-v1-2026-10-05",
+    "status": "compiled_not_published",
+    "validation": {
+     "errors": [
+      "no variant carries a GTIN; Manufacturer Center keys every product by GTIN"
+     ],
+     "ok": false
+    }
+   },
+   {
+    "channel": "manufacturer_center",
+    "channel_slug": "manufacturer_center",
+    "compiled_at": "2026-10-25T22:02:33",
+    "error": "no variant carries a GTIN; Manufacturer Center keys every product by GTIN",
+    "expressiveness": [
+     {
+      "field": "percent_off",
+      "note": "Manufacturer Center: no sale-price or discount attribute; suggestedRetailPrice is MSRP and lowering it to encode a discount would misstate it (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+      "severity": "dropped"
+     },
+     {
+      "field": "amount_off",
+      "note": "Manufacturer Center: no sale-price or discount attribute; suggestedRetailPrice is MSRP and lowering it to encode a discount would misstate it (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+      "severity": "dropped"
+     },
+     {
+      "field": "member_price",
+      "note": "Manufacturer Center: no price attribute but MSRP and no membership concept (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+      "severity": "dropped"
+     },
+     {
+      "field": "subscribe_and_save",
+      "note": "Manufacturer Center: no subscription attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+      "severity": "dropped"
+     },
+     {
+      "field": "points_earn",
+      "note": "Manufacturer Center: no loyalty attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+      "severity": "dropped"
+     },
+     {
+      "field": "free_shipping",
+      "note": "Manufacturer Center: no shipping attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+      "severity": "dropped"
+     },
+     {
+      "field": "gift_with_purchase",
+      "note": "Manufacturer Center: no promotion attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+      "severity": "dropped"
+     },
+     {
+      "field": "mfr_coupon",
+      "note": "Manufacturer Center: no promotion or code attribute, even for the manufacturer's own coupon (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+      "severity": "dropped"
+     },
+     {
+      "field": "member",
+      "note": "Manufacturer Center: no eligibility attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+      "severity": "dropped"
+     },
+     {
+      "field": "tier",
+      "note": "Manufacturer Center: no eligibility attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+      "severity": "dropped"
+     },
+     {
+      "field": "subscription",
+      "note": "Manufacturer Center: no eligibility attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+      "severity": "dropped"
+     },
+     {
+      "field": "new_customer",
+      "note": "Manufacturer Center: no eligibility attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+      "severity": "dropped"
+     },
+     {
+      "field": "retailer_availability",
+      "note": "Manufacturer Center has no field for who sells the product or where; retailer URLs and the retailer list are not sent (MC-0 \u00a74b).",
+      "severity": "dropped"
+     },
+     {
+      "field": "availability",
+      "note": "No stock or availability attribute; 'availability' is n/a for Manufacturer Center (answer/7073012).",
+      "severity": "dropped"
+     },
+     {
+      "field": "shelf_price",
+      "note": "No price or sale_price attribute; only suggestedRetailPrice (MSRP) exists (answer/7073012, discovery Attributes).",
+      "severity": "dropped"
+     },
+     {
+      "field": "provenance",
+      "note": "No provenance attribute; the brand's verified account is itself the provenance claim (MC-0 \u00a74a).",
+      "severity": "dropped"
+     },
+     {
+      "field": "validity_dates",
+      "note": "No offer validity; disclosureDate and releaseDate are product-lifecycle dates, not offer windows (MC-0 \u00a74b).",
+      "severity": "dropped"
+     },
+     {
+      "field": "gtin",
+      "note": "1 variant(s) without a GTIN not compiled (sku:sku_pg_amore_s1_132): Manufacturer Center keys every product by GTIN and has no identifier_exists=false (answer/6358237).",
+      "severity": "dropped"
+     },
+     {
+      "field": "rule_r1",
+      "note": "rule r1 off: nothing in this compile (publish_msrp is off, so no MSRP is sent either way).",
+      "severity": "info"
+     },
+     {
+      "field": "price",
+      "note": "Manufacturer mode: no shelf price; MSRP only on Manufacturer Center with publish_msrp.",
+      "severity": "dropped"
+     },
+     {
+      "field": "rule_r5",
+      "note": "rule r5 off: no size chart rows; on, 0 weight-range row(s) from the brand page's chart.",
+      "severity": "info"
+     }
+    ],
+    "external_ref": null,
+    "held": true,
+    "id": 8,
+    "journal": [
+     {
+      "at": "2026-10-25T22:02:33+00:00",
+      "by": "parleo",
+      "event": "compiled",
+      "note": null
+     },
+     {
+      "at": "2026-10-25T22:02:33+00:00",
+      "by": "parleo",
+      "event": "held_for_merchant",
+      "note": "compiled; the brand's own team sends it"
+     },
+     {
+      "at": "2026-10-25T22:02:33+00:00",
+      "by": "alice@test",
+      "event": "sent_by_merchant",
+      "note": "uploaded in Manufacturer Center",
+      "sent_at": "2026-10-17T15:30:00+00:00",
+      "stated_by": "P&G content team"
+     }
+    ],
+    "listing_id": null,
+    "mode": "manufacturer",
+    "payload": {
+     "apiVersion": "manufacturers/v1",
+     "products": []
+    },
+    "published_at": null,
+    "reason": "held_for_merchant",
+    "record_ref": "feed:pampers-2r1:sku:sku_pg_amore_s1_132",
+    "spec_clause": null,
+    "spec_version": "manufacturers-v1-2026-10-05",
+    "status": "compiled_not_published",
+    "validation": {
+     "errors": [
+      "no variant carries a GTIN; Manufacturer Center keys every product by GTIN"
+     ],
+     "ok": false
+    }
+   },
+   {
+    "channel": "manufacturer_center",
+    "channel_slug": "manufacturer_center",
+    "compiled_at": "2026-10-25T22:02:33",
+    "error": null,
+    "expressiveness": [
+     {
+      "field": "percent_off",
+      "note": "Manufacturer Center: no sale-price or discount attribute; suggestedRetailPrice is MSRP and lowering it to encode a discount would misstate it (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+      "severity": "dropped"
+     },
+     {
+      "field": "amount_off",
+      "note": "Manufacturer Center: no sale-price or discount attribute; suggestedRetailPrice is MSRP and lowering it to encode a discount would misstate it (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+      "severity": "dropped"
+     },
+     {
+      "field": "member_price",
+      "note": "Manufacturer Center: no price attribute but MSRP and no membership concept (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+      "severity": "dropped"
+     },
+     {
+      "field": "subscribe_and_save",
+      "note": "Manufacturer Center: no subscription attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+      "severity": "dropped"
+     },
+     {
+      "field": "points_earn",
+      "note": "Manufacturer Center: no loyalty attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+      "severity": "dropped"
+     },
+     {
+      "field": "free_shipping",
+      "note": "Manufacturer Center: no shipping attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+      "severity": "dropped"
+     },
+     {
+      "field": "gift_with_purchase",
+      "note": "Manufacturer Center: no promotion attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+      "severity": "dropped"
+     },
+     {
+      "field": "mfr_coupon",
+      "note": "Manufacturer Center: no promotion or code attribute, even for the manufacturer's own coupon (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+      "severity": "dropped"
+     },
+     {
+      "field": "member",
+      "note": "Manufacturer Center: no eligibility attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+      "severity": "dropped"
+     },
+     {
+      "field": "tier",
+      "note": "Manufacturer Center: no eligibility attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+      "severity": "dropped"
+     },
+     {
+      "field": "subscription",
+      "note": "Manufacturer Center: no eligibility attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+      "severity": "dropped"
+     },
+     {
+      "field": "new_customer",
+      "note": "Manufacturer Center: no eligibility attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+      "severity": "dropped"
+     },
+     {
+      "field": "retailer_availability",
+      "note": "Manufacturer Center has no field for who sells the product or where; retailer URLs and the retailer list are not sent (MC-0 \u00a74b).",
+      "severity": "dropped"
+     },
+     {
+      "field": "availability",
+      "note": "No stock or availability attribute; 'availability' is n/a for Manufacturer Center (answer/7073012).",
+      "severity": "dropped"
+     },
+     {
+      "field": "shelf_price",
+      "note": "No price or sale_price attribute; only suggestedRetailPrice (MSRP) exists (answer/7073012, discovery Attributes).",
+      "severity": "dropped"
+     },
+     {
+      "field": "provenance",
+      "note": "No provenance attribute; the brand's verified account is itself the provenance claim (MC-0 \u00a74a).",
+      "severity": "dropped"
+     },
+     {
+      "field": "validity_dates",
+      "note": "No offer validity; disclosureDate and releaseDate are product-lifecycle dates, not offer windows (MC-0 \u00a74b).",
+      "severity": "dropped"
+     },
+     {
+      "field": "rule_r1",
+      "note": "rule r1 off: nothing in this compile (publish_msrp is off, so no MSRP is sent either way).",
+      "severity": "info"
+     },
+     {
+      "field": "price",
+      "note": "Manufacturer mode: no shelf price; MSRP only on Manufacturer Center with publish_msrp.",
+      "severity": "dropped"
+     },
+     {
+      "field": "rule_r5",
+      "note": "rule r5 off: no size chart rows; on, 1 weight-range row(s) from the brand page's chart.",
+      "severity": "info"
+     },
+     {
+      "field": "image_from_brand_page",
+      "note": "Pampers Zzz Size 4, 104 ct: no image_url in the feed; imageLink is the line's image on the brand's own page (https://images.ctfassets.net/pfeg73t23esw/42JI7m5X9vpLZlpOmWxsk9/1474318b593a33988ab42d381d3187fc/37000833987_SwaddlersZZZs_CLEAN.jpg).",
+      "severity": "info"
+     },
+     {
+      "field": "description_from_brand_page",
+      "note": "Pampers Zzz Size 4, 104 ct: no description in the feed; description is the line's on the brand's own page.",
+      "severity": "info"
+     }
+    ],
+    "external_ref": null,
+    "held": true,
+    "id": 11,
+    "journal": [
+     {
+      "at": "2026-10-25T22:02:33+00:00",
+      "by": "parleo",
+      "event": "compiled",
+      "note": null
+     },
+     {
+      "at": "2026-10-25T22:02:33+00:00",
+      "by": "parleo",
+      "event": "held_for_merchant",
+      "note": "compiled; the brand's own team sends it"
+     },
+     {
+      "at": "2026-10-25T22:02:33+00:00",
+      "by": "alice@test",
+      "event": "sent_by_merchant",
+      "note": "uploaded in Manufacturer Center",
+      "sent_at": "2026-10-17T15:30:00+00:00",
+      "stated_by": "P&G content team"
+     }
+    ],
+    "listing_id": null,
+    "mode": "manufacturer",
+    "payload": {
+     "apiVersion": "manufacturers/v1",
+     "products": [
+      {
+       "attributes": {
+        "brand": "Pampers",
+        "count": {
+         "unit": "count",
+         "value": "104"
+        },
+        "description": "Say goodnight to overnight wakeups and hello to Pampers ZZZ, the overnight diaper designed with extra absorbency for more peaceful nights.",
+        "gtin": [
+         "037000833970"
+        ],
+        "imageLink": {
+         "imageUrl": "https://images.ctfassets.net/pfeg73t23esw/42JI7m5X9vpLZlpOmWxsk9/1474318b593a33988ab42d381d3187fc/37000833987_SwaddlersZZZs_CLEAN.jpg"
+        },
+        "productName": "Pampers Zzz",
+        "productPageUrl": "https://www.pampers.com/en-us/products/pampers-zzz",
+        "title": "Pampers Zzz Size 4, 104 ct"
+       },
+       "name": "US:en:00037000833970"
+      }
+     ]
+    },
+    "published_at": null,
+    "reason": "held_for_merchant",
+    "record_ref": "feed:pampers-2r1:00037000833970",
+    "spec_clause": null,
+    "spec_version": "manufacturers-v1-2026-10-05",
+    "status": "compiled_not_published",
+    "validation": {
+     "errors": [],
+     "ok": true
+    }
+   }
+  ],
+  "recorded": 4,
+  "sent_at": "2026-10-17T15:30:00+00:00",
+  "stated_by": "P&G content team"
+ },
+ "headers": {
+  "content-type": "application/json"
+ },
+ "status": 200
+}
