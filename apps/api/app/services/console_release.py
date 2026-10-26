@@ -186,6 +186,10 @@ def _feed_row(feed_rows: List[dict], variant: dict) -> Optional[dict]:
     return None
 
 
+#: 2T-3 (9): a feed's variant label that says it is retired ("Size 1 (retired)"): the record says so once, itself.
+_RETIRED_MARK = re.compile(r'\s*\(\s*retired\s*\)', re.I)
+
+
 def record_variants(record_ref: str, catalog: Optional[dict], feed_rows: Optional[List[dict]]) -> List[dict]:
     """The held record's variants: the catalog listing whose product_id is
     the record_ref, each with its feed row. [{variant_id, label, count, gtin,
@@ -194,7 +198,8 @@ def record_variants(record_ref: str, catalog: Optional[dict], feed_rows: Optiona
     out = []
     for v in listing.get('variants') or []:
         row = _feed_row(feed_rows or [], v) or {}
-        out.append({'variant_id': v.get('variant_id'), 'label': v.get('title') or row.get('variant_label'),
+        label = v.get('title') or row.get('variant_label')
+        out.append({'variant_id': v.get('variant_id'), 'label': _RETIRED_MARK.sub('', label).strip() if label else label,
                     'count': v.get('count') if v.get('count') is not None else row.get('pack_count'),
                     'gtin': v.get('gtin') or row.get('gtin'), 'sku': row.get('sku'), 'status': v.get('status'),
                     'successor': v.get('successor'),
@@ -319,6 +324,14 @@ def _variant_words(v: dict, chart) -> str:
     if weight:
         parts.append(weight)
     return ', '.join(parts)
+
+
+def _variant_short(v: dict) -> str:
+    """"Newborn 84 ct": the label without its commas, the count when the label does not say it."""
+    label = re.sub(r'\s*,\s*', ' ', v.get('label') or '').strip()
+    if v.get('count') and not re.search(r'\b\d+\s*ct\b', label):
+        label = f"{label} {v['count']} ct".strip()
+    return label
 
 
 def subtitle(variants: List[dict], chart) -> str:
@@ -489,8 +502,15 @@ def master_record(variants: List[dict], *, prices: Optional[List[dict]], retaile
     listed = list(dict.fromkeys(d for v in variants for d in v.get('retailers') or [] if _domain(d) not in own))
     if priced:
         day = manu.short_day(max(str(r.get('observed_at') or '') for r in priced))
+
+        def where(v):
+            mine = [r for r in variant_rows(priced, v)]
+            return ', '.join(dict.fromkeys(f"{rm._retailer_name(_domain(r.get('retailer_domain')))} ${r['price']}"
+                                           for r in mine)) or None
+        # 2T-3 (8): per variant, "Newborn 84 ct: Amazon $27.97, Walmart $27.97 · Size 1 96 ct: ..."
+        parts = [(v, where(v)) for v in variants]
         out.append({'k': f"Where to buy ({day})", 'prov': 'retail',
-                    'v': ' · '.join(f"{rm._retailer_name(_domain(r.get('retailer_domain')))} ${r['price']}" for r in priced)})
+                    'v': ' · '.join(f"{_variant_short(v)}: {text}" if many else text for v, text in parts if text)})
     elif listed:
         out.append({'k': 'Where to buy', 'prov': 'retail',
                     'v': T['record.where.unread'].format(names=manu._and([rm._retailer_name(_domain(d)) for d in listed]))})

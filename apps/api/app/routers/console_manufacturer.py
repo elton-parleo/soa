@@ -256,6 +256,8 @@ async def release_view(scope: CustomerScope, ms: MerchantScope, merchant: str, *
         'cell_states': list(rel.CELL_STATES),
         'pass_channels': rel.pass_channels(pubs),
         'readback_cycle': (cycle or {}).get('cycle_code'),
+        # 2T-3 (10): the agents the readback cycle ran, for the explainer's "Six agents read those surfaces"
+        'agents_count': len(facts.get('agents') or []) if cycle is not None else None,
         'read_errors': errors,
     }
 

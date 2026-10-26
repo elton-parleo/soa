@@ -15,6 +15,8 @@ Two kinds of input, each named where it is used:
 """
 from app.services import console_brand_overview as bo
 from app.services import console_release as rel
+from tests.test_console_2c3a import db  # noqa: F401  (fixture)
+from tests.test_console_read_models import http, upstream  # noqa: F401  (pytest fixtures)
 
 OWN = ['pampers.com']
 SKUS = ['sku_pg_swd_nb_84', 'sku_pg_swd_s1_96', 'sku_pg_amore_s1_132', 'sku_pg_zzz_s4_104', 'sku_pg_cr360_s3_168',
@@ -290,3 +292,43 @@ def test_the_workspace_counts_distinct_fields_per_record():
     assert (after['carried'], after['dropped']) == (sum(c for c, _ in per), sum(d for _, d in per))
     # one scale: no record's dropped count exceeds the fields it was asked to carry and drop
     assert after['dropped'] < before['dropped'] and after['carried'] > before['carried']
+
+
+# ── 8: where to buy, per variant ────────────────────────────────────────
+
+def test_where_to_buy_is_grouped_by_variant():
+    """FL15's three-variant Swaddlers record read "Amazon $27.97 · Walmart $27.97 · Amazon $27.97 · Walmart $27.97 ·
+    Amazon $49.77 · Walmart $49.77". FL15-shaped priced rows for its three SKUs."""
+    variants = [{'variant_id': s, 'sku': s, 'label': label, 'count': count, 'product_name': 'Pampers Swaddlers',
+                 'retailers': ['amazon.com', 'walmart.com']}
+                for s, label, count in (('sku_pg_swd_nb_84', 'Newborn, 84 ct', 84), ('sku_pg_swd_s1_96', 'Size 1', 96),
+                                        ('sku_pg_swd_s4_150', 'Size 4, 150 ct', 150))]
+    prices = [_shelf(d, v['sku'], 'regex', p) for v, p in zip(variants, ('27.97', '27.97', '49.77'))
+              for d in ('amazon.com', 'walmart.com')]
+    record = {f['k']: f for f in rel.master_record(variants, prices=prices, retailers=[], own_domains=OWN, chart=None)}
+    assert record['Where to buy (Oct 24)']['v'] == ('Newborn 84 ct: Amazon $27.97, Walmart $27.97 · Size 1 96 ct: '
+                                                    'Amazon $27.97, Walmart $27.97 · Size 4 150 ct: Amazon $49.77, '
+                                                    'Walmart $49.77')
+    one = {f['k']: f for f in rel.master_record(variants[:1], prices=prices, retailers=[], own_domains=OWN, chart=None)}
+    assert one['Where to buy (Oct 24)']['v'] == 'Amazon $27.97, Walmart $27.97'
+
+
+# ── 9: a retired variant's label says "(retired)" once, never twice ─────
+
+def test_the_retired_mark_is_stripped_from_the_feed_label():
+    """FL15: "Pampers Pure Protection, Size 1 (retired), 8 to 14 lb. Retired, successor AMORE"."""
+    catalog = {'listings': [{'product_id': 'feed:x:sku:pure', 'title': 'Pampers Pure Protection', 'variants': [
+        {'variant_id': 'sku_pg_pure_s1', 'title': 'Size 1 (retired)', 'status': 'retired',
+         'successor': {'product_name': 'Pampers AMORE'}}]}]}
+    variants = rel.record_variants('feed:x:sku:pure', catalog, [])
+    assert variants[0]['label'] == 'Size 1'
+    assert rel.subtitle(variants, None) == 'Size 1'
+
+
+# ── 10: /truesync serves the agents the cycle ran ───────────────────────
+
+def test_truesync_serves_the_agents_count(http, db, upstream):
+    from tests.test_console_2t1_overview_truesync import _read, _shape
+    _shape(db, http, upstream)
+    ts = _read(http, 'truesync')
+    assert ts['agents_count'] == 6
