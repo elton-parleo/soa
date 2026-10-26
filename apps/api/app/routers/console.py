@@ -264,6 +264,22 @@ async def _routing_inputs(scope: CustomerScope, row: dict, merchant: Optional[st
     return facts, {k: v for k, v in (('retailers', r_err), ('reference', f_err)) if v}
 
 
+async def _attribute_inputs(scope: CustomerScope, row: dict, slug: str) -> tuple:
+    """2T-1: (the cycle's judged attribute answers, supply's /reference, its
+    read error) as the Overview reads them: cached per cycle and reference.
+    ([], None, None) for a cycle that asked no attribute question."""
+    with engine.connect() as conn:
+        asks = rm.asks_attribute(conn, row)
+    if not asks:
+        return [], None, None
+    _, reference, r_err = await _reads(scope).get_reference(slug)
+    reference = reference if r_err is None else None
+    with engine.connect() as conn:
+        answers = console_cache.cycle_read(conn, row, 'attribute_answers', lambda: rm.attribute_answers(
+            conn, row, reference), console_cache.digest(reference))
+    return answers, reference, r_err
+
+
 async def _tenant_kind(scope: CustomerScope, slug: str) -> Optional[str]:
     """2L-4: the merchant's kind ('brand' | 'seller') from supply's /tenant;
     None when it cannot be read or does not list the merchant. 2Q-1 (B3): kept
@@ -287,8 +303,9 @@ async def get_overview(cycle: str = Query(...), merchant: Optional[str] = Query(
     TEMPLATES). With `merchant`, the last access run feeds the access signal;
     a failed read leaves it out and is named in `read_errors`."""
     started = time.monotonic()
+    ms = None
     if merchant:
-        await check_merchant(scope, merchant)   # 2H: a slug that is not the org's is a 404
+        ms = await check_merchant(scope, merchant)   # 2H: a slug that is not the org's is a 404
     row = dict(cycle_in_scope(cycle, scope))
     with engine.connect() as conn:
         prev, n_scored = parity.previous_scored_cycle(conn, row, cycle_customer_org_sql())
@@ -415,6 +432,14 @@ async def get_overview(cycle: str = Query(...), merchant: Optional[str] = Query(
     # 2L-3: the products' and the signals' example answers' narratives
     with engine.connect() as conn:
         narratives_svc.with_overview(body, narratives_svc.lines_for(conn, row['id']))
+    # 2T-1: a brand at retail (supply's mode manufacturer): the demo's lead, TrueSync card, charter,
+    # strip, revenue, week in short, ranked signals, agents' facts, products' deals, first picks, activity
+    if ms is not None and (next((m for m in ms.merchants or [] if m.get('slug') == merchant), None) or {}).get(
+            'mode') == 'manufacturer':
+        from app.routers.console_manufacturer import brand_overview
+        await brand_overview(scope, ms, merchant, row, body, prev=prev, rows=rows, vis=vis, true_value=tv,
+                             attribute_answers=answers, accuracy=accuracy, promo=promo, deals=_deals,
+                             reference=attr_reference, brand=brand)
     # 2Q-1 (B3): how long the read took, and what the cache served
     score_svc.log_event('overview.read', cycle=row['cycle_code'], previous=prev['cycle_code'] if prev else None,
                         ms=int((time.monotonic() - started) * 1000), cache=console_cache.describe())
@@ -856,12 +881,22 @@ async def get_truesync(merchant: str = Query(...), scope: CustomerScope = Depend
     # changes on publish, the held file's preview and the artifacts, as /publishing serves them
     record = next((m for m in ms.merchants or [] if m.get('slug') == merchant), None)
     if (record or {}).get('mode') == 'manufacturer':
-        from app.routers.console_manufacturer import publishing_view
-        view = await publishing_view(scope, ms, merchant, channels=[c for c in channels or [] if c.get('is_active', True)],
-                                     publications=pubs or [], catalog=catalog,
-                                     reference=reference if r_err is None else None, drift=drift)
+        from app.routers.console_manufacturer import brand_reads, publishing_view, release_view
+        active = [c for c in channels or [] if c.get('is_active', True)]
+        reads = await brand_reads(scope, merchant)
+        view = await publishing_view(scope, ms, merchant, channels=active, publications=pubs or [], catalog=catalog,
+                                     reference=reference if r_err is None else None, drift=drift, reads=reads)
         errors = view.pop('read_errors')
+        # 2T-1 (B3): the diff stays on /publishing; TrueSync is the release page
+        view.pop('diff', None)
         body.update(view)
+        release = await release_view(scope, ms, merchant, channels=active, publications=pubs or [], catalog=catalog,
+                                     reference=reference if r_err is None else None, reads=reads)
+        errors.update(release.pop('read_errors'))
+        # the matrix is one row per held record, on the channels this pass compiled for only
+        body['products'] = release.pop('records')
+        body['channels'] = [c for c in body.get('channels') or [] if c.get('id') in release['pass_channels']]
+        body.update(release)
         if errors:
             body.setdefault('read_errors', {}).update(errors)
     return body
@@ -1242,11 +1277,14 @@ def _merchant_meta(ms: MerchantScope) -> dict:
             'domain': m.get('domain')}
 
 
-def _revenue_model(conn, row: dict, inputs: dict, meta: dict, access_requests, vis_rows: Optional[list] = None) -> dict:
+def _revenue_model(conn, row: dict, inputs: dict, meta: dict, access_requests, vis_rows: Optional[list] = None,
+                   attribute_answers: Optional[list] = None, site: Optional[str] = None) -> dict:
+    """2T-1 (B2): `attribute_answers` for a brand at retail: Missed is its size answers wrong."""
     if vis_rows is None:
         vis_rows = rm.load_visibility(conn, row).get('byQuestion') or []
     catalog = revenue_svc.load_catalog_rows(conn, row)
-    shares = revenue_svc.revenue_shares(vis_rows, catalog, inputs['lost_gainable']['value'], kind=meta['kind'])
+    shares = revenue_svc.revenue_shares(vis_rows, catalog, inputs['lost_gainable']['value'], kind=meta['kind'],
+                                        attribute_answers=attribute_answers, site=site)
     return revenue_svc.build_model(shares, inputs, cycle=row['cycle_code'], kind=meta['kind'], name=meta['name'],
                                    domain=meta['domain'], access_requests=access_requests)
 
@@ -1308,9 +1346,16 @@ async def get_revenue(cycle: str = Query(...), merchant: Optional[str] = Query(N
         requests = [{**r, 'measured': parity._measured(r)} for r in (rm.accessibility_from_supply(payload).get('requests') or [])]
     else:
         errors['access'] = error
+    # 2T-1 (B2): a brand at retail's Missed is its size answers wrong, as its Overview reads it
+    answers, site = None, None
+    if (next((m for m in ms.merchants or [] if m.get('slug') == ms.slug), None) or {}).get('mode') == 'manufacturer':
+        answers, _reference, a_err = await _attribute_inputs(scope, row, ms.slug)
+        if a_err is not None:
+            errors['reference'] = a_err
+        site = next((a['site'] for a in answers if a.get('site')), None)
     with engine.connect() as conn:
         inputs = revenue_svc.inputs_view(revenue_svc.load_inputs(conn, scope.org.id, ms.slug), ms.slug)
-        body = _revenue_model(conn, row, inputs, _merchant_meta(ms), requests)
+        body = _revenue_model(conn, row, inputs, _merchant_meta(ms), requests, attribute_answers=answers, site=site)
     meta = _merchant_meta(ms)
     rows, vis = await _baseline_rows(scope, row, ms, meta, errors)
     if rows:

@@ -65,12 +65,13 @@ def test_truesync_and_publishing_carry_the_same_objects(http, db, upstream):
     _dump('truesync-2r2.json', ts)
     _dump('publishing-2r2.json', pub)
     assert ts['mode'] == pub['mode'] == 'manufacturer'
-    for key in ('surfaces', 'diff', 'preview', 'artifacts', 'held'):
+    for key in ('surfaces', 'preview', 'artifacts', 'held'):
         assert ts[key] == pub[key], key
-    # the matrix reads the held feed records as its catalog listings (record_ref = the listing's product_id)
+    # 2T-1 (B3): the diff stays on /publishing; the matrix is one row per held record, in the held/blocked vocabulary
+    assert 'diff' not in ts and pub['diff']
     cells = {p['name']: {k: c['s'] for k, c in p['cells'].items()} for p in ts['products']}
     assert list(cells) == ['Pampers Swaddlers', 'Pampers Pure Protection', 'Pampers AMORE', 'Pampers Zzz']
-    assert {(c['schema_org'], c['acp'], c['manufacturer_center']) for c in cells.values()} == {('compiled', 'compiled', 'na')}
+    assert {(c['schema_org'], c['acp'], c['manufacturer_center']) for c in cells.values()} == {('held', 'blocked', 'held')}
 
 
 def test_the_surfaces_from_33(http, db, upstream):

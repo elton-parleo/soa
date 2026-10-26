@@ -28,3 +28,12 @@ Not from #33 (the soa side of the test, unchanged): 2P-1's two cycles, and their
 `/deals`, which are not 2R-1's routes.
 
 Recorded with no production read or write and no network call: the harness is in memory.
+
+2T-1: `deals-20261020.json` and `deals-20261021.json` are #33's `GET /merchants/pampers-2r1/deals?as_of=<day>` after its
+compile, recorded on Oct 26, 2026 by `recorder_deals.py` in the same harness at the same commit (`4ec9a8a`), run as:
+
+    SOA_2T1_RECORD=<dir> pytest tests/test_zz_record_2t1.py
+
+#33's merchant has no live deal: its retailer rows were never read (`shelf_seen` 0 everywhere), so supply lists every
+retailer under `walled` and `deals` is empty. The tests that need a live deal keep the pair's `/deals` (2P-1); one test
+serves this recording and checks that nothing deal-shaped is invented from it.

@@ -8264,3 +8264,90 @@ clash keeps 2Q-1's line. Copy only; `SCORER_VERSION` stays 17.
 and its own supply answers (the /reference attributes, the deals) served for it too. One state #33's harness did not
 produce (every Manufacturer Center record failing) is derived from its rows in the test that needs it.
 `tests/test_console_2r2_clash.py` on FL15's shape by hand and on the pair over HTTP.
+
+## 2T-1: the Overview and TrueSync read models, to the console demo's shape for a brand at retail
+
+The spec is the console demo (`parleohq/truesync` `console-demo`: `data/pg.ts`, `data/v2_pg.ts`, `screens/v2.tsx`,
+`v21.tsx`, `v28.tsx`, `Charter.tsx`). For a merchant whose supply `mode` is `manufacturer` only; every other merchant's
+`/overview` and `/truesync` are unchanged. No migration, no model call, `SCORER_VERSION` stays 17. Builders:
+`app/services/console_brand_overview.py` (B1, B2, B4; copy in `BRAND_OVERVIEW_TEMPLATES`) and
+`app/services/console_release.py` (B3; copy in `RELEASE_TEMPLATES`); reads: `app/routers/console_manufacturer.py`
+(`brand_reads`, `cycle_facts`, `release_view`, `brand_overview`). A demo field with no source is served `null`.
+
+### B1: `/overview`'s lead, TrueSync card and charter
+
+* `lead` `{headline, kind, signal, pool, facts[2], do, owner, ctas}`: the headline is chosen by the kind of the top
+  ranked signal (B2's list, the one `signals[]` serves): `size_chart`, `retired`, `deal`, `price` (another brand's
+  price or a wrong price), `claim`, `store`, `access`. `facts` are two tiles `{who, value, of, cap}` from that signal's
+  own numbers (size chart: the variant the most sources disagree on, its ranges, then the brand's markup lines; retired:
+  the line and its successor named; deal: named of asked, then the promo pass-through; price: the signal over the
+  denominator its own detail states, then prices right). `do` names the surfaces held (TrueSync's workspace). `owner`
+  is `null`: no owner is recorded (E18).
+* `truesync_card` `{products, cells: {n, of}, drifting, published, blocked, surfaces[{channel, name, compiled, of,
+  blocked, line}], mode_note}`: TrueSync's `workspace` (B3) as it is, never a second count.
+* `charter[4]` (attribute, coverage, presence, promo), each the score's brand tile (`value`, `of` = its `denominator`,
+  `delta`, `state`, asserted equal in a test) with `big`, `cap` and `second_line` from the tile's own counts
+  (`metric_counts`): pages and answers; the club-only line's where-to-buy answers naming a club (only when the feed has
+  a club-only line); the rival first; the biggest live deal's SKUs and its named of asked. Presence keeps the tile's
+  `value` (named) and serves the demo's big number, the first picks, as `first`/`big`.
+
+### B2: the rest
+
+* `strip` `{score, delta, vs_cycle, moved: {n, of, keys}, moved_line, pillars[{code, name, score, max,
+  applicable_max, delta}], approvals: null, actions: null}`: the score read `/score` serves; moved is the brand tiles
+  whose delta is not 0. B4: each pillar's delta is its own field, never in the fraction.
+* `revenue`: the revenue model (`_revenue_model`) with `headline`, `how_calculated` (the model's `basis`) and
+  `mode_note`. For a brand at retail with size questions Missed is the share of size answers wrong (`basis:
+  'attribute'`, `missed.measured.attribute`), counted once as before; the price share is the second clause, never
+  added. `/revenue` reads the same model, so Impact and the Overview agree. The headline is the facts sentence when
+  the top signal is a size chart, a retired line or a claim, else the first-pick sentence.
+* `week_in_short[≤5]` `{key, text, route}`: attribute, where the misses sit, the retired line's sentence, coverage, promo.
+* `by_surface[s].agents[]` gain `facts_right {right, of, weight, price}` and `deals_line` ("Named N of M live deals":
+  of the agent's cheapest-place answers about a SKU with a live deal, those naming one).
+* `by_surface[s].signals[]`: the existing generators (all kept) plus, on `all`, `size_chart` (2M-1's weight rows:
+  two charts for a size, else the markup, else retailer pages), `retired` (2L-2), `store` (a club-only line sent to a
+  non-club store: the feed's retailers all clubs, `named_stores` in order), `deal` (the biggest live deal named by fewer
+  than asked). Each carries `kind`, `pool` (`lost` | `missed` | `root`), `rank`, `pool_value`. Ranked by the pool's
+  modeled value (the dollars when entered, else the share: the same order), then count; ties keep the order made.
+* `by_surface[s].products[]` gain `live_deals` (supply's deals live on the SKU, "Amazon $27.97 with save 40% on 1 when
+  you buy 2", appended to `live`), `check` (`right` | `partly_right` | `wrong` | `none`; partly right: some runs right,
+  some wrong, none another brand's), the weight fact first on `issue` ("Weight right in 5 of 5."), `quoted` collapsed to
+  the top three amounts with "+N more" and `quoted_all`, `signal` (the ranked signal it belongs to).
+* `first_pick` `{footnote, singles, no_single_pick, of}`; `activity[]` `{at, day, stage, icon, text}` newest first:
+  study started (first run), brand page read, shelf reads (walled named), study complete (last run, usable), compiled
+  and held (supply's journal); approvals come later.
+* `vs_label` "vs Oct 14" (the prior cycle's local start day), `vs_cycle` its code; `header` `{skus, records,
+  retailers_checked, retailers, brand_domain}` (B4).
+
+### B3: `/truesync` as the release page
+
+* `workspace` `{records, compiled: {n, of}, published, blocked, fields: {carried, approximated, dropped}, disagree,
+  walled: {n, domains}, last_verified, next_check: null, surfaces[], mode_note}`: the hold's rows (newest per record
+  per channel); fields sum their expressiveness lines (a `rule_rN` line is a rule applied, not a field).
+* `release` `{name, named: false, compiled_at, day, rules_on: {on, of}, products, surfaces_held, approved_by: null,
+  requested, status, surfaces[{channel, name, spec_version, status, in_pass}], notes[2], channels}`; `releases[]` one per
+  compile (distinct `compiled_at`), newest first, `what_changed` the feed version (known for the newest only) and rule
+  changes since the last; no roll back.
+* `destinations[]`: step 1 the Manufacturer Center file; step 2 only when another merchant of the tenant holds a
+  compile not sent (supply has no plan record, so `planned_on` is `null`).
+* `products[]` (the matrix) one row per held record (`record_ref`), cells on the channels this pass compiled only, in
+  `cell_states` (`held | published | blocked | na`) with `disagree`; each row `sub`, `variants`, `retired`, `successor`,
+  `disagree {agents, of, which}`, `record[]` `{k, v, prov, note}`, `drift[]`/`drift_all[]` (weight, price, one shelf row
+  per live deal), `timeline[]`, `compiler[]` `{channel, spec_version, rule, rules_applied, state, lines[{mark, field,
+  note}]}`. Answers match a record's variant by id, else by the same label, else by line and size when one variant has
+  them. `channels` narrows to the pass; `diff` stays on `/publishing` only.
+
+### Served `null`, and why
+
+`lead.owner` (no owner recorded); `strip.approvals`, `strip.actions` (none recorded); `workspace.next_check` (no
+schedule); `release.approved_by` (no approval recorded for a compile); `release.name` is the template, `named: false`
+(no release is named); `destinations[1].planned_on` (no plan record); a charter tile's `second_line` with nothing to
+count (the coverage line with no club-only line). Not served at all: WebMCP (supply has no such channel), Merchant
+Center and the deal directory on a brand's matrix, "Not carried" (no shelf read says a retailer does not carry a SKU;
+the record says "Not in the feed").
+
+### Tests
+
+`tests/test_console_2t1_overview_truesync.py` on 2P-1's pair with 2R-2's recordings and #33's `/deals`
+(`deals-20261020.json`, `deals-20261021.json`, recorded by `supply_2r1/recorder_deals.py` in #33's harness at
+4ec9a8a; its merchant has no live deal). `SOA_2T1_SAMPLE_DUMP=<dir>` writes the samples.

@@ -1,0 +1,50 @@
+{
+ "body": {
+  "as_of": "2026-10-21T23:59:59.999999+00:00",
+  "deals": [],
+  "kind": "brand",
+  "merchant": "pampers-2r1",
+  "partial": [],
+  "read_date": null,
+  "retailers": [
+   {
+    "asked": 0,
+    "retailer_domain": "amazon.com",
+    "rows": 2,
+    "shelf_seen": 0,
+    "with_deals": 0
+   },
+   {
+    "asked": 0,
+    "retailer_domain": "samsclub.com",
+    "rows": 1,
+    "shelf_seen": 0,
+    "with_deals": 0
+   },
+   {
+    "asked": 0,
+    "retailer_domain": "target.com",
+    "rows": 1,
+    "shelf_seen": 0,
+    "with_deals": 0
+   },
+   {
+    "asked": 0,
+    "retailer_domain": "walmart.com",
+    "rows": 1,
+    "shelf_seen": 0,
+    "with_deals": 0
+   }
+  ],
+  "walled": [
+   "amazon.com",
+   "samsclub.com",
+   "target.com",
+   "walmart.com"
+  ]
+ },
+ "headers": {
+  "content-type": "application/json"
+ },
+ "status": 200
+}
