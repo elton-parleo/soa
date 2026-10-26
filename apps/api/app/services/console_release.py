@@ -386,7 +386,9 @@ def readback(variants: List[dict], *, attribute_answers: List[dict], true_value_
         named = sum(1 for j in judged if did in j.get('named') or [])
         out.append({'agent': 'shelf', 'fact': 'deal', 'variant': mine[0].get('variant_label'),
                     'said': ppt.label(deal, mine[0]), 'truth': T['drift.shelf.truth'].format(named=named, asked=len(judged)),
-                    'verdict': 'right' if named else 'missed', 'run': None, 'surface': None,
+                    # 2T-3 (5): the promo rule: right when every answer on the SKU named it, left out when none did
+                    'verdict': 'right' if judged and named == len(judged) else 'missed' if not named else 'partial',
+                    'run': None, 'surface': None,
                     'named': named, 'asked': len(judged)})
     rank = {'wrong': 0, 'partial': 1, 'missed': 2, 'right': 3}
     return sorted(out, key=lambda r: (r['agent'] == 'shelf', rank.get(r['verdict'], 4), r['fact'], str(r['agent'])))

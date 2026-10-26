@@ -212,3 +212,24 @@ def test_one_deal_label_feeds_the_signal_its_detail_the_live_cell_and_the_shelf_
     assert [l['said'] for l in shelf] == ['Amazon: 25% off, $36.18 from $47.99']
     for text in (signal['title'], signal['detail'], shelf[0]['said']):
         assert 'percent savings' not in text and '-25%' not in text
+
+
+# ── 5: the shelf row's verdict is the promo rule's ──────────────────────
+
+def test_the_shelf_row_is_right_only_when_every_answer_named_the_deal():
+    """FL15's Walmart Rollback row read "Named in 3 of 6 answers · Right"."""
+    deals = fl15_deals()
+    variant = {'variant_id': 'sku_pg_swd_nb_84', 'sku': 'sku_pg_swd_nb_84', 'label': 'Newborn, 84 ct'}
+
+    def verdict(named, asked):
+        texts = ['Walmart has a Rollback at $24.97.'] * named + ['Try Target.'] * (asked - named)
+        answers = [{'run_id': i, 'surface': 'consumer_ui', 'intent': 'cheapest_place', 'text': t,
+                    'source_ref': {'variant_id': 'sku_pg_swd_nb_84', 'sku': 'sku_pg_swd_nb_84'}}
+                   for i, t in enumerate(texts)]
+        promo = ppt.count(answers, deals)
+        row = next(l for l in rel.readback([variant], attribute_answers=[], true_value_rows=[], promo=promo,
+                                           deals=deals, brand='Pampers') if l['agent'] == 'shelf')
+        return row['truth'], row['verdict']
+    assert verdict(3, 6) == ('Named in 3 of 6 answers', 'partial')
+    assert verdict(6, 6) == ('Named in 6 of 6 answers', 'right')
+    assert verdict(0, 6) == ('Named in 0 of 6 answers', 'missed')
