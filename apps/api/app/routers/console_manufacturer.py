@@ -358,9 +358,16 @@ async def post_sent(body: SentStatement = Body(...), merchant: str = Query(...),
     if 'publications' in errors:
         raise HTTPException(status_code=502, detail=f"TrueSync publications unavailable: {errors['publications']}")
     rows = manu.latest_by_record(pubs, body.channel)
-    if not [p for p in rows if manu.is_held(p)]:
+    held = [p for p in rows if manu.is_held(p)]
+    if not held:
         why = 'is blocked' if any(manu.is_blocked(p) for p in rows) else 'holds nothing'
         raise HTTPException(status_code=409, detail=f"{body.channel} {why} for {merchant!r}; nothing was held to send")
+    # 2R-2b: a file cannot have been sent before it was compiled (supply accepts it; soa says no first)
+    compiled = max((_when(str(p['compiled_at'])) for p in held if p.get('compiled_at')), default=None)
+    if compiled is not None and _when(body.sent_at) < compiled:
+        raise HTTPException(status_code=422, detail=(
+            f"sent_at {body.sent_at} is before the held {body.channel} file was compiled "
+            f"({compiled.isoformat()}): a file cannot be sent before it exists"))
     actor = user.get('email') or user.get('sub')
     statement = {'channel': body.channel, 'sent_at': body.sent_at, 'stated_by': body.stated_by, 'actor': actor,
                  'note': body.note, **({'publication_ids': body.publication_ids} if body.publication_ids else {})}

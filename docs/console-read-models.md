@@ -8227,7 +8227,8 @@ A merchant not in manufacturer mode: `/rules`, `/publishing` and the compile are
 
 `POST /api/console/publishing/sent?merchant=` `{channel, sent_at, stated_by, note?, publication_ids?}` (members and
 operators): `stated_by` who says it was sent (required), the signed-in user forwarded as `actor`. soa answers 409 itself
-for a channel that holds nothing (ACP while blocked, supply's words) and 422 for a bad or future `sent_at`; otherwise
+for a channel that holds nothing (ACP while blocked, supply's words) and 422 for a bad or future `sent_at`, or one
+before the held file's `compiled_at` (2R-2b: supply accepts it; the detail names both dates); otherwise
 supply journals `sent_by_merchant` per held row and soa answers the re-read Publishing with supply's `recorded`.
 
 `/revenue` gains `locked` for a merchant in manufacturer mode. Before a send: "Cause shows once <merchant> publishes the
@@ -8242,6 +8243,9 @@ Impact's baseline measures through `_compared(…, prev=before)`.
 the org's token, answered with supply's content type, `Content-Disposition` and `X-TrueSync-*` headers. A blocked
 channel's 409 is answered as JSON with supply's clause, never a file, and never kept. A file is kept in
 `console_cache` per org, merchant, channel, publication and the rows' `compiled_at`.
+The API's CORS middleware (`app/app.py`, the one place it is configured) exposes `Content-Disposition`,
+`X-TrueSync-Compiled-At`, `X-TrueSync-Record-Count` and `X-TrueSync-Validator`, so the console can read them
+cross-origin (2R-2b).
 
 ### B5: H34, a quote for a variant the record does not have
 

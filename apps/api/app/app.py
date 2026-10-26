@@ -57,6 +57,10 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    # 2R-2b: the console downloads the compiled file cross-origin and names it from
+    # Content-Disposition; the X-TrueSync-* lines say when it was compiled and how it validated
+    expose_headers=["Content-Disposition", "X-TrueSync-Compiled-At", "X-TrueSync-Record-Count",
+                    "X-TrueSync-Validator"],
 )
 
 # Apply JWT verification to all routes in these routers.

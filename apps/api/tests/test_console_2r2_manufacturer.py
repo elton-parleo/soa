@@ -238,23 +238,45 @@ def test_the_sent_statement_goes_to_supply_as_33_takes_it(http, db, upstream):
     _shape(db, http, upstream)
     as_('alice')   # the brand states it: a member may
     post = lambda body: http.post('/api/console/publishing/sent', params={'merchant': SLUG}, json=body)  # noqa: E731
-    r = post({'channel': 'manufacturer_center', 'sent_at': '2026-10-17T15:30:00Z', 'stated_by': 'P&G content team',
+    r = post({'channel': 'manufacturer_center', 'sent_at': '2026-10-25T23:00:00Z', 'stated_by': 'P&G content team',
               'note': 'uploaded in Manufacturer Center'})
     assert r.status_code == 200, r.text
     [call] = [c for c in upstream.calls if c['method'] == 'POST']
     assert call['token'] == TOKEN_A and call['path'] == f'{BASE}/publications/sent'
-    assert call['json'] == {'channel': 'manufacturer_center', 'sent_at': '2026-10-17T15:30:00Z',
+    assert call['json'] == {'channel': 'manufacturer_center', 'sent_at': '2026-10-25T23:00:00Z',
                             'stated_by': 'P&G content team', 'actor': 'alice@test',
                             'note': 'uploaded in Manufacturer Center'}
     assert r.json()['recorded'] == 4 and r.json()['mode'] == 'manufacturer'
     # ACP is blocked: nothing held to send, as supply says it (and soa does not ask it)
-    r = post({'channel': 'acp', 'sent_at': '2026-10-17T15:30:00Z', 'stated_by': 'P&G content team'})
+    r = post({'channel': 'acp', 'sent_at': '2026-10-25T23:00:00Z', 'stated_by': 'P&G content team'})
     assert r.status_code == 409 and r.json()['detail'] == "acp is blocked for 'pampers-2r1'; nothing was held to send"
     assert r.json()['detail'] == f2r2.body('sent-acp-409')['detail']
     assert post({'channel': 'manufacturer_center', 'sent_at': 'yesterday', 'stated_by': 'x'}).status_code == 422
     assert post({'channel': 'manufacturer_center', 'sent_at': '2999-01-01', 'stated_by': 'x'}).status_code == 422
-    assert post({'channel': 'manufacturer_center', 'sent_at': '2026-10-17', 'stated_by': ' '}).status_code == 422
+    assert post({'channel': 'manufacturer_center', 'sent_at': '2026-10-25T23:00:00Z', 'stated_by': ' '}).status_code == 422
     assert len([c for c in upstream.calls if c['method'] == 'POST']) == 1
+
+
+def test_a_send_cannot_predate_its_compile(http, db, upstream):
+    """2R-2b. #33 compiled the held Manufacturer Center file Oct 25 (22:02 UTC) and accepted a send stated for
+    Oct 17; soa refuses it before forwarding, naming both dates. Later the same day is recorded."""
+    _shape(db, http, upstream)
+    compiled = f2r2.body('tenant-held')['merchants'][0]['held']['compiled_at']
+    assert compiled.startswith('2026-10-25T22:')
+    as_('alice')
+    post = lambda sent_at: http.post('/api/console/publishing/sent', params={'merchant': SLUG},  # noqa: E731
+                                     json={'channel': 'manufacturer_center', 'sent_at': sent_at,
+                                           'stated_by': 'P&G content team'})
+    r = post('2026-10-17T15:30:00Z')
+    assert r.status_code == 422, r.text
+    assert r.json()['detail'] == (
+        f"sent_at 2026-10-17T15:30:00Z is before the held manufacturer_center file was compiled "
+        f"({compiled}+00:00): a file cannot be sent before it exists")
+    assert not [c for c in upstream.calls if c['method'] == 'POST']   # never forwarded
+    r = post('2026-10-25T23:00:00Z')
+    assert r.status_code == 200, r.text
+    assert r.json()['recorded'] == 4
+    assert [c['json']['sent_at'] for c in upstream.calls if c['method'] == 'POST'] == ['2026-10-25T23:00:00Z']
 
 
 def test_once_sent_impact_and_the_backtest_read_the_next_cycle(http, db, upstream):
@@ -341,6 +363,25 @@ def test_the_artifact_comes_through_soa_with_33_s_headers(http, db, upstream):
     r = get(channel='acp')
     assert r.status_code == 409 and r.headers['content-type'].startswith('application/json')
     assert r.json()['spec_clause'] == CLAUSE and r.json()['reason'] == 'blocked' and r.json()['record_count'] == 4
+
+
+def test_cors_exposes_the_download_headers_on_the_artifact_route(http, db, upstream):
+    """2R-2b: the console (another origin) reads the filename and the X-TrueSync-* lines of the file it downloads.
+    Starlette answers the preflight, then names the exposed headers on the GET itself."""
+    _shape(db, http, upstream)
+    origin = 'http://localhost:5173'
+    as_('alice')
+    preflight = http.options('/api/console/truesync/artifact', headers={
+        'Origin': origin, 'Access-Control-Request-Method': 'GET',
+        'Access-Control-Request-Headers': 'authorization, x-parleo-customer'})
+    assert preflight.status_code == 200 and preflight.headers['access-control-allow-origin'] == origin
+    r = http.get('/api/console/truesync/artifact', params={'merchant': SLUG, 'channel': 'manufacturer_center'},
+                 headers={'Origin': origin})
+    assert r.status_code == 200, r.text
+    exposed = [h.strip().lower() for h in r.headers['access-control-expose-headers'].split(',')]
+    assert exposed == ['content-disposition', 'x-truesync-compiled-at', 'x-truesync-record-count',
+                       'x-truesync-validator']
+    assert r.headers['content-disposition'] == f2r2.recorded('artifact-manufacturer_center')['headers']['content-disposition']
 
 
 def test_the_artifact_is_kept_per_compiled_at(http, db, upstream, monkeypatch):
