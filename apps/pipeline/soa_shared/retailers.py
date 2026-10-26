@@ -28,6 +28,8 @@ KNOWN_RETAILERS = {
     'target': 'target.com', 'target circle': 'target.com',
     'costco': 'costco.com', "sam's club": 'samsclub.com', 'sams club': 'samsclub.com',
     "bj's": 'bjs.com', 'bjs': 'bjs.com', 'bjs wholesale': 'bjs.com',
+    # 2T-4: the store's full name, as FL14's and FL15's answers write it
+    "bj's wholesale": 'bjs.com', "bj's wholesale club": 'bjs.com', 'bjs wholesale club': 'bjs.com',
     'kroger': 'kroger.com', 'cvs': 'cvs.com', 'walgreens': 'walgreens.com',
     'rite aid': 'riteaid.com', 'meijer': 'meijer.com', 'h-e-b': 'heb.com', 'heb': 'heb.com',
     'publix': 'publix.com', 'whole foods': 'wholefoodsmarket.com',
@@ -117,6 +119,70 @@ def is_store_name(name) -> bool:
     if not core:
         return False
     return core in KNOWN_RETAILERS or core in STORE_LABELS or bool(_DOMAIN_IN_TEXT.fullmatch(_norm_name(name)))
+
+
+# ─── One retailer identity (2T-4) ──────────────────────────────────────────
+#
+# A store is written many ways: a domain ("walmart.com", "https://www.
+# walmart.com/ip/1"), a name ("Walmart", "Walmart.com"), a list item's cut
+# ("**Walmart** -", "at Walmart:"), the brand's own site in words ("Pampers
+# Official Store", 2N-1). The brand's fact index holds domains (the feed's
+# retailer URLs), a claim states whatever the answer wrote. retailer_key
+# turns either side into one key, the store's domain, so the two are
+# compared as stores, never as strings.
+
+#: What a list item or a sentence puts around a store's name.
+_KEY_NOISE = re.compile(r"[*_`#>\[\]()\"“”]+|^\s*(?:[-•·]|\d+[.)])\s*")
+_KEY_LEAD = re.compile(r"^(?:at|from|on|via|in|buy (?:it )?(?:at|from|on)|available (?:at|on)|try)\s+", re.I)
+_KEY_TAIL = re.compile(r"[\s:–—,.!?-]+$")
+
+
+def retailer_key(value, *, own_domains: Iterable[str] = (), brand: Optional[str] = None) -> Optional[str]:
+    """
+    2T-4: the store a written value names, as its domain, or None when it
+    names no store we can say. A domain or URL is its host; a name is the
+    retailer lexicon's (KNOWN_RETAILERS, STORE_LABELS), with the words a
+    list item or sentence puts around it dropped and a store word beside it
+    allowed ("Walmart store", "Amazon.com online"); the brand's own site in
+    words is its first own domain ("Pampers Official Store", "the Pampers
+    website"). The same rule for a fact index's domains and a claim's words.
+    """
+    text = _norm_name(value)
+    if not text:
+        return None
+    own = [d for d in (ea.normalize_domain(d) for d in own_domains or []) if d]
+    domain = ea.normalize_domain(text) if ' ' not in text.strip() else None
+    if domain is None:
+        m = _DOMAIN_IN_TEXT.search(text)
+        domain = ea.normalize_domain(m.group(1)) if m else None
+    if domain:
+        return domain
+    core = _KEY_TAIL.sub('', _KEY_LEAD.sub('', _KEY_NOISE.sub(' ', text).strip()).strip()).strip()
+    if core in KNOWN_RETAILERS:
+        return KNOWN_RETAILERS[core]
+    if core in STORE_LABELS:
+        return STORE_LABELS[core]
+    words = [w for w in re.split(r"[^a-z0-9'&-]+", core) if w]
+    bare = ' '.join(w for w in words if w not in _STORE_WORDS)
+    if bare in KNOWN_RETAILERS:
+        return KNOWN_RETAILERS[bare]
+    if bare in STORE_LABELS:
+        return STORE_LABELS[bare]
+    if own and brand:
+        brand_words = [w for w in _norm_name(brand).split() if w]
+        site = {'official', 'site', 'website', 'web', 'store', 'shop', 'page', 'product', 'online', 'the', 'own',
+                'brand', 'directly', 'direct', 'from'}
+        named = [w.removesuffix("'s") for w in words]
+        if brand_words and all(w in named for w in brand_words) and \
+                all(w in site or w in brand_words for w in named):
+            return own[0]
+    return None
+
+
+def same_retailer(a, b, *, own_domains: Iterable[str] = (), brand: Optional[str] = None) -> bool:
+    """2T-4: whether two written values name the same store (retailer_key)."""
+    ka = retailer_key(a, own_domains=own_domains, brand=brand)
+    return ka is not None and ka == retailer_key(b, own_domains=own_domains, brand=brand)
 
 
 _DOMAIN_IN_TEXT = re.compile(r'([a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:com|net|org|co|us|io|shop|store|ca|co\.uk))\b')

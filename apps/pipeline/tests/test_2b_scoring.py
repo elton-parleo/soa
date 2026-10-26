@@ -361,16 +361,31 @@ def availability(mentions, **ref):
                        source_ref=source_ref)
 
 
-def test_a_retailer_not_in_the_list_is_fabricated_availability():
+def test_a_retailer_not_in_a_brands_list_is_unverified_never_fabricated():
+    """2T-4: a brand's list is its feed's retailer URLs, where it is sold and
+    not where it isn't: Amazon off it is unverified, and the answer carries
+    no fabricated_availability flag."""
     result = availability([{'name': 'Amazon', 'role': 'recommendation'},
                            {'name': 'Target', 'role': 'recommendation'}])
+    assert 'fabricated_availability' not in result.flag_names
+    out = af.fabricated_availability([{'name': 'Amazon', 'role': 'recommendation'},
+                                      {'name': '**Walmart** -', 'role': 'recommendation'}],
+                                     retailer_list=ACME_REF['retailer_list'], own_domain='acmebaby.example',
+                                     merchant_kind='brand')
+    assert out['fabricated'] == [] and [r['domain'] for r in out['unverified']] == ['amazon.com']
+    assert [r['domain'] for r in out['listed']] == ['walmart.com']
+
+
+def test_a_retailer_off_a_sellers_own_site_is_still_fabricated_availability():
+    result = availability([{'name': 'Amazon', 'role': 'recommendation'}],
+                          merchant_kind='seller', retailer_list=['acmebaby.example'])
     (flag,) = [f for f in result.flags if f['flag'] == 'fabricated_availability']
     assert [r['domain'] for r in flag['retailers']] == ['amazon.com']
 
 
-def test_online_counts_for_a_brand_without_its_own_site_listed():
+def test_online_for_a_brand_without_its_own_site_listed_is_unverified():
     result = availability([{'name': 'online retailers', 'role': 'recommendation'}])
-    assert 'fabricated_availability' in result.flag_names
+    assert 'fabricated_availability' not in result.flag_names
 
 
 def test_online_is_fine_for_a_seller():

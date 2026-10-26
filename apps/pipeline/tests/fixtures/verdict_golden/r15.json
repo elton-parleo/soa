@@ -1,7 +1,7 @@
 {
   "id": "r15",
-  "rule": "\u00a72 fabricated_availability",
-  "source": "brand with two retailers; the answer places it at Amazon",
+  "rule": "\u00a72 fabricated_availability (2T-4: never for a brand)",
+  "source": "brand with two retailers; the answer places it at Amazon, off the feed: unverified, no flag (2T-4)",
   "attribution": "claude-reviewed, elton-pending",
   "expectation": {
     "type": "price",
@@ -53,8 +53,6 @@
   "verdict_before": "wrong",
   "verdict_after": "exact",
   "reason_code_after": null,
-  "flags_after": [
-    "fabricated_availability"
-  ],
+  "flags_after": [],
   "reason_after": "stated 17.99; the page said 17.99"
 }

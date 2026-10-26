@@ -22,6 +22,15 @@ fabricated_availability
     merchant's own site sells it — always for a seller, and for a brand
     only when its own domain is in its retailer list.
 
+    2T-4: never for a brand. A brand's retailer list is its feed's retailer
+    URLs: where it is sold, not where it isn't. A store off it is
+    `unverified` (Sam's Club may carry a club pack the feed has no URL
+    for), and the flag, which made the answer High, is never raised for one.
+    A seller's list is its own site, a closed set, and is checked as before.
+    A name is read as a store by soa_shared/retailers.retailer_key, the rule
+    the brand fact index reads its domains with ("Walmart -", "Walmart.com",
+    walmart.com are one store).
+
 grounded by source
     Each cited domain is own_domain (the merchant's own site, or a
     subdomain of it), listed_retailer (in the record's retailer list), or
@@ -38,7 +47,7 @@ from soa_shared import expected_answers as ea
 # In soa_shared/retailers.py (2C), shared with the catalog-tier generator;
 # re-exported here unchanged.
 from soa_shared.retailers import (  # noqa: E402,F401
-    KNOWN_RETAILERS, RETAILER_NAMES, _DOMAIN_IN_TEXT, _norm_name, retailer_name, retailers_named,
+    KNOWN_RETAILERS, RETAILER_NAMES, _DOMAIN_IN_TEXT, _norm_name, retailer_key, retailer_name, retailers_named,
 )
 
 ONLINE = 'online'
@@ -56,14 +65,10 @@ def claimed_retailer(name, *, own_domain: Optional[str]) -> Optional[str]:
     text = _norm_name(name)
     if not text:
         return None
-    domain_match = _DOMAIN_IN_TEXT.search(text)
-    if domain_match:
-        return ea.normalize_domain(domain_match.group(1))
-    if text in KNOWN_RETAILERS:
-        return KNOWN_RETAILERS[text]
+    key = retailer_key(text)
+    if key:
+        return key
     stripped = re.sub(r'^(at |from |on |via )', '', text).strip(' .')
-    if stripped in KNOWN_RETAILERS:
-        return KNOWN_RETAILERS[stripped]
     if _OWN_SITE.search(text) and own_domain:
         return own_domain
     if _ONLINE.match(stripped):
@@ -83,8 +88,9 @@ def _domain_in(domain: Optional[str], allowed: Iterable[str]) -> bool:
 def fabricated_availability(retailer_mentions, *, retailer_list: List[str],
                             own_domain: Optional[str], merchant_kind: Optional[str]) -> dict:
     """
-    {'fabricated': [...], 'listed': [...], 'unrecognised': [...]} — each entry
-    {'name', 'domain'}. `fabricated` non-empty is the flag.
+    {'fabricated': [...], 'listed': [...], 'unrecognised': [...], 'unverified':
+    [...]} — each entry {'name', 'domain'}. `fabricated` non-empty is the
+    flag; 2T-4: a brand's stores off its list are `unverified`, never it.
     """
     allowed = {ea.normalize_domain(d) for d in retailer_list or [] if ea.normalize_domain(d)}
     own = ea.normalize_domain(own_domain)
@@ -94,7 +100,9 @@ def fabricated_availability(retailer_mentions, *, retailer_list: List[str],
         ea.normalize_domain(d) for d in retailer_list or []
     })
 
-    out = {'fabricated': [], 'listed': [], 'unrecognised': []}
+    # 2T-4: a brand's list says where it is sold, never where it isn't
+    open_list = merchant_kind != 'seller'
+    out = {'fabricated': [], 'listed': [], 'unrecognised': [], 'unverified': []}
     for mention in retailer_mentions or []:
         if not isinstance(mention, dict) or not mention.get('name'):
             continue
@@ -105,11 +113,11 @@ def fabricated_availability(retailer_mentions, *, retailer_list: List[str],
         if domain is None:
             out['unrecognised'].append(entry)
         elif domain == ONLINE:
-            (out['listed'] if online_ok else out['fabricated']).append(entry)
+            (out['listed'] if online_ok else out['unverified'] if open_list else out['fabricated']).append(entry)
         elif _domain_in(domain, allowed):
             out['listed'].append(entry)
         else:
-            out['fabricated'].append(entry)
+            (out['unverified'] if open_list else out['fabricated']).append(entry)
     return out
 
 

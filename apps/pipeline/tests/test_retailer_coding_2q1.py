@@ -151,7 +151,7 @@ def test_the_scorer_stores_the_stores_on_a_where_to_buy_run_with_no_model_call(d
     rows = stored(db)
     for run_id in (1, 2):
         assert names(rows[run_id]['named_stores']) == ['Amazon', 'Target', 'Walmart']
-        assert rows[run_id]['coder']['version'] == ea.BRAND_CODER_VERSION == 7
+        assert rows[run_id]['coder']['version'] == ea.BRAND_CODER_VERSION == 8
         assert rows[run_id]['coder']['calls'] == []
     # an AI-written question's answer is the brand-claim rule's: no store coding
     assert 'named_stores' not in rows[3]
