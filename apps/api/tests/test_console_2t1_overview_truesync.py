@@ -329,7 +329,8 @@ def test_strip_week_agents_and_labels(http, db, upstream):
     assert overview['header'] == {'skus': 6, 'records': 4, 'retailers_checked': 2,
                                   'retailers': ['walmart.com', 'amazon.com'], 'brand_domain': 'pampers.com'}
     stages = [e['stage'] for e in overview['activity']]
-    assert stages[0] == 'compiled' and {'started', 'complete', 'brand_page'} <= set(stages)
+    # the pair's runs share one stamp: complete still reads above started
+    assert stages == ['compiled', 'complete', 'started', 'brand_page']
     foot = overview['first_pick']['footnote']
     assert foot.endswith('AMORE was named in 3 of 102, Pure in 7.')
 

@@ -783,7 +783,9 @@ def build_activity(*, cycle: dict, first_at, last_at, answers: int, usable: int,
         out.append({'at': max(str(e.get('at') or '') for e in compiled), 'icon': 'truesync', 'stage': 'compiled',
                     'text': T['activity.compiled'].format(records=workspace['records'],
                                                           surfaces=f"held on {manu._and(held)}" if held else 'none held')})
-    out.sort(key=lambda e: rm._ts(e['at']), reverse=True)
+    # newest first; one stamp keeps the loop's order (a study's first and last run can share it)
+    stages = ('started', 'brand_page', 'shelf', 'complete', 'compiled')
+    out.sort(key=lambda e: (rm._ts(e['at']), stages.index(e['stage'])), reverse=True)
     for e in out:
         e['day'] = manu.short_day(e['at'])
     return out
