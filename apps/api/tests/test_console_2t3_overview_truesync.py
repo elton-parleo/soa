@@ -165,3 +165,50 @@ def test_the_size_chart_detail_names_both_ranges_and_their_lines():
     assert signal['facts']['two'][0]['groups'] == [
         {'range': '15 to 34 lb', 'lines': ['Swaddlers', 'Baby-Dry', 'AMORE']},
         {'range': '22 to 37 lb', 'lines': ['Cruisers 360', 'Zzz']}]
+
+
+# ── 3: one deal label, never supply's shelf text ────────────────────────
+
+from soa_shared import promo_pass_through as ppt  # noqa: E402
+
+
+def fl15_deals():
+    """FL15-shaped /deals (supply's deals.py shape): the Amazon list price cut on AMORE Size 1 and the Walmart Rollback,
+    each with the shelf's own words in `text` / `evidence`, as the walk showed them."""
+    return {'read_date': '2026-10-24', 'deals': [
+        {'retailer_domain': 'amazon.com', 'kind': 'rollback_or_was', 'value': None, 'value_unit': None, 'terms': None,
+         'text': '$36.18 with 25 percent savings -25%', 'variants': [
+             {'sku': 'sku_pg_amore_s1_132', 'variant_label': 'Size 1, 132 ct', 'product_name': 'Pampers AMORE',
+              'shelf_price': '36.18', 'price': '36.18', 'was_price': '47.99',
+              'evidence': '$36.18 with 25 percent savings -25% $ 36 . 18 $0.27 per count List Price: $47.99'}]},
+        {'retailer_domain': 'walmart.com', 'kind': 'rollback_or_was', 'value': None, 'value_unit': None, 'terms': None,
+         'text': 'Rollback $24.97 $27.97', 'variants': [
+             {'sku': 'sku_pg_swd_nb_84', 'variant_label': 'Newborn, 84 ct', 'product_name': 'Pampers Swaddlers',
+              'shelf_price': '24.97', 'price': '24.97', 'was_price': '27.97', 'evidence': 'Rollback $24.97 was $27.97'}]}]}
+
+
+def test_one_deal_label_feeds_the_signal_its_detail_the_live_cell_and_the_shelf_row():
+    deals = fl15_deals()
+    amazon, walmart = deals['deals']
+    assert (ppt.label(amazon), ppt.label(walmart)) == ('Amazon: 25% off, $36.18 from $47.99',
+                                                       'Walmart: Rollback, 11% off, $24.97 from $27.97')
+    answers = [{'run_id': i, 'surface': 'consumer_ui', 'intent': 'cheapest_place',
+                'source_ref': {'variant_id': 'sku_pg_amore_s1_132', 'sku': 'sku_pg_amore_s1_132'},
+                'text': 'Amazon has it for about $36.'} for i in range(3)]
+    promo = ppt.count(answers, deals)
+    signal = bo.deal_signal(promo, 'Oct 24')
+    # before: "Amazon: 25% off list price on AMORE Size 1, $36.18 from $47.99 ran on 1 SKU …
+    #          $36.18 with 25 percent savings -25% was live"
+    assert signal['title'] == 'Amazon: 25% off, $36.18 from $47.99 ran on 1 SKU. No answer named it.'
+    assert signal['detail'] == ('Amazon: 25% off, $36.18 from $47.99 was live on 1 SKU on Oct 24. 0 of 3 cheapest-place '
+                                'answers on those SKUs mentioned it.')
+    # before: "Amazon $36.18 with $36.18 with 25 percent savings -25%"
+    product = {'sku': 'sku_pg_amore_s1_132'}
+    assert bo.live_deals(product, deals) == ['Amazon: 25% off, $36.18 from $47.99']
+    assert bo.live_deals({'sku': 'sku_pg_swd_nb_84'}, deals) == ['Walmart: Rollback, 11% off, $24.97 from $27.97']
+    variant = {'variant_id': 'sku_pg_amore_s1_132', 'sku': 'sku_pg_amore_s1_132', 'label': 'Size 1, 132 ct'}
+    shelf = [l for l in rel.readback([variant], attribute_answers=[], true_value_rows=[], promo=promo, deals=deals,
+                                     brand='Pampers') if l['agent'] == 'shelf']
+    assert [l['said'] for l in shelf] == ['Amazon: 25% off, $36.18 from $47.99']
+    for text in (signal['title'], signal['detail'], shelf[0]['said']):
+        assert 'percent savings' not in text and '-25%' not in text

@@ -308,6 +308,27 @@ def title(deal: dict) -> str:
     return f"{af.retailer_name(deal.get('retailer_domain'))}: {phrase}{on}{prices}"
 
 
+def label(deal: dict, entry: Optional[dict] = None) -> str:
+    """2T-3 (3): the deal's one label for a brand's copy (a signal, its
+    detail, a product's Live cell, a record's shelf row): "<Retailer>: <offer>"
+    with the SKU's price from its was price when the shelf showed both:
+    "Amazon: 25% off, $36.18 from $47.99", "Walmart: Rollback, 12% off, $x
+    from $y", "Amazon: save 40% on 1 when you buy 2". From the deal's fields
+    (`entry` the SKU's own variant entry); supply's shelf text never."""
+    from soa_shared import retailers as af
+    variants = [entry] if entry else deal.get('variants') or ([deal['variant']] if deal.get('variant') else [])
+    one = {**deal, 'variants': variants}
+    pct = _pct_off(one)
+    if deal.get('kind') == 'rollback_or_was' and deal.get('retailer_domain') != 'walmart.com':
+        offer = f"{pct}% off" if pct else kind_words(deal)
+    else:
+        offer = _phrase(one)
+    prices = ''
+    if len(variants) == 1 and variants[0].get('price') and variants[0].get('was_price'):
+        prices = f", ${variants[0]['price']} from ${variants[0]['was_price']}"
+    return f"{af.retailer_name(deal.get('retailer_domain'))}: {offer}{prices}"
+
+
 def short(deal: dict) -> str:
     """"Amazon multi-buy", "Walmart Rollback", "Amazon list price cut", "Sam's Club Sam's Cash": the tile note's
     name. 2N-2: the retailer and kind_words(), the kind_label the Trade promotions row shows, so every reader
@@ -341,7 +362,7 @@ def count(answers: List[dict], deals_payload: Optional[dict], intent: str = CHEA
     Returns {n, k, loose, subscribe, per_deal, by_surface, judged} over the
     answers of `intent`: n the answers, k those naming a live deal; per_deal
     one entry per deal live on any asked variant {id, retailer, retailer_domain,
-    text, kind, title, short, kind_label, asked, named} (asked: answers about a SKU it was live on),
+    text, kind, title, label, short, kind_label, asked, named} (asked: answers about a SKU it was live on),
     most asked first; by_surface {surface: {n, k, loose, subscribe}}; judged
     per answer {run_id, surface, live: [ids], named: [ids], loose, subscribe}.
     """
@@ -355,7 +376,8 @@ def count(answers: List[dict], deals_payload: Optional[dict], intent: str = CHEA
             entry = per.setdefault(deal_id(d), {
                 'id': deal_id(d), 'retailer_domain': d.get('retailer_domain'),
                 'retailer': title(d).split(':', 1)[0], 'text': d.get('text'), 'kind': d.get('kind'),
-                'title': title(d), 'short': short(d), 'kind_label': kind_words(d), 'asked': 0, 'named': 0})
+                'title': title(d), 'label': label(d), 'short': short(d), 'kind_label': kind_words(d), 'asked': 0,
+                'named': 0})
             entry['asked'] += 1
             entry['named'] += deal_id(d) in verdict['named']
         cell = by_surface.setdefault(a.get('surface'), {'n': 0, 'k': 0, 'loose': 0, 'subscribe': 0})

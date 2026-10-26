@@ -143,7 +143,6 @@ BRAND_OVERVIEW_TEMPLATES = {
     # agents and products
     'agent.deals': 'Named {k} of {n} live deals',
     'product.weight': 'Weight right in {k} of {n}.',
-    'product.live_deal': '{retailer} ${price} with {deal}',
     'product.more': '+{n} more',
     # first picks
     'first_pick.singles': 'One first pick each for {names}.',
@@ -410,14 +409,16 @@ def deal_signal(promo: Optional[dict], day: Optional[str]) -> Optional[dict]:
     skus = len(variant_ids)
     sku_words = f"{skus} SKU{'s' if skus != 1 else ''}"
     named = top.get('named') or 0
+    # 2T-3 (3): the deal's one label (ppt.label), never supply's shelf text
+    said = top.get('label') or top['title']
     return {'id': f"deal:{_deal_id(top)}", 'kind': 'deal', 'pool': 'missed', 'rule': 'deal',
-            'title': T['signal.deal.title'].format(deal=top['title'], skus=sku_words,
+            'title': T['signal.deal.title'].format(deal=said, skus=sku_words,
                                                    named_words=f"{named} of {top['asked']} answers" if named
                                                    else T['signal.deal.none']),
-            'detail': T['signal.deal.detail'].format(text=top.get('text') or top['short'], skus=sku_words,
+            'detail': T['signal.deal.detail'].format(text=said, skus=sku_words,
                                                      day=day or 'the read day', named=named, asked=top['asked']),
             'tag': 'Deal missed', 'tone': 'bad', 'route': 'prove', 'count': top['asked'] - named,
-            'facts': {'deal': top['title'], 'short': top['short'], 'retailer': top.get('retailer'),
+            'facts': {'deal': said, 'short': top['short'], 'retailer': top.get('retailer'),
                       'kind_label': top.get('kind_label'), 'skus': skus, 'variant_ids': variant_ids, 'named': named,
                       'asked': top['asked']}}
 
@@ -714,16 +715,12 @@ def collapse_quoted(quoted: Optional[str], shown: int = 3) -> tuple:
 
 
 def live_deals(product: dict, deals: Optional[dict]) -> List[str]:
-    """The deals live on the product's SKU that day, each as the demo's
-    reference cell writes it: "Amazon $27.97 with buy 2, save 40% on 1"."""
+    """The deals live on the product's SKU that day, each as its one label
+    (2T-3 (3), ppt.label): "Amazon: 25% off, $36.18 from $47.99"."""
     ref = {'variant_id': product.get('sku'), 'sku': product.get('sku')}
     out = []
     for d in ppt.live_for(deals, ref):
-        entry = d.get('variant') or {}
-        price = entry.get('shelf_price') or entry.get('price')
-        text = (d.get('text') or ppt.short(d)).strip()
-        line = T['product.live_deal'].format(retailer=_name(d.get('retailer_domain')), price=price,
-                                             deal=text[:1].lower() + text[1:]) if price else ppt.title(d)
+        line = ppt.label(d, d.get('variant'))
         if line not in out:
             out.append(line)
     return out

@@ -339,8 +339,9 @@ def test_products_live_deals_check_weight_and_quotes(http, db, upstream):
     _shape(db, http, upstream)
     products = {p['sku']: p for p in _overview(http)['by_surface']['all']['products']}
     v1 = products['v1']
-    assert v1['live_deals'] == ['Amazon $27.97 with save 40% on 1 when you buy 2']
-    assert v1['live'].endswith('. Amazon $27.97 with save 40% on 1 when you buy 2')
+    # 2T-3 (3): the deal's one label (ppt.label)
+    assert v1['live_deals'] == ['Amazon: save 40% on 1 when you buy 2']
+    assert v1['live'].endswith('. Amazon: save 40% on 1 when you buy 2')
     assert v1['issue'].startswith('Weight right in 5 of 5.')
     assert v1['check'] == 'partly_right'
     assert v1['quoted_all'].count('$') == 3 and v1['quoted'] == v1['quoted_all']   # three amounts: nothing collapsed

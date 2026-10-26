@@ -385,7 +385,7 @@ def readback(variants: List[dict], *, attribute_answers: List[dict], true_value_
                   and (j.get('variant_id') in ids or any(_row_matches(e, {'sku': j.get('variant_id')}) for e in mine))]
         named = sum(1 for j in judged if did in j.get('named') or [])
         out.append({'agent': 'shelf', 'fact': 'deal', 'variant': mine[0].get('variant_label'),
-                    'said': ppt.title(deal), 'truth': T['drift.shelf.truth'].format(named=named, asked=len(judged)),
+                    'said': ppt.label(deal, mine[0]), 'truth': T['drift.shelf.truth'].format(named=named, asked=len(judged)),
                     'verdict': 'right' if named else 'missed', 'run': None, 'surface': None,
                     'named': named, 'asked': len(judged)})
     rank = {'wrong': 0, 'partial': 1, 'missed': 2, 'right': 3}
