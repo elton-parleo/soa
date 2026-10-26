@@ -8384,3 +8384,76 @@ Every other merchant's reads are unchanged. No migration, no model call, `SCORER
 Tests: `tests/test_console_2t3_overview_truesync.py`. FL15's own rows are production reads, so its shape (Amazon read
 by our fetch, Target by the hosted render, Walmart walled on three SKUs; the Amazon list price cut and the Walmart
 Rollback; the Ultra URL landing on the Swaddlers page) is built in the test in supply's served shape and says so.
+
+## 2T-4: five scoring and truth fixes from the Oct 26 walk (FL15, org 12; brand-claim coder 8, console scorer 18)
+
+No migration, no model call. `BRAND_CODER_VERSION` 8 (three copies), console `SCORER_VERSION` 18,
+`SCORER_CHANGES['18']` "a store off a brand's feed is unverified, never fabricated", `CODER_SCORER_VERSIONS` 7 → "17"
+and 8 → "18". No dimension reads any of it, so no score moves; comparability as 2O-3 made it (a cycle compares as
+the version its oldest brand-direct outcome was coded under).
+
+### 1: a store named in prose is not a contradiction of its domain
+
+`soa_shared/retailers.retailer_key` (two copies) is one store key, its domain, for a domain, a URL, a name, a list
+item's cut ("**Walmart** -", "at Target:"), a retailer label and the brand's own site in words ("Pampers Official
+Store"). The brand fact index holds its stores and checks a claim's by it: a store the feed lists grounds, one it does
+not is unverified (it never contradicted since 2O-5). `answer_flags.fabricated_availability` is never raised for a
+brand: its list is the feed's retailer URLs, where it is sold and not where it isn't, so a store off it is
+`unverified` in the flag's result. A seller's list (its own site) is closed, as before. Verdict golden r15 (a brand,
+Amazon off its list) now records no flag; its attribution is unchanged (claude-reviewed, elton-pending).
+
+What FL15 showed is the flag, not the verdict: on 2O-6's recorded index the three live sentences ("Target lists
+Pampers Swaddlers Size 4 150 count", "You can buy Pampers Pure Protection from: Amazon", "**Walmart** - …") are
+grounded, the reason the narratives quoted. The flag made the answer High and a narrative subject beside that grounded
+reason.
+
+### 2: severity by verdict (`soa_shared/severity.py`, two copies)
+
+`classify(...) -> {severity, rule, could_not_check}`, read by `/answers` (`severity`, `severity_rule`,
+`could_not_check`), `/answers/summary.severity` and the brand Overview's `flagged` (`tally()`: shown, high, medium,
+right, low, flagged, could_not_check) and the narratives' flag rule (`counted_flags`).
+
+| severity | rule |
+|---|---|
+| high | `wrong_price` (wrong, stale, a variant clash); `wrong_fact` (attribute mismatch, brand-claim fabricated, misattributed); `retired_called_current` (when coded); `successor_not_named`; `club_only_elsewhere` (the feed's club-only variant, the first store named not a club); `brand_not_first` (a comparison question naming the brand, a rival first); `fabricated_claim` (a dead citation; a seller's store off its list) |
+| medium | `missed_deal`; `fewer_retailers` (where-to-buy naming one or none where the feed lists two or more); `no_weight`; `partial_price` |
+| ok (Right) | an exact price, a grounded claim, the deal or successor named, two or more retailers, the weight matching |
+| low | the rest: no deal live, unverified, echoed, acknowledged unknown, absent, per unit; a page we could not check (`could_not_check`, the scorer's reason) |
+
+A brand's `fabricated_availability`, on a row stored before coder 8, is not read. The answer row read `raw` after the
+claims loop reused it, so a value answer took its last claim's severity; it reads the answer's outcome now.
+`no_successor` is High (2Q-2 read it medium). The club rule needs the feed (`console._club_keys`: the feed and
+`/retailers`); without it the rule reads nothing. On the 2I-8 fixtures the one value that moved is an answer saying it
+could not find the brand (medium, now low).
+
+### 3: one read per True Value cell
+
+Each scored item carries `judged` (`console_read_models.judged_read`: the deciding claim's `reference`; a run stored
+unverifiable with none is an unreadable read with the scorer's reason). A cell's `live`, `status`, `observed_at`,
+`method` and `reference_source` are the read its runs were judged against (the one most carry); a later read of the
+page that differs is `later` {live, observed_at, text "page read later: $36.18, Oct 24"}. A run with no judged read
+reads the cell's reference, as before. The Overview's products row carries `live_later` (a read-across row names the
+retailer, each `retailers[]` entry its own), TrueSync's readback a line's `later`.
+
+### 4: Accessibility on the brand's own pages (brand mode)
+
+`app/services/console_accessibility_brand.py`. `/accessibility` for a merchant in manufacturer mode: `checks` are six
+over the brand's own pages, N the feed's distinct pages on its site; `retailer_checks` the seven over the retailer
+pages; `brand_pages` {domain, pages, read, plain_html, read_at}; `hero` {text, lead, blocks[{domain, kind, n, of?,
+text}]}; `mode`. The six: robots (the access run's per-token verdicts on the brand's rows, `allow` of every token),
+plain HTML, ProductGroup with an Offer per retailer and gtin13 (each counted in the basis), retailer prices in markup,
+GTINs well formed, weight in markup against the chart. Hero: "<domain> served every product page on <day>. What agents
+find there is the problem." when every page is served and no own-site verdict blocks; then each retailer block,
+"<Retailer>'s robots.txt disallows N of M agents" (token verdicts `disallow`) and "<Retailer> challenged N page reads"
+(its reads' `read_status` challenged), as sentences. The score's Catalog & Context is unchanged.
+
+### 5: a line's chart is matched by its page
+
+`console_release.chart_for`: a feed row's chart is the page it links to on the brand's site (`page_chart`: the own
+read whose `url` is the row's link, newest first; a read that landed elsewhere counts only when the landed page names
+the row's line). By name (`line_charts`) only for a row with no page there. `record_chart` and `feed_line_charts` (the
+lead signal, the size-chart groups) read it. Answers' attribute truth already reads by the row's key
+(`attribute_accuracy.truth_index`). `merchant_rules` is not referenced in this repository; r5 is supply's rule.
+
+Tests: `apps/pipeline/tests/test_retailer_identity_2t4.py`, `apps/api/tests/test_console_2t4_severity.py`,
+`test_console_2t4_true_value.py`, `test_console_2t4_accessibility.py`, `test_console_2t4_line_chart.py`.
