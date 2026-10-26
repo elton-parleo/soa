@@ -784,6 +784,16 @@ def deciding_swap(claims: List[dict], outcome: Optional[str]) -> Optional[dict]:
             or (swaps[0] if swaps else None))
 
 
+def clash_named(claim: Optional[dict], reason_code: Optional[str]) -> Optional[str]:
+    """2R-2 (B5): the product words a quote named ("Pampers ZZZ Size 3,
+    116-count") when the price check judged it wrong for naming a variant
+    the record does not have (reason variant_clash) and not for its pack
+    count (pack_conflict's), else None."""
+    if reason_code != 'variant_clash' or not claim or pack_conflict(claim) is not None:
+        return None
+    return str(claim.get('product') or '').strip() or None
+
+
 def pack_conflict(claim: Optional[dict]) -> Optional[int]:
     """2Q-1 (B4): the pack count a quote was for, when the price check moved
     it off the asked variant for that count (the claim's `conflict`, "pack
@@ -1117,7 +1127,8 @@ def build_true_value(reference: Optional[dict], scored: List[dict], *, own_domai
                         'stated': None if r.get('stated') in (None, '') else str(r['stated']),
                         'run': r.get('run'), **({'swap_product': r['swap_product']} if r.get('swap_product') else {}),
                         **({'swap_variant': r['swap_variant']} if r.get('swap_variant') else {}),
-                        **({'pack': r['pack']} if r.get('pack') else {})}
+                        **({'pack': r['pack']} if r.get('pack') else {}),
+                        **({'clash': r['clash']} if r.get('clash') else {})}
                        for r in runs],
         }
 
@@ -1619,11 +1630,16 @@ def build_truesync(merchant: str, *, channels: List[dict], publications: List[di
     channel_list = [c for c in channels or [] if c.get('is_active', True)]
     listings = catalog.get('listings') or []
     listing_ids = {l.get('listing_id') for l in listings}
+    # 2R-2a: a brand's held rows are feed records (record_ref "feed:<slug>:…", no listing); the
+    # catalog lists each record as a listing whose product_id is that record_ref
+    by_record = {l.get('product_id'): l.get('listing_id') for l in listings
+                 if str(l.get('product_id') or '').startswith('feed:')}
     pubs: Dict[tuple, dict] = {}
     for pub in publications or []:
-        if pub.get('listing_id') not in listing_ids:
+        lid = pub.get('listing_id') if pub.get('listing_id') in listing_ids else by_record.get(pub.get('record_ref'))
+        if lid is None:
             continue
-        key = (pub['listing_id'], pub.get('channel_slug'))
+        key = (lid, pub.get('channel_slug'))
         best = pubs.get(key)
         if best is None or (_ts(pub.get('compiled_at')), pub.get('id') or 0) > (_ts(best.get('compiled_at')), best.get('id') or 0):
             pubs[key] = pub
@@ -2458,7 +2474,7 @@ def build_retired_named(retired: List[dict], *, rows: List[dict], runs: List[dic
                         surface_list: List[str], retired_by: Optional[str] = None) -> dict:
     """
     {lines: [{line, label, product_name, variant_ids, successor, brand_choice,
-    brand_direct, headline, sentence}], rule, still_sold_note}. `rows` are
+    agents, brand_direct, headline, sentence}], rule, still_sold_note}. `rows` are
     build_visibility's byQuestion rows (each `run` is `run-<id>`); `runs`
     the loaded runs with their question's `source_ref`; `texts` each run's
     answer text by run id.
@@ -2467,6 +2483,8 @@ def build_retired_named(retired: List[dict], *, rows: List[dict], runs: List[dic
     answers (`answers`), how many named the line (`named`) and how many its
     successor (`successor_named`), plus `no_text`: answers with no stored
     text, counted in `answers` and never as naming anything.
+    agents (2R-2): on the first surface, how many agents answered a
+    brand-choice question (`of`) and how many of them named the line.
     brand_direct: the answered runs of the question asked about this line
     (source_ref.retired_line), how many named the successor, and
     `still_sold`: null, with RETIRED_STILL_SOLD_NOTE.
@@ -2497,6 +2515,10 @@ def build_retired_named(retired: List[dict], *, rows: List[dict], runs: List[dic
         asked = [r for r in answered if r.get('tier') == 'brand_direct'
                  and ((refs.get(texts_of[r['run']][0]) or {}).get('retired_line') or {}).get('line') == line.get('line')]
         top = per.get(surface_list[0]) if surface_list else {'answers': 0, 'named': 0, 'successor_named': 0}
+        # 2R-2 (B1): the agents that answered on the first surface, and those that named the line
+        on_top = [r for r in choice if surface_list and on(r['surface'], surface_list[0])]
+        agents_of = {r.get('agent') or r.get('platform') for r in on_top}
+        agents_named = {r.get('agent') or r.get('platform') for r in on_top if named(r, line.get('terms'))}
         label = line.get('label') or line.get('line')
         headline = f"{label} named in {top['named']} of {top['answers']} brand-choice answers"
         sentence = f"Agents named {label}, which {by} retired, {_times(top['named'])} in {top['answers']} category answers"
@@ -2508,6 +2530,7 @@ def build_retired_named(retired: List[dict], *, rows: List[dict], runs: List[dic
             'variant_ids': line.get('variant_ids') or [],
             'successor': {k: succ.get(k) for k in ('variant_id', 'sku', 'product_name', 'line', 'label')} if succ else None,
             'brand_choice': per,
+            'agents': {'named': len(agents_named), 'of': len(agents_of)},
             'brand_direct': {'answers': len(asked),
                              'named_successor': sum(1 for r in asked if named(r, succ.get('terms'))) if succ else None,
                              'still_sold': None},

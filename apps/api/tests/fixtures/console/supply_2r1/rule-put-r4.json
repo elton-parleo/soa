@@ -1,0 +1,38 @@
+{
+ "body": {
+  "approval": "approved",
+  "approved_at": "2026-10-25T22:02:33.362243+00:00",
+  "approved_by": "op@test",
+  "audience": "Verified shopping agents",
+  "code": "r4",
+  "compiled": false,
+  "detail": "A deal Pampers 2R-1 funds attaches to the product with its terms and end date, every honoring retailer listed the same way. Ships in the next release.",
+  "history": [
+   {
+    "actor": "op@test",
+    "at": "2026-10-25T22:02:33",
+    "changes": {
+     "approval": [
+      "needs_approval",
+      "approved"
+     ],
+     "note": [
+      null,
+      "Legal signed Oct 24"
+     ]
+    },
+    "token_id": "ea7022ef2a843357"
+   }
+  ],
+  "name": "Pampers 2R-1-funded deals publish retailer-neutral",
+  "note": "Legal signed Oct 24",
+  "on": false,
+  "outcome": "Needs Legal",
+  "scope": "Pampers 2R-1-funded deals",
+  "stored": true
+ },
+ "headers": {
+  "content-type": "application/json"
+ },
+ "status": 200
+}

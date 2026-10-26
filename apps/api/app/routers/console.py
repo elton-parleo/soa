@@ -185,13 +185,16 @@ def _reads(scope: CustomerScope):
     return console_cache.reads(full_loop._client(scope), scope.org.id)
 
 
-def _compared(conn, row: dict, rows: list, vis: dict, facts: Optional[dict] = None) -> Optional[dict]:
+def _compared(conn, row: dict, rows: list, vis: dict, facts: Optional[dict] = None,
+              prev: Optional[dict] = None) -> Optional[dict]:
     """2P-1 (B3): the newest earlier scored cycle and whether it compares with
     this one, by the rule the Changes block reads (every agent together):
     {code, row, rows, visibility, status, note, condition}, None on a first
     cycle. Visibility, True Value, Prove and Impact read their deltas only
-    when `status` is 'compared'."""
-    prev, _n = parity.previous_scored_cycle(conn, row, cycle_customer_org_sql())
+    when `status` is 'compared'. 2R-2 (B3): `prev` names the earlier cycle
+    (the last before a stated send), by the same rule."""
+    if prev is None:
+        prev, _n = parity.previous_scored_cycle(conn, row, cycle_customer_org_sql())
     if prev is None:
         return None
     prev = {**prev, 'customer_org_id': row['customer_org_id']}
@@ -637,6 +640,8 @@ def _true_value_inputs(conn, row) -> tuple:
                        'swap_variant': swap.get('variant_id') if swap else None,
                        # 2Q-1 (B4): the pack the quote was for, when the check moved it off the asked one for its count
                        'pack': rm.pack_conflict(deciding),
+                       # 2R-2 (B5): the variant it named, when the check found it is not one of the record's
+                       'clash': rm.clash_named(deciding, o['reason_code']),
                        'run': f"run-{o['run_id']}", 'platform': o['platform'],
                        'agent': surfaces.agent_of(o['platform']) or o['platform'],
                        'surface': o['surface'] or surfaces.surface_of(o['platform']) or 'unlabelled'})
@@ -812,7 +817,7 @@ async def get_truesync(merchant: str = Query(...), scope: CustomerScope = Depend
     "not connected" for a tenant with no MC account), last verified, and
     the validator lines and artifact per cell. Assembled from supply with
     the tenant token (rm.build_truesync)."""
-    await check_merchant(scope, merchant)   # 2H: a slug that is not the org's is a 404
+    ms = await check_merchant(scope, merchant)   # 2H: a slug that is not the org's is a 404
     client = full_loop._client(scope)
     (c_status, channels, c_err), (p_status, pubs, p_err), (k_status, catalog, k_err), (_, prov, prov_err), \
         (_, reference, r_err) = \
@@ -847,6 +852,18 @@ async def get_truesync(merchant: str = Query(...), scope: CustomerScope = Depend
         body['weight_drift'] = drift
     if r_err is not None:
         body.setdefault('read_errors', {})['reference'] = r_err
+    # 2R-2 (B1): a brand at retail (supply's `mode` manufacturer): the five surfaces, what
+    # changes on publish, the held file's preview and the artifacts, as /publishing serves them
+    record = next((m for m in ms.merchants or [] if m.get('slug') == merchant), None)
+    if (record or {}).get('mode') == 'manufacturer':
+        from app.routers.console_manufacturer import publishing_view
+        view = await publishing_view(scope, ms, merchant, channels=[c for c in channels or [] if c.get('is_active', True)],
+                                     publications=pubs or [], catalog=catalog,
+                                     reference=reference if r_err is None else None, drift=drift)
+        errors = view.pop('read_errors')
+        body.update(view)
+        if errors:
+            body.setdefault('read_errors', {}).update(errors)
     return body
 
 
@@ -1316,6 +1333,11 @@ async def get_revenue(cycle: str = Query(...), merchant: Optional[str] = Query(N
         body['baseline_cycle'] = base['cycle_code']
         body['baseline_started'] = rm._iso(base.get('start_date'))
         body['since_baseline'] = rm.since_baseline(rows, base_rows, base['cycle_code'])
+    # 2R-2 (B3): a brand at retail: locked until it states it sent the record, then what moved since
+    from app.routers.console_manufacturer import impact_block
+    locked = await impact_block(scope, ms, errors)
+    if locked is not None:
+        body['locked'] = locked
     body['merchant'] = ms.slug
     body['read_errors'] = errors
     return body

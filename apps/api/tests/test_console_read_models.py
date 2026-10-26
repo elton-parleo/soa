@@ -26,6 +26,7 @@ from sqlalchemy.pool import StaticPool
 
 import app.console_scope as console_scope_module
 import app.routers.console as console_router
+import app.routers.console_manufacturer as console_manufacturer_router
 import app.routers.console_ops as console_ops_router
 import app.routers.full_loop as full_loop_router
 import clients.truesync_client as truesync_client_module
@@ -95,7 +96,8 @@ def db(monkeypatch):
         dbapi_conn.create_function("NOW", 0, lambda: datetime.now(timezone.utc).isoformat())
 
     seed_console_db(engine)
-    for module in (customers, console_scope_module, console_router, console_ops_router, full_loop_router):
+    for module in (customers, console_scope_module, console_router, console_ops_router, full_loop_router,
+                   console_manufacturer_router):
         monkeypatch.setattr(module, "engine", engine)
     return engine
 
@@ -106,19 +108,22 @@ class Upstream:
     def __init__(self):
         self.calls, self.routes = [], {}
 
-    def answer(self, method, path, status=200, body=None, token=None):
-        self.routes[(method, path, token)] = (status, body)
+    def answer(self, method, path, status=200, body=None, token=None, headers=None):
+        self.routes[(method, path, token)] = (status, body) if headers is None else (status, body, headers)
 
     def factory(self, **_kwargs):
         upstream = self
 
         class Response:
-            def __init__(self, status, body):
+            def __init__(self, status, body, headers=None):
                 self.status_code, self._body = status, body
-                self.text = '' if body is None else json.dumps(body)
+                # 2R-2 (B4): a file answers as bytes, with its own headers
+                self.text = '' if body is None else body.decode() if isinstance(body, bytes) else json.dumps(body)
+                self.content = body if isinstance(body, bytes) else self.text.encode()
+                self.headers = {k.lower(): v for k, v in (headers or {}).items()}
 
             def json(self):
-                if self._body is None:
+                if self._body is None or isinstance(self._body, bytes):
                     raise ValueError
                 return self._body
 

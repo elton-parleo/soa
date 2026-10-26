@@ -1,0 +1,139 @@
+{
+ "body": {
+  "listings": [
+   {
+    "brand": "Pampers",
+    "listing_id": 1,
+    "product_id": "feed:pampers-2r1:sku:sku_pg_swd_nb_84",
+    "product_url": "https://www.pampers.com/en-us/diapers-wipes/swaddlers-diapers",
+    "published_at": "2026-10-25T22:02:32.846516",
+    "spec_version": "sku-feed",
+    "title": "Pampers Swaddlers",
+    "variants": [
+     {
+      "attributes": {},
+      "count": 84,
+      "currency": null,
+      "gtin": null,
+      "list_price": null,
+      "size": null,
+      "status": "active",
+      "successor": null,
+      "title": "Newborn, 84 ct",
+      "variant_id": "sku:sku_pg_swd_nb_84",
+      "weight_range": null
+     },
+     {
+      "attributes": {},
+      "count": 96,
+      "currency": null,
+      "gtin": null,
+      "list_price": null,
+      "size": null,
+      "status": "active",
+      "successor": null,
+      "title": "Size 1, 96 ct",
+      "variant_id": "sku:sku_pg_swd_s1_96",
+      "weight_range": null
+     },
+     {
+      "attributes": {},
+      "count": null,
+      "currency": null,
+      "gtin": "037000799818",
+      "list_price": null,
+      "size": null,
+      "status": "active",
+      "successor": null,
+      "title": "Size 4",
+      "variant_id": "00037000799818",
+      "weight_range": null
+     }
+    ]
+   },
+   {
+    "brand": "Pampers",
+    "listing_id": 3,
+    "product_id": "feed:pampers-2r1:sku:sku_pg_pure_s1",
+    "product_url": "https://www.pampers.com/en-us/diapers-wipes/pure-protection-diapers",
+    "published_at": "2026-10-25T22:02:32.846516",
+    "spec_version": "sku-feed",
+    "title": "Pampers Pure Protection",
+    "variants": [
+     {
+      "attributes": {},
+      "count": null,
+      "currency": null,
+      "gtin": null,
+      "list_price": null,
+      "size": null,
+      "status": "retired",
+      "successor": {
+       "gtin": null,
+       "product_name": "Pampers AMORE",
+       "sku": "sku_pg_amore_s1_132",
+       "title": "Size 1, 132 ct",
+       "variant_id": "sku:sku_pg_amore_s1_132"
+      },
+      "title": "Size 1",
+      "variant_id": "sku:sku_pg_pure_s1",
+      "weight_range": null
+     }
+    ]
+   },
+   {
+    "brand": "Pampers",
+    "listing_id": 4,
+    "product_id": "feed:pampers-2r1:sku:sku_pg_amore_s1_132",
+    "product_url": "https://www.pampers.com/en-us/diapers-wipes/amore-diapers",
+    "published_at": "2026-10-25T22:02:32.846516",
+    "spec_version": "sku-feed",
+    "title": "Pampers AMORE",
+    "variants": [
+     {
+      "attributes": {},
+      "count": 132,
+      "currency": null,
+      "gtin": null,
+      "list_price": null,
+      "size": null,
+      "status": "active",
+      "successor": null,
+      "title": "Size 1, 132 ct",
+      "variant_id": "sku:sku_pg_amore_s1_132",
+      "weight_range": null
+     }
+    ]
+   },
+   {
+    "brand": "Pampers",
+    "listing_id": 6,
+    "product_id": "feed:pampers-2r1:00037000833970",
+    "product_url": "https://www.pampers.com/en-us/products/pampers-zzz",
+    "published_at": "2026-10-25T22:02:32.846516",
+    "spec_version": "sku-feed",
+    "title": "Pampers Zzz",
+    "variants": [
+     {
+      "attributes": {},
+      "count": 104,
+      "currency": null,
+      "gtin": "037000833970",
+      "list_price": null,
+      "size": null,
+      "status": "active",
+      "successor": null,
+      "title": "Size 4, 104 ct",
+      "variant_id": "00037000833970",
+      "weight_range": null
+     }
+    ]
+   }
+  ],
+  "merchant": "pampers-2r1"
+ },
+ "headers": {
+  "content-type": "application/json"
+ },
+ "status": 200
+}

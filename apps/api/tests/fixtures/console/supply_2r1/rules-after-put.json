@@ -1,0 +1,125 @@
+{
+ "body": {
+  "kind": "brand",
+  "merchant": "pampers-2r1",
+  "mode": "manufacturer",
+  "rules": [
+   {
+    "approval": "needs_approval",
+    "approved_at": null,
+    "approved_by": null,
+    "audience": "All agents",
+    "code": "r1",
+    "compiled": true,
+    "detail": "Retailer prices appear only as what a retailer charges, labeled with the retailer.",
+    "history": [],
+    "name": "Never publish a retail price as Pampers 2R-1's",
+    "note": null,
+    "on": false,
+    "outcome": "No price set by Pampers 2R-1, anywhere",
+    "scope": "All records",
+    "stored": true
+   },
+   {
+    "approval": "needs_approval",
+    "approved_at": null,
+    "approved_by": null,
+    "audience": "All agents",
+    "code": "r2",
+    "compiled": true,
+    "detail": "Alphabetical, every retailer that carries the product, no favorites.",
+    "history": [],
+    "name": "Retailers in the same order every time",
+    "note": null,
+    "on": false,
+    "outcome": "Every carrier listed, clubs included",
+    "scope": "All records",
+    "stored": true
+   },
+   {
+    "approval": "needs_approval",
+    "approved_at": null,
+    "approved_by": null,
+    "audience": "Google agents",
+    "code": "r3",
+    "compiled": false,
+    "detail": "Pampers 2R-1 publishes product content. Offers flow through retailers' own feeds.",
+    "history": [],
+    "name": "Manufacturer Center, not Merchant Center",
+    "note": null,
+    "on": false,
+    "outcome": "Content live, prices from retailers",
+    "scope": "Google",
+    "stored": true
+   },
+   {
+    "approval": "approved",
+    "approved_at": "2026-10-25T22:02:33.362243",
+    "approved_by": "op@test",
+    "audience": "Verified shopping agents",
+    "code": "r4",
+    "compiled": false,
+    "detail": "A deal Pampers 2R-1 funds attaches to the product with its terms and end date, every honoring retailer listed the same way. Ships in the next release.",
+    "history": [
+     {
+      "actor": "op@test",
+      "at": "2026-10-25T22:02:33",
+      "changes": {
+       "approval": [
+        "needs_approval",
+        "approved"
+       ],
+       "note": [
+        null,
+        "Legal signed Oct 24"
+       ]
+      },
+      "token_id": "ea7022ef2a843357"
+     }
+    ],
+    "name": "Pampers 2R-1-funded deals publish retailer-neutral",
+    "note": "Legal signed Oct 24",
+    "on": false,
+    "outcome": "Needs Legal",
+    "scope": "Pampers 2R-1-funded deals",
+    "stored": true
+   },
+   {
+    "approval": "needs_approval",
+    "approved_at": null,
+    "approved_by": null,
+    "audience": "All agents",
+    "code": "r5",
+    "compiled": true,
+    "detail": "Each line carries its own chart from pampers.com. Size 4 is 15 to 34 lb for Swaddlers, Baby-Dry, AMORE and Ultra, and 22 to 37 lb for Cruisers 360 and Zzz. No attribute changes without counsel.",
+    "history": [],
+    "name": "One size chart per line",
+    "note": null,
+    "on": false,
+    "outcome": "Swaddlers Size 4 resolves to 15 to 34 lb everywhere",
+    "scope": "6 lines",
+    "stored": true
+   },
+   {
+    "approval": "needs_approval",
+    "approved_at": null,
+    "approved_by": null,
+    "audience": "All agents",
+    "code": "r6",
+    "compiled": true,
+    "detail": "Pure Protection points at AMORE, the way pampers.com already redirects it. Agents get the live product, and the record notes leftover retailer stock.",
+    "history": [],
+    "name": "Retired products carry a successor",
+    "note": null,
+    "on": false,
+    "outcome": "Pure stops being sold as current",
+    "scope": "2 records",
+    "stored": true
+   }
+  ]
+ },
+ "headers": {
+  "content-type": "application/json"
+ },
+ "status": 200
+}

@@ -20,6 +20,7 @@ from sqlalchemy import text
 
 import app.console_scope as console_scope_module
 import app.routers.console as console_router
+import app.routers.console_manufacturer as console_manufacturer_router
 import app.routers.console_ops as console_ops_router
 import app.routers.full_loop as full_loop_router
 import soa_shared.config as config
@@ -46,7 +47,8 @@ def db(request, monkeypatch):
     else:
         engine = postgres_engine()
         seed_console_db(engine)
-    for module in (customers, console_scope_module, console_router, console_ops_router, full_loop_router):
+    for module in (customers, console_scope_module, console_router, console_ops_router, full_loop_router,
+                   console_manufacturer_router):
         monkeypatch.setattr(module, "engine", engine)
     yield engine
     engine.dispose()

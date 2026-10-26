@@ -1,0 +1,28 @@
+# Supply 2R-1 responses, recorded
+
+Every `*.json` here is one response of parleo-supply-app PR #33 (branch `claude/optimistic-carson-2nihli`,
+commit `4ec9a8a2526775d2094c66833087a36c8f78e397`, 2R-1 and 2R-1a), recorded on Oct 25, 2026 by running
+`recorder.py` inside #33's own test harness (`tests/conftest.py`'s in-memory sqlite, its `pampers` fixture from
+`tests/test_manufacturer_mode_2r1.py`: the committed `pampers_2l2.csv` feed plus the two Size 4 rows that
+module builds from the recorded pampers.com pages). Nothing is hand-edited. Each file is
+`{status, headers, body}` (`body_base64` for a file response); headers are `content-type`,
+`content-disposition` and `X-TrueSync-*` only.
+
+Run, from the supply checkout with `recorder.py` copied to `tests/test_zz_record_2r2.py`:
+
+    SOA_2R2_RECORD=<dir> SOA_2R2_SENT_AT=2026-10-17T15:30:00Z pytest tests/test_zz_record_2r2.py
+    SOA_2R2_RECORD=<dir> SOA_2R2_SENT_AT=2026-10-23T15:30:00Z pytest tests/test_zz_record_2r2.py
+
+The first run is the top level here (`sent-20261017.json` is its sent POST); the second run's sent POST,
+`/tenant` and `/publications` afterwards are in `sent-20261023/`. Its other responses differ from the first
+run's only in wall-clock stamps (`compiled_at`, `at`, filenames' dates).
+
+`brand-pages.json` is not a route's response: no route in #33's harness serves `brand_page` for this
+merchant (its `/reference` and `/retailer-prices` rows carry none: the harness's reads are not matched to the
+feed's rows). It is supply's own `brand_page.read` over the recorded pampers.com pages, the value #33's
+harness stores on its reads, so soa's tests put it on the own-domain retailer-prices rows where 2O-6 serves it.
+
+Not from #33 (the soa side of the test, unchanged): 2P-1's two cycles, and their `/reference` attributes and
+`/deals`, which are not 2R-1's routes.
+
+Recorded with no production read or write and no network call: the harness is in memory.

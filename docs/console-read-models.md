@@ -8142,3 +8142,125 @@ its score was stored; cycle 2's Size 4, 120 ct at Amazon quoted at its own price
 cycle 2's Amazon multi-buy beside "Out of stock"). `SOA_2Q1_SAMPLE_DUMP=<dir>` writes `score-2q1`, `overview-2q1`,
 `visibility-2q1`, `visibility-2q1-c1`, `true-value-2q1`, `prove-2q1`, `revenue-2q1`, `revenue-history-2q1`,
 `runs-2q1`, `answers-summary-2q1`, `answers-summary-2q1-c1`, unedited.
+
+## 2R-2: manufacturer mode, a brand at retail (TrueSync, Rules, Publishing, Impact)
+
+A manufacturer never sets a price and Parleo never writes into its accounts. Supply compiles the brand's records from
+its SKU feed and holds them; the brand's own team sends them. So no state below is one Parleo caused, and "sent" is a
+fact the brand states, never one soa observed. No migration. No model call. Builders:
+`app/services/console_manufacturer.py` (`MANUFACTURER_TEMPLATES` holds only what soa derives: surface notes, backtest
+notes, Impact's locked block); reads: `app/routers/console_manufacturer.py`.
+
+### What soa reads from supply 2R-1 (parleo-supply-app#33)
+
+2R-2a: as #33 serves it (branch `claude/optimistic-carson-2nihli`, 2R-1 and 2R-1a; its
+`docs/truesync/manufacturer-mode.md` and `api/truesync_manufacturer_router.py`). Supply's shapes win; none of 2R-2's
+assumed shapes is read any more. The fixture is recorded from #33's own test harness
+(`tests/fixtures/console/supply_2r1/`, PROVENANCE.md there).
+
+| supply route | what soa reads |
+|---|---|
+| `GET /tenant` | per merchant `mode` (`manufacturer` \| `seller`) and `held: {total, by_channel, blocked, compiled_at, sent: {channel: newest sent_at \| null}}`; soa passes both through (`_tenant_view`) and reads the preview's counts, `compiled_at` and the sent line from `held`, never a recount |
+| `GET /publications` | a hold's rows are feed records: `record_ref` `feed:<slug>:<sku or gtin14>`, `listing_id` null. Every row `status: compiled_not_published`, `reason: held_for_merchant \| blocked`, `held`, `mode`, `channel`, `compiled_at`, `validation`, `error`, `expressiveness`, `spec_clause` (blocked rows), `journal: [{event, at, by, note, sent_at?, stated_by?}]` oldest first. Held now = per record, per channel, the newest row |
+| `POST /merchants/{slug}/publish[?dry_run=true]` | `{merchant, kind, mode, rows, skipped: [{channel, note}]}` (A2) |
+| `GET /merchants/{slug}/rules` | `{merchant, kind, mode, rules: [{code, name, detail, scope, audience (one string), outcome, on, approval: needs_approval \| approved \| declined, approved_by, approved_at, note, compiled, stored, history[] (newest 20)}]}` |
+| `PUT /merchants/{slug}/rules/{code}` | body `{on?, approval?, note?, actor}`; answers the rule |
+| `POST /merchants/{slug}/publications/sent` | body `{channel, sent_at, stated_by, actor, note, publication_ids?}`; answers `{merchant, channel, sent_at, stated_by, actor, note, recorded, publications[]}`; 409 when the channel holds nothing (a blocked channel), 422 for a bad or future `sent_at` (5 minutes' skew) or an empty `stated_by` |
+| `GET /merchants/{slug}/artifacts?channel=` | the file (Manufacturer Center one batch JSON, schema.org a zip, ACP the feed); headers `Content-Disposition`, `X-TrueSync-Compiled-At`, `-Record-Count`, `-Validator` (`ok=N; failed=M`), `-Merchant-Kind`, `-Mode`; ACP **409** while blocked, `detail: {reason, spec_clause, detail, compiled_at, record_count, kind, validator}` |
+| `GET /publications/{id}/artifact` | one row's payload, the same headers plus `X-TrueSync-Reason` |
+| `GET /merchants/{slug}/retailer-prices` | 2O-6's `brand_page` on the brand's own rows: `json_ld` (a ProductGroup whose `hasVariant` Products carry `gtin13`), `image` (reader v2; empty on production reads until the backfill), `line`, `size_chart` |
+| `GET /merchants/{slug}/feed`, `/retailers`, `/catalog`, `/channels` | as before 2R-2; the catalog lists each held record as a listing whose `product_id` is its `record_ref` |
+
+Journal events soa reads: `compiled`, `held_for_merchant`, `blocked`, `sent_by_merchant`. Retailers come as domains;
+soa names them with `soa_shared/retailers.retailer_name`, as the Overview does.
+
+### B1: `/truesync` in manufacturer mode
+
+Unchanged for any other merchant. For one whose `mode` is `manufacturer`, beside the matrix: `mode`, `surfaces`,
+`diff`, `preview`, `artifacts`, `held` (/tenant's), `cycle` (the newest scored cycle the rows read). `/publishing`
+serves the same objects (`publishing_view`). The matrix reads a held feed record as the catalog listing whose
+`product_id` is its `record_ref`.
+
+`surfaces`, in the demo's order, each `{id, name, status, last, fields, note}` and its facts beside:
+
+| id | status | from |
+|---|---|---|
+| `mfc` | `held` when at least one held Manufacturer Center record is valid; every one failing: `blocked`, the first validator error the note (2R-2a A4); `not_compiled` before the first hold; `live` for a published row | `records` "2 of 4 valid" (`records_valid`, `records_total` from `held.by_channel`), `errors`; `last` "File compiled Oct 25" from `held.compiled_at`, ", sent Oct 17" from `held.sent`; `fields` the attribute names the valid records carry; `images_from_brand_page` (the compile's `image_from_brand_page` flag) and `no_image` (no such flag and a validator error naming the image), "N with no image yet: the brand page served none" in the note, never an invented image |
+| `oai` | `blocked` when supply's rows are reason `blocked`, the note supply's `spec_clause`; `held` / `not_compiled` otherwise | |
+| `markup` | `drift` when 2M-1's weight rows have markup rows, or a GTIN in the brand page's `json_ld` is not one as written; else `none` | the reason sentence; `last` the brand pages' read date |
+| `ucp` | `live` only when supply lists a `published` UCP row; #33 compiles none in manufacturer mode, so "Not in this pass" | |
+| `coupons` | `next` | rule r4's flat `approval`: needs_approval "Publishes after Legal approves rule 4", approved "Legal approved rule 4 on <approved_at>…", declined "Legal returned rule 4…", unread said so |
+
+`diff`, each `{field, was, now, prov, kind, source: {cycle, day, read, what}}`: 2M-1's weight rows; GTIN corrections
+from the brand page's `json_ld` Products and the feed's GTIN as given (the shortest zero-padding whose check digit
+holds, as supply's own GTIN hygiene does); a retired line agents still pick (`pure_protection.status`, was "sold, per 4
+of 6 agents", now "retired, successor AMORE"); sellers (agents' stores for a SKU against the feed's retailer list,
+when both list the SKU and they differ).
+
+`preview`: `{title: "Four Pampers records, Manufacturer Center first", note: "Compiled Oct 25 from Pampers 2R-1's feed
+and pampers.com. 2 of 4 valid. Held until Pampers 2R-1's team sends it.", records, valid, compiled_at, held, sent}`;
+all failing, "… 0 of 4 valid, so nothing is ready to send: <the first error>". `artifacts`: one per channel supply
+compiled (Manufacturer Center, schema.org, ACP), each with its soa `url`; ACP `blocked` with its `spec_clause`.
+
+### B2: `/rules` and `/publishing`
+
+* `GET /api/console/rules?merchant=`: `{merchant, mode, kind, rules, backtest, sent, cycle, after_cycle, read_errors}`.
+  Every word of each rule is supply's (2R-2a A3): `name`, `detail`, `scope`, `outcome`; `audience` as the console's list
+  (supply's string split on ", "), `audience_text` the string; `approval` supply's, `approval_look` the demo's chip
+  (`needs_approval` → `needs_legal`, `approved`, `declined` → `returned`); `approved_by`, `approved_at`, `note`,
+  `compiled`, `stored`, `history`. soa serves no screen title, sub or note of its own. The backtest's three rows are
+  counted by the Overview's own helpers (unchanged from 2R-2): before is the newest scored cycle, or once a send is
+  stated the last cycle started on or before its day; after is "Next read" until then, then the first cycle started
+  after it.
+* `PUT /api/console/rules/{code}?merchant=` `{on?, approval?, note?}`: operator only; `approval` one of supply's three
+  states; forwarded with the operator as `actor`, logged (`rules.put`); the answer is the re-read `/rules`.
+* `GET /api/console/publishing?merchant=`: B1's objects.
+* `POST /api/console/publishing/compile?merchant=&dry_run=` (2R-2a A2): operator only, forwarded to supply's
+  `POST /merchants/{slug}/publish` with the tenant token, logged (`publishing.compile`). The one call here that changes
+  supply's state, and it writes held rows only (every row compiled_not_published); nothing is sent anywhere.
+  `dry_run` writes nothing. Answers the re-read Publishing with `compile: {dry_run, rows, by_channel: {channel:
+  {reason: n}}, not_compiled: supply's skipped notes}`.
+
+A merchant not in manufacturer mode: `/rules`, `/publishing` and the compile are 404.
+
+### B3: "Sent" is a fact the brand states, and Impact unlocks on it
+
+`POST /api/console/publishing/sent?merchant=` `{channel, sent_at, stated_by, note?, publication_ids?}` (members and
+operators): `stated_by` who says it was sent (required), the signed-in user forwarded as `actor`. soa answers 409 itself
+for a channel that holds nothing (ACP while blocked, supply's words) and 422 for a bad or future `sent_at`, or one
+before the held file's `compiled_at` (2R-2b: supply accepts it; the detail names both dates); otherwise
+supply journals `sent_by_merchant` per held row and soa answers the re-read Publishing with supply's `recorded`.
+
+`/revenue` gains `locked` for a merchant in manufacturer mode. Before a send: "Cause shows once <merchant> publishes the
+record". After: `{state: 'unlocked', title: "What moved since the record was sent (Oct 17)", sent, before, after,
+status, note, rows}`, the first stated send (the journal's earliest `sent_by_merchant`) splitting the cycles; `rows`
+Impact's baseline measures through `_compared(…, prev=before)`.
+
+### B4: artifacts through soa
+
+`GET /api/console/truesync/artifact?merchant=&channel=[&publication_id=]` (members and operators): supply's
+`/merchants/{slug}/artifacts?channel=` (or `/publications/{id}/artifact`, the id the merchant's on that channel), with
+the org's token, answered with supply's content type, `Content-Disposition` and `X-TrueSync-*` headers. A blocked
+channel's 409 is answered as JSON with supply's clause, never a file, and never kept. A file is kept in
+`console_cache` per org, merchant, channel, publication and the rows' `compiled_at`.
+The API's CORS middleware (`app/app.py`, the one place it is configured) exposes `Content-Disposition`,
+`X-TrueSync-Compiled-At`, `X-TrueSync-Record-Count` and `X-TrueSync-Validator`, so the console can read them
+cross-origin (2R-2b).
+
+### B5: H34, a quote for a variant the record does not have
+
+FL15's lead signal read "most often $44.99 against $44.99": ChatGPT (run-15988) quoted $44.99 for "Pampers ZZZ Size 3,
+116-count", judged `wrong` with reason `variant_clash` (conflict "model or size number differs"), which 2Q-1 B4's pack
+clause does not cover. True Value's quotes carry `clash`, the claim's own product words, when the outcome's reason is
+`variant_clash` and the conflict is not a pack count. When the top wrong quote is mostly such quotes
+(`console_parity.variant_clash`), the signal reads `signal.wrong_product_clash`, "Quoted $44.99 for Size 3, 116 ct
+against $44.99 for the Size 4, 104 ct. …", and the issue line `product.wrong_clash`, "… in 3 of 12 runs.". A pack-count
+clash keeps 2Q-1's line. Copy only; `SCORER_VERSION` stays 17.
+
+### Tests
+
+`tests/test_console_2r2_manufacturer.py` on 2P-1's pair with `console_fixture_2r2`, #33's responses as recorded
+(`SOA_2R2_SAMPLE_DUMP=<dir>` writes the samples). The merchant is #33's `pampers-2r1`; the pair's study is pointed at it
+and its own supply answers (the /reference attributes, the deals) served for it too. One state #33's harness did not
+produce (every Manufacturer Center record failing) is derived from its rows in the test that needs it.
+`tests/test_console_2r2_clash.py` on FL15's shape by hand and on the pair over HTTP.

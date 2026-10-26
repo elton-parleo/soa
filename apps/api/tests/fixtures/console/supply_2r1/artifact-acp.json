@@ -1,0 +1,20 @@
+{
+ "body": {
+  "detail": {
+   "compiled_at": "2026-10-25T22:02:33+00:00",
+   "detail": "blocked: manufacturer mode publishes no price, and the ACP feed requires one on every item. docs/truesync/truesync-protocol-specs.md \u00a71 (acp-feed-stable-2026-08-18): \"Required for non-Ads feeds: `item_id`, `title`, `description`, `url`, `brand`, `image_url`, `price` (\"79.99 USD\"), `availability` (...), `target_countries`, `seller_name`, and OpenAI flags `is_eligible_search`, `is_eligible_checkout`.\"",
+   "kind": "brand",
+   "reason": "blocked",
+   "record_count": 4,
+   "spec_clause": "docs/truesync/truesync-protocol-specs.md \u00a71 (acp-feed-stable-2026-08-18): \"Required for non-Ads feeds: `item_id`, `title`, `description`, `url`, `brand`, `image_url`, `price` (\"79.99 USD\"), `availability` (...), `target_countries`, `seller_name`, and OpenAI flags `is_eligible_search`, `is_eligible_checkout`.\"",
+   "validator": {
+    "failed": 4,
+    "ok": 0
+   }
+  }
+ },
+ "headers": {
+  "content-type": "application/json"
+ },
+ "status": 409
+}

@@ -1,0 +1,9 @@
+{
+ "body": {
+  "detail": "acp is blocked for 'pampers-2r1'; nothing was held to send"
+ },
+ "headers": {
+  "content-type": "application/json"
+ },
+ "status": 409
+}

@@ -1,0 +1,40 @@
+{
+ "body": {
+  "display_name": "Wiggle & Snug",
+  "merchants": [
+   {
+    "domain": "www.pampers.com",
+    "has_record": true,
+    "held": {
+     "blocked": 4,
+     "by_channel": {
+      "acp": 4,
+      "manufacturer_center": 4,
+      "schema_org": 4
+     },
+     "compiled_at": "2026-10-25T22:02:33",
+     "sent": {
+      "acp": null,
+      "manufacturer_center": null,
+      "schema_org": null
+     },
+     "total": 12
+    },
+    "hosting": "external",
+    "kind": "brand",
+    "mode": "manufacturer",
+    "name": "Pampers 2R-1",
+    "own_domains": [
+     "pampers.com"
+    ],
+    "slug": "pampers-2r1"
+   }
+  ],
+  "slug": "wiggle-and-snug",
+  "soa_org_id": null
+ },
+ "headers": {
+  "content-type": "application/json"
+ },
+ "status": 200
+}

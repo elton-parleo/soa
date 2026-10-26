@@ -6,7 +6,7 @@ from fastapi.responses import FileResponse
 from app.routers import (
     studies, entities, cycles, metrics, scope, actions, full_analysis,
     truesync, customers, lite_requests, public_lite, public_demo, public_full_analysis,
-    console, console_ops, full_loop,
+    console, console_ops, console_manufacturer, full_loop,
 )
 from app.auth import verify_token
 
@@ -57,6 +57,10 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    # 2R-2b: the console downloads the compiled file cross-origin and names it from
+    # Content-Disposition; the X-TrueSync-* lines say when it was compiled and how it validated
+    expose_headers=["Content-Disposition", "X-TrueSync-Compiled-At", "X-TrueSync-Record-Count",
+                    "X-TrueSync-Validator"],
 )
 
 # Apply JWT verification to all routes in these routers.
@@ -133,6 +137,13 @@ app.include_router(
 # operator-only on top of the console scope (app/routers/console_ops.py).
 app.include_router(
     console_ops.router,
+    prefix="/api",
+    dependencies=[Depends(verify_token)],
+)
+# 2R-2: manufacturer mode (Rules, Publishing, the sent statement, the
+# compiled file through soa): console-scoped, the rule switch operator-only.
+app.include_router(
+    console_manufacturer.router,
     prefix="/api",
     dependencies=[Depends(verify_token)],
 )
