@@ -233,3 +233,27 @@ def test_the_shelf_row_is_right_only_when_every_answer_named_the_deal():
     assert verdict(3, 6) == ('Named in 3 of 6 answers', 'partial')
     assert verdict(6, 6) == ('Named in 6 of 6 answers', 'right')
     assert verdict(0, 6) == ('Named in 0 of 6 answers', 'missed')
+
+
+# ── 6: the compiler names the rules that apply and the ones that are on ─
+
+def test_the_compiler_serves_the_rules_that_apply_apart_from_the_rules_on():
+    """FL15's footer read "rules r1, r2, r5" beside "Compliance rules: 0 of 6 on". The recorded schema_org row of
+    #33 (every rule off); then derived: the same row as a compile with r1 and r5 on writes it (their off flags gone)."""
+    import copy
+    from tests import console_fixture_2r2 as f2r2
+    row = next(r for r in f2r2.mine(f2r2.body('publications-held')) if r['channel_slug'] == 'schema_org'
+               and r['record_ref'].endswith('00037000833970'))
+    rules = [{'code': f"r{i}", 'on': False} for i in range(1, 7)]
+    c = rel.compiler({'schema_org': row}, {}, rules)[0]
+    assert (c['rules_relevant'], c['rules_applied'], c['rules_line']) == (['r1', 'r2', 'r5'], [],
+                                                                          'r1, r2, r5 apply, none on')
+    on = copy.deepcopy(row)
+    on['expressiveness'] = [e for e in on['expressiveness'] if e['field'] not in ('rule_r1', 'rule_r5')]
+    rules_on = [{**r, 'on': r['code'] in ('r1', 'r5')} for r in rules]
+    c = rel.compiler({'schema_org': on}, {}, rules_on)[0]
+    assert (c['rules_relevant'], c['rules_applied'], c['rules_line']) == (['r1', 'r2', 'r5'], ['r1', 'r5'],
+                                                                          'r1, r2, r5 apply, r1 and r5 on')
+    # r6 applies only to a record with a retired variant
+    assert 'r6' not in rel.compiler({'schema_org': on}, {}, [{'code': 'r6', 'on': True}])[0]['rules_relevant']
+    assert rel.compiler({'schema_org': on}, {}, [{'code': 'r6', 'on': True}], retired=True)[0]['rules_applied'] == ['r6']

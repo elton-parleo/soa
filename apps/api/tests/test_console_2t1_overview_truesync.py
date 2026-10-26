@@ -231,7 +231,9 @@ def test_a_record_its_readback_timeline_and_compiler(http, db, upstream):
         'Nothing published']
     compiler = {c['channel']: c for c in zzz['compiler']}
     assert compiler['manufacturer_center']['spec_version'] == 'manufacturers-v1-2026-10-05'
-    assert compiler['manufacturer_center']['rules_applied'] == ['r1', 'r5']
+    # 2T-3 (6): r1 and r5 apply to Manufacturer Center; #33's rules are all off, so none is applied
+    assert (compiler['manufacturer_center']['rules_relevant'], compiler['manufacturer_center']['rules_applied']) == \
+        (['r1', 'r5'], [])
     assert compiler['manufacturer_center']['lines'][0]['mark'] == 'carried'
     assert {l['mark'] for l in compiler['acp']['lines']} <= {'carried', 'info', 'approximated', 'conflict', 'dropped'}
     assert compiler['acp']['state'] == 'blocked'

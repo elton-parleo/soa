@@ -243,7 +243,7 @@ async def release_view(scope: CustomerScope, ms: MerchantScope, merchant: str, *
         retailers=(reads['retailers'] or {}).get('domains') or [], own_domains=own_domains, channels=channels,
         brand=brand, cycle=cycle, attribute_answers=facts.get('attribute_answers') or [],
         true_value_rows=facts.get('true_value_rows') or [], promo=facts.get('promo'), deals=facts.get('deals'),
-        agents=facts.get('agents') or [])
+        agents=facts.get('agents') or [], rules=reads['rules'])
     return {
         'workspace': rel.build_workspace(pubs=pubs, records=records, prices=reads['prices'], own_domains=own_domains,
                                          brand=brand or name, domain=own),

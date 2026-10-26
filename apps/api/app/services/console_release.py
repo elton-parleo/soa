@@ -45,8 +45,16 @@ SURFACE_SHORT = {'schema_org': 'Site markup', 'manufacturer_center': 'Manufactur
 #: supply's expressiveness severity -> the compiler line's mark.
 MARKS = {'info': 'info', 'dropped': 'dropped', 'approximated': 'approximated', 'blocked': 'conflict'}
 
-#: The rules a compile applied are journaled as expressiveness lines named so.
+#: A rule that is off is journaled as an expressiveness line named so ("rule rN off: ...").
 RULE_FLAG = re.compile(r'^rule_(r\d+)$')
+
+#: 2T-3 (6): the compliance rules a manufacturer-mode compile reads on each
+#: channel (parleo-supply-app truesync/channels/manufacturer_mode.py): r1 no
+#: price, everywhere; r2 retailers in one order, where retailers are listed;
+#: r5 one size chart per line, where a weight range goes; r6 a retired line's
+#: successor, everywhere, on a record with a retired variant.
+CHANNEL_RULES = {'schema_org': ('r1', 'r2', 'r5', 'r6'), 'manufacturer_center': ('r1', 'r5', 'r6'),
+                 'acp': ('r1', 'r2', 'r6')}
 
 RELEASE_TEMPLATES = {
     'workspace.mode_note': ("Manufacturer records compiled from the feed and {domain}. Nothing publishes until {brand_s} "
@@ -106,6 +114,10 @@ RELEASE_TEMPLATES = {
     'timeline.compiled.blocked': ', blocked on {blocked}',
     'timeline.sent': '{who} says it sent the {channel} file',
     'compiler.carried': 'Validated against {spec}',
+    'compiler.rules': '{rules} {verb}, {on}',
+    'compiler.rules.none_on': 'none on',
+    'compiler.rules.all_on': 'all on',
+    'compiler.rules.some_on': '{codes} on',
     'compiler.rule.manufacturer_center': ('Manufacturer Center keys every product by GTIN and excludes price and '
                                           'availability by spec.'),
     'compiler.rule.schema_org': 'Product with its GTIN, size and pack count. No price: retailers set it.',
@@ -567,15 +579,31 @@ def timeline(variants: List[dict], rows: Dict[str, dict], *, prices: Optional[Li
     return out
 
 
-def compiler(rows: Dict[str, dict], channels: Dict[str, dict]) -> List[dict]:
+def rules_line(relevant: List[str], applied: List[str]) -> Optional[str]:
+    """"r1, r2, r5 apply, none on"."""
+    if not relevant:
+        return None
+    on = T['compiler.rules.none_on'] if not applied else T['compiler.rules.all_on'] if len(applied) == len(relevant) \
+        else T['compiler.rules.some_on'].format(codes=manu._and(applied))
+    return T['compiler.rules'].format(rules=', '.join(relevant), verb='applies' if len(relevant) == 1 else 'apply', on=on)
+
+
+def compiler(rows: Dict[str, dict], channels: Dict[str, dict], rules: Optional[List[dict]] = None,
+             retired: bool = False) -> List[dict]:
     """Per surface the record was compiled for: its spec version, the
-    one-line rule, the compliance rules the compile applied, and the
-    validator's and the expressiveness check's lines, each {mark (carried |
-    info | approximated | conflict | dropped), field, note}."""
+    one-line rule, the compliance rules, and the validator's and the
+    expressiveness check's lines, each {mark (carried | info | approximated |
+    conflict | dropped), field, note}.
+
+    2T-3 (6): `rules_relevant` the rules that apply to the surface (a rule
+    that is off says so in the compile's flags; one that is on, from
+    /rules, by CHANNEL_RULES), `rules_applied` those that are on, and
+    `rules_line` both in one: "r1, r2, r5 apply, none on"."""
+    on = {r.get('code') for r in rules or [] if r.get('on')}
     out = []
     for slug, row in rows.items():
         spec = (channels.get(slug) or {}).get('spec_version') or row.get('spec_version')
-        lines, applied = [], []
+        lines, off = [], []
         validation = row.get('validation') or {}
         carried = manu.carried_fields(row.get('payload'))
         if manu.is_valid(row) and carried:
@@ -585,11 +613,15 @@ def compiler(rows: Dict[str, dict], channels: Dict[str, dict]) -> List[dict]:
         for e in row.get('expressiveness') or []:
             flag = RULE_FLAG.match(str(e.get('field') or ''))
             if flag:
-                applied.append(flag.group(1))
+                off.append(flag.group(1))
                 continue
             lines.append({'mark': MARKS.get(e.get('severity'), 'info'), 'field': e.get('field'), 'note': e.get('note')})
+        applies = [c for c in CHANNEL_RULES.get(slug, ()) if c in on and (c != 'r6' or retired)]
+        relevant = sorted(set(off) | set(applies), key=lambda c: int(c[1:]))
+        applied = [c for c in relevant if c in on and c not in off]
         out.append({'channel': slug, 'name': _channel_short(slug, channels), 'spec_version': spec,
-                    'rule': T.get(f'compiler.rule.{slug}'), 'rules_applied': applied, 'state': cell_state(row),
+                    'rule': T.get(f'compiler.rule.{slug}'), 'rules_relevant': relevant, 'rules_applied': applied,
+                    'rules_line': rules_line(relevant, applied), 'state': cell_state(row),
                     'spec_clause': row.get('spec_clause'), 'lines': lines})
     return out
 
@@ -600,7 +632,7 @@ def build_records(*, pubs: List[dict], catalog: Optional[dict], feed_rows: Optio
                   prices: Optional[List[dict]], retailers: List[str], own_domains: Iterable[str],
                   channels: List[dict], brand: Optional[str], cycle: Optional[dict], attribute_answers: List[dict],
                   true_value_rows: List[dict], promo: Optional[dict], deals: Optional[dict],
-                  agents: Iterable[str]) -> List[dict]:
+                  agents: Iterable[str], rules: Optional[List[dict]] = None) -> List[dict]:
     """The matrix, one row per held record (supply's record_ref), cells for
     the channels in this pass only: {record_ref, name, sub, variants,
     retired, successor, disagree, cells: {channel: {s, disagree, at,
@@ -637,7 +669,7 @@ def build_records(*, pubs: List[dict], catalog: Optional[dict], feed_rows: Optio
             'drift': drift_rows(lines), 'drift_all': lines,
             'timeline': timeline(variants, rows, prices=prices, own_domains=own_domains, lines=lines, cycle=cycle,
                                  channels=by_slug),
-            'compiler': compiler(rows, by_slug),
+            'compiler': compiler(rows, by_slug, rules, retired=retired is not None),
         })
     return out
 
