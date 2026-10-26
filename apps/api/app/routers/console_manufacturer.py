@@ -34,14 +34,16 @@ from app.console_merchants import MerchantScope, check_merchant, merchant_cycles
 from app.console_scope import console_scope
 from app.customer_context import CustomerScope
 from app.routers import full_loop
-from app.routers.console import (_baseline_rows, _compared, _merchant_meta, _promo_inputs, _reads, _routing_inputs,
-                                 _rows, _visibility)
+from app.routers.console import (_baseline_rows, _compared, _json, _merchant_meta, _promo_inputs, _reads,
+                                 _routing_inputs, _rows, _true_value_inputs, _visibility)
 from app.routers.console_ops import operator_scope
 from app.routers.truesync import _unwrap
 from app.services import console_cache
 from app.services import console_manufacturer as manu
 from app.services import console_read_models as rm
+from app.services import console_release as rel
 from app.services import console_score as score_svc
+from soa_shared import surfaces
 from soa_shared.database import engine
 
 router = APIRouter(prefix="/console", tags=["console-manufacturer"])
@@ -125,15 +127,10 @@ def named_by_variant(conn, cycle: dict) -> dict:
     return {k: [name for name, _ in sorted(b.items(), key=lambda kv: (-kv[1][0], kv[1][1]))] for k, b in counts.items()}
 
 
-async def publishing_view(scope: CustomerScope, ms: MerchantScope, merchant: str, *, channels: List[dict],
-                          publications: List[dict], catalog: Optional[dict], reference: Optional[dict],
-                          drift: List[dict]) -> dict:
-    """B1: {mode, surfaces, diff, preview, artifacts, cycle, read_errors} for
-    a merchant in manufacturer mode, from the reads /truesync already holds
-    (channels, publications, catalog, reference and its weight rows), the
-    merchant's /tenant record (`held`), its rules, feed, retailer list and
-    brand pages (retailer-prices), and the newest scored cycle's answers."""
-    record = _record(ms)
+async def brand_reads(scope: CustomerScope, merchant: str) -> dict:
+    """supply's reads a brand at retail's TrueSync, Publishing and Overview
+    share, in one round: {rules, feed, retailers, prices (retailer-prices
+    rows), errors}; a failed read is None and named in `errors`."""
     client = full_loop._client(scope)
     (_, rules, rules_err), (f_status, feed, f_err), (_, retailers, o_err), (_, prices, rp_err) = await asyncio.gather(
         client.get_rules(merchant), client.get_feed(merchant), _reads(scope).get_retailers(merchant),
@@ -141,17 +138,35 @@ async def publishing_view(scope: CustomerScope, ms: MerchantScope, merchant: str
     errors = {n: e for n, e in (('rules', rules_err), ('retailers', o_err), ('retailer_prices', rp_err)) if e}
     if f_err is not None and f_status != 404:   # a merchant with no feed has no sellers to compare
         errors['feed'] = f_err
+    return {'rules': (rules or {}).get('rules') if rules_err is None else None,
+            'feed': feed if f_err is None else None,
+            'retailers': retailers if o_err is None else None,
+            'prices': (prices or {}).get('prices') if rp_err is None else None,
+            'errors': errors}
+
+
+async def publishing_view(scope: CustomerScope, ms: MerchantScope, merchant: str, *, channels: List[dict],
+                          publications: List[dict], catalog: Optional[dict], reference: Optional[dict],
+                          drift: List[dict], reads: Optional[dict] = None) -> dict:
+    """B1: {mode, surfaces, diff, preview, artifacts, cycle, read_errors} for
+    a merchant in manufacturer mode, from the reads /truesync already holds
+    (channels, publications, catalog, reference and its weight rows), the
+    merchant's /tenant record (`held`), its rules, feed, retailer list and
+    brand pages (retailer-prices, brand_reads: `reads` when the caller
+    already holds them), and the newest scored cycle's answers."""
+    record = _record(ms)
+    reads = reads if reads is not None else await brand_reads(scope, merchant)
+    errors = dict(reads['errors'])
     pubs = manu.merchant_publications(publications, _listing_ids(catalog), merchant)
-    own = _own_domain(retailers if o_err is None else None, record)
-    price_rows = (prices or {}).get('prices') if rp_err is None else None
+    own = _own_domain(reads['retailers'], record)
+    price_rows = reads['prices']
     pages = manu.brand_pages(price_rows, [own] if own else [])
     read_at = manu.brand_page_read_at(price_rows)
-    feed_rows = (feed or {}).get('rows') if f_err is None else None
+    feed_rows = (reads['feed'] or {}).get('rows') if reads['feed'] is not None else None
     flags = manu.gtin_flags(pages, feed_rows, brand=_brand(catalog))
     held = (record or {}).get('held')
     surfaces = manu.build_surfaces(pubs=pubs, channels=channels, drift=drift, reference=reference, pages=pages,
-                                   flags=flags, own_domain=own, held=held, read_at=read_at,
-                                   rules=(rules or {}).get('rules') if rules_err is None else None)
+                                   flags=flags, own_domain=own, held=held, read_at=read_at, rules=reads['rules'])
     cycles = _scored_cycles(ms)
     cycle = cycles[0] if cycles else None
     lifecycle, sellers = [], []
@@ -173,6 +188,74 @@ async def publishing_view(scope: CustomerScope, ms: MerchantScope, merchant: str
         'artifacts': manu.build_artifacts(merchant, pubs, channels, held),
         'held': held,
         'cycle': (cycle or {}).get('cycle_code'),
+        'read_errors': errors,
+    }
+
+
+async def cycle_facts(scope: CustomerScope, cycle: dict, merchant: str, reference: Optional[dict]) -> dict:
+    """2T-1 (B3): what one cycle's answers say, as the Overview's own helpers
+    read them (no second count): the attribute answers (cached per cycle and
+    reference, as the Overview keeps them), the True Value rows (each
+    retailer's live price and the agents' quotes), the promo pass-through
+    with its judged answers and supply's deals that day, the agents that ran."""
+    with engine.connect() as conn:
+        asks = rm.asks_attribute(conn, cycle)
+        answers = console_cache.cycle_read(conn, cycle, 'attribute_answers', lambda: rm.attribute_answers(
+            conn, cycle, reference), console_cache.digest(reference)) if asks else []
+        own_domain, variants, scored = _true_value_inputs(conn, cycle)
+        platforms = [r[0] for r in conn.execute(text("SELECT DISTINCT platform FROM soa_runs WHERE cycle_id = :c"),
+                                                {'c': cycle['id']})]
+    tv = rm.build_true_value(_json(cycle.get('reference_prices')), scored, own_domain=own_domain,
+                             record_variants=variants, reads=(reference or {}).get('rows'))
+    promo, deals, _as_of, p_err = await _promo_inputs(scope, cycle, merchant)
+    return {'attribute_answers': answers, 'true_value_rows': tv.get('rows') or [], 'promo': promo, 'deals': deals,
+            'agents': sorted({surfaces.agent_of(p) or p for p in platforms if p}),
+            'errors': {'deals': p_err} if p_err else {}}
+
+
+async def release_view(scope: CustomerScope, ms: MerchantScope, merchant: str, *, channels: List[dict],
+                       publications: List[dict], catalog: Optional[dict], reference: Optional[dict],
+                       reads: Optional[dict] = None, cycle: Optional[dict] = None,
+                       facts: Optional[dict] = None) -> dict:
+    """2T-1 (B3): TrueSync as a release page for a brand at retail:
+    {workspace, release, destinations, records (the matrix, one row per held
+    record), releases, cell_states, pass_channels, read_errors}. `cycle` the
+    cycle whose answers the readback reads (the newest scored one when not
+    given), `facts` its cycle_facts when the caller already holds them. The
+    Overview's TrueSync card reads the same workspace: no second count."""
+    record = _record(ms)
+    reads = reads if reads is not None else await brand_reads(scope, merchant)
+    errors = dict(reads['errors'])
+    pubs = manu.merchant_publications(publications, _listing_ids(catalog), merchant)
+    own = _own_domain(reads['retailers'], record)
+    own_domains = [own] if own else []
+    if cycle is None:
+        cycles = _scored_cycles(ms)
+        cycle = cycles[0] if cycles else None
+    if facts is None and cycle is not None:
+        facts = await cycle_facts(scope, cycle, merchant, reference)
+    facts = facts or {}
+    errors.update(facts.get('errors') or {})
+    brand, name = _brand(catalog), (record or {}).get('name') or merchant
+    feed = reads['feed'] or {}
+    records = rel.build_records(
+        pubs=pubs, catalog=catalog, feed_rows=feed.get('rows'), prices=reads['prices'],
+        retailers=(reads['retailers'] or {}).get('domains') or [], own_domains=own_domains, channels=channels,
+        brand=brand, cycle=cycle, attribute_answers=facts.get('attribute_answers') or [],
+        true_value_rows=facts.get('true_value_rows') or [], promo=facts.get('promo'), deals=facts.get('deals'),
+        agents=facts.get('agents') or [])
+    return {
+        'workspace': rel.build_workspace(pubs=pubs, records=records, prices=reads['prices'], own_domains=own_domains,
+                                         brand=brand or name, domain=own),
+        'release': rel.build_release(pubs=pubs, records=records, channels=channels, rules=reads['rules'], name=name,
+                                     brand=brand),
+        'destinations': rel.build_destinations(pubs=pubs, all_pubs=publications, merchants=ms.merchants or [],
+                                               slug=merchant, name=name, brand=brand, domain=own, channels=channels),
+        'records': records,
+        'releases': rel.build_releases(pubs=pubs, feed_version=feed.get('version'), rules=reads['rules']),
+        'cell_states': list(rel.CELL_STATES),
+        'pass_channels': rel.pass_channels(pubs),
+        'readback_cycle': (cycle or {}).get('cycle_code'),
         'read_errors': errors,
     }
 

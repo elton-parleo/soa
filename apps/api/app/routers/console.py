@@ -856,12 +856,22 @@ async def get_truesync(merchant: str = Query(...), scope: CustomerScope = Depend
     # changes on publish, the held file's preview and the artifacts, as /publishing serves them
     record = next((m for m in ms.merchants or [] if m.get('slug') == merchant), None)
     if (record or {}).get('mode') == 'manufacturer':
-        from app.routers.console_manufacturer import publishing_view
-        view = await publishing_view(scope, ms, merchant, channels=[c for c in channels or [] if c.get('is_active', True)],
-                                     publications=pubs or [], catalog=catalog,
-                                     reference=reference if r_err is None else None, drift=drift)
+        from app.routers.console_manufacturer import brand_reads, publishing_view, release_view
+        active = [c for c in channels or [] if c.get('is_active', True)]
+        reads = await brand_reads(scope, merchant)
+        view = await publishing_view(scope, ms, merchant, channels=active, publications=pubs or [], catalog=catalog,
+                                     reference=reference if r_err is None else None, drift=drift, reads=reads)
         errors = view.pop('read_errors')
+        # 2T-1 (B3): the diff stays on /publishing; TrueSync is the release page
+        view.pop('diff', None)
         body.update(view)
+        release = await release_view(scope, ms, merchant, channels=active, publications=pubs or [], catalog=catalog,
+                                     reference=reference if r_err is None else None, reads=reads)
+        errors.update(release.pop('read_errors'))
+        # the matrix is one row per held record, on the channels this pass compiled for only
+        body['products'] = release.pop('records')
+        body['channels'] = [c for c in body.get('channels') or [] if c.get('id') in release['pass_channels']]
+        body.update(release)
         if errors:
             body.setdefault('read_errors', {}).update(errors)
     return body
