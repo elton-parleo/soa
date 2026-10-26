@@ -22,6 +22,7 @@ from typing import Dict, Iterable, List, Optional
 
 from app.services import console_manufacturer as manu
 from app.services import console_read_models as rm
+from app.services import console_release as rel
 from soa_shared import attribute_accuracy, surfaces
 from soa_shared import promo_pass_through as ppt
 from soa_shared.possessive import possessive
@@ -764,16 +765,15 @@ def build_activity(*, cycle: dict, first_at, last_at, answers: int, usable: int,
         out.append({'at': max(str(r['observed_at']) for r in pages), 'icon': 'record', 'stage': 'brand_page',
                     'text': T['activity.brand_page'].format(domain=next(iter(sorted(own)), 'the brand site'), pages=n,
                                                            page_word='page' if n == 1 else 'pages')})
-    shelf = [r for r in prices or [] if r.get('role') != 'own' and _domain(r.get('retailer_domain')) not in own
-             and r.get('observed_at')]
-    if shelf:
-        domains = {_domain(r.get('retailer_domain')) for r in shelf}
-        walled = sorted({_name(r.get('retailer_domain')) for r in shelf if r.get('price') is None
-                         and r.get('method') in ('none', 'wall')})
-        out.append({'at': max(str(r['observed_at']) for r in shelf), 'icon': 'record', 'stage': 'shelf',
-                    'text': T['activity.shelf'].format(n=len(domains), read=len(domains) - len(walled),
+    # 2T-3 (1): the record timeline's rule (rel.shelf_reads), over every SKU
+    reads = rel.shelf_reads(prices, own)
+    if reads['read'] or reads['walled']:
+        walled = reads['walled']
+        out.append({'at': reads['at'], 'icon': 'record', 'stage': 'shelf',
+                    'text': T['activity.shelf'].format(n=len(reads['read']) + len(walled), read=len(reads['read']),
                                                        walled=T['activity.shelf.walled'].format(names=manu._and(walled))
-                                                       if walled else '')})
+                                                       if walled else ''),
+                    'read': reads['read'], 'walled': walled, 'walled_skus': reads['walled_skus']})
     if last_at and cycle.get('status') == 'complete':
         out.append({'at': str(last_at), 'icon': 'answers', 'stage': 'complete',
                     'text': T['activity.complete'].format(answers=answers, agents=agents, usable=usable)})

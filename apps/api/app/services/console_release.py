@@ -202,6 +202,39 @@ def variant_rows(prices: Optional[List[dict]], variant: dict) -> List[dict]:
     return [r for r in prices or [] if _row_matches(r, variant)]
 
 
+#: A reference read's price method when the page was walled: nothing read it.
+WALLED_METHODS = (None, 'none', 'wall')
+
+
+def shelf_reads(rows: Optional[List[dict]], own_domains: Iterable[str]) -> dict:
+    """2T-3 (1): what the shelf reads say per retailer, the one rule the
+    record timeline and the Overview's activity both read. A retailer is
+    read when at least one SKU's reference read on it has a price method
+    other than none (an own fetch, a hosted render), walled only when every
+    read on it walled, unread when no read of it is dated. {read, walled,
+    unread: [names], walled_skus: {name: SKUs walled on a retailer read}, at}."""
+    own = {_domain(d) for d in own_domains or () if d}
+    shelf = [r for r in rows or [] if r.get('role') != 'own' and _domain(r.get('retailer_domain')) not in own]
+    by: Dict[str, List[dict]] = {}
+    for r in shelf:
+        by.setdefault(rm._retailer_name(_domain(r.get('retailer_domain'))), []).append(r)
+    read, walled, unread, walled_skus = [], [], [], {}
+    for name, mine in by.items():
+        dated = [r for r in mine if r.get('observed_at')]
+        if not dated:
+            unread.append(name)
+            continue
+        walls = [r for r in dated if r.get('method') in WALLED_METHODS]
+        if len(walls) == len(dated):
+            walled.append(name)
+        else:
+            read.append(name)
+            if walls:
+                walled_skus[name] = len({r.get('sku') or r.get('gtin') or r.get('variant_ref') for r in walls})
+    return {'read': sorted(read), 'walled': sorted(walled), 'unread': sorted(unread), 'walled_skus': walled_skus,
+            'at': max((str(r['observed_at']) for r in shelf if r.get('observed_at')), default=None)}
+
+
 def _chart_entry(chart: Optional[List[dict]], label: Optional[str]) -> Optional[dict]:
     size = attribute_accuracy.size_of(label)
     if size is None:
@@ -404,9 +437,8 @@ def master_record(variants: List[dict], *, prices: Optional[List[dict]], retaile
     if missing:
         out.append({'k': 'Not in the feed', 'v': ', '.join(rm._retailer_name(_domain(d)) for d in missing),
                     'prov': 'brand', 'note': T['record.not_in_feed']})
-    walled = sorted({rm._retailer_name(_domain(r.get('retailer_domain'))) for r in shelf
-                     if r.get('observed_at') and r.get('method') in ('none', 'wall') and r.get('price') is None})
-    unread = sorted({rm._retailer_name(_domain(r.get('retailer_domain'))) for r in shelf if not r.get('observed_at')})
+    reads = shelf_reads(shelf, own)
+    walled, unread = reads['walled'], reads['unread']
     cant = [T['record.walled'].format(names=manu._and(walled))] if walled else []
     cant += [T['record.unread'].format(names=manu._and(unread))] if unread else []
     if cant:
@@ -442,17 +474,13 @@ def timeline(variants: List[dict], rows: Dict[str, dict], *, prices: Optional[Li
         out.append({'at': newest['observed_at'], 'what': T['timeline.brand_page'].format(domain=domain,
                                                                                           what=manu._and(what)),
                     'tone': 'neu'})
-    shelf = [r for r in mine if r.get('role') != 'own' and _domain(r.get('retailer_domain')) not in own]
-    if shelf:
-        name = lambda r: rm._retailer_name(_domain(r.get('retailer_domain')))  # noqa: E731
-        read = sorted({name(r) for r in shelf if r.get('observed_at') and r.get('price') is not None})
-        walled = sorted({name(r) for r in shelf if r.get('observed_at') and r.get('price') is None})
-        unread = sorted({name(r) for r in shelf if not r.get('observed_at')})
+    reads = shelf_reads(mine, own)
+    if reads['read'] or reads['walled'] or reads['unread']:
+        read, walled, unread = reads['read'], reads['walled'], reads['unread']
         parts = ([T['timeline.shelf.read'].format(names=manu._and(read))] if read else []) + \
             ([T['timeline.shelf.walled'].format(names=manu._and(walled))] if walled else []) + \
             ([T['timeline.shelf.unread'].format(names=manu._and(unread))] if unread else [])
-        at = max((str(r['observed_at']) for r in shelf if r.get('observed_at')), default=None)
-        out.append({'at': at, 'what': T['timeline.shelf'].format(read='. '.join(parts)),
+        out.append({'at': reads['at'], 'what': T['timeline.shelf'].format(read='. '.join(parts)),
                     'tone': 'warn' if walled or unread else 'ok'})
     if cycle is not None and lines:
         parts = []
@@ -589,8 +617,9 @@ def build_workspace(*, pubs: List[dict], records: List[dict], prices: Optional[L
     slugs = pass_channels(pubs)
     own = {_domain(d) for d in own_domains or () if d}
     shelf = [r for r in prices or [] if r.get('role') != 'own' and _domain(r.get('retailer_domain')) not in own]
+    names = shelf_reads(shelf, own)['walled']
     walled = sorted({_domain(r.get('retailer_domain')) for r in shelf
-                     if r.get('observed_at') and r.get('method') in ('none', 'wall') and r.get('price') is None})
+                     if rm._retailer_name(_domain(r.get('retailer_domain'))) in names})
     verified = max((str(r['observed_at']) for r in prices or [] if r.get('observed_at')), default=None)
     per_surface = []
     for slug in slugs:
