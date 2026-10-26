@@ -89,6 +89,7 @@ from scoring import brand_fact_index as bfi
 from scoring.brand_direct_classifier import spans_overlap
 from soa_shared import attribute_accuracy as aa
 from soa_shared import expected_answers as ea
+from soa_shared.possessive import possessive
 from soa_shared.retailers import retailer_name, retailers_named
 
 GROUNDED, ECHOED, MISATTRIBUTED, FABRICATED = 'grounded', 'echoed', 'misattributed', 'fabricated'
@@ -344,10 +345,6 @@ def judge_span(text, *, question, brand, index, others=(), own_domains=(), facts
     else:
         out['verdict'] = UNVERIFIED
     return out
-
-
-def possessive(name) -> str:
-    return f"{name}'" if str(name).endswith('s') else f"{name}'s"
 
 
 def _where(fact: dict, span: dict, index, brand) -> str:

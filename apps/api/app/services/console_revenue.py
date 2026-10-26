@@ -23,6 +23,7 @@ from sqlalchemy import text
 
 from app.services import console_read_models as rm
 from soa_shared import revenue as defaults
+from soa_shared.possessive import possessive
 
 INPUT_FIELDS = ('scope_value', 'scope_display', 'scope_source', 'influence', 'horizon', 'penalty', 'lost_gainable',
                 'currency')
@@ -176,7 +177,7 @@ TEMPLATES = {
     'lost.fix.brand': "Publish the brand's facts as one record agents can read, so brand-choice answers can find it",
     'lost.fix.retailer': "Publish the offer record so cheapest-place answers can see your price",
     'missed.title.brand': "Prices and deals agents get wrong",
-    'missed.title.retailer': "{name}'s price is wrong",
+    'missed.title.retailer': "{name_s} price is wrong",
     'missed.measured': ("{n} of the {of} price answers got the price wrong or quoted another brand's price, {pct}. "
                         "Counted once: only for shoppers the brand choice did not already send elsewhere, {once}."),
     'missed.no_price': "{n} {answers} gave no price at all.",
@@ -324,7 +325,8 @@ def build_model(shares: dict, inputs: dict, *, cycle: str, kind: str, name: str,
                         'share': L['share'], 'gainable': L['gainable'], 'fix': TEMPLATES[f'lost.fix.{k}'],
                         'route': 'visibility', **({'answerId': L['first_answer']} if L['first_answer'] else {})})
         if M['share'] is not None:
-            drivers.append({'id': 'missed', 'kind': 'missed', 'title': TEMPLATES[f'missed.title.{k}'].format(name=name),
+            drivers.append({'id': 'missed', 'kind': 'missed',
+                            'title': TEMPLATES[f'missed.title.{k}'].format(name=name, name_s=possessive(name)),
                             'measured': TEMPLATES['missed.measured'].format(n=M['n'], of=M['of'], pct=_pct(M['raw']),
                                                                             once=_pct(M['share'])),
                             'share': M['share'], 'gainable': 1.0, 'fix': TEMPLATES[f'missed.fix.{k}'],

@@ -20,7 +20,7 @@ BANNED = (';', '—')
 
 
 @pytest.mark.parametrize('module', ['surfaces.py', 'expected_answers.py', 'degraded_dimensions.py',
-                                    'scan_dimensions.py', 'catalog_tiers.py'])
+                                    'scan_dimensions.py', 'catalog_tiers.py', 'possessive.py'])
 def test_every_copy_is_identical(module):
     present = [os.path.join(ROOT, d, module) for d in COPIES if os.path.exists(os.path.join(ROOT, d, module))]
     assert len(present) >= 2, present          # catalog_tiers.py has no packages/shared copy

@@ -17,10 +17,12 @@ The first run is the top level here (`sent-20261017.json` is its sent POST); the
 `/tenant` and `/publications` afterwards are in `sent-20261023/`. Its other responses differ from the first
 run's only in wall-clock stamps (`compiled_at`, `at`, filenames' dates).
 
-`brand-pages.json` is not a route's response: no route in #33's harness serves `brand_page` for this
-merchant (its `/reference` and `/retailer-prices` rows carry none: the harness's reads are not matched to the
-feed's rows). It is supply's own `brand_page.read` over the recorded pampers.com pages, the value #33's
-harness stores on its reads, so soa's tests put it on the own-domain retailer-prices rows where 2O-6 serves it.
+`brand-pages.json` is not a route's response: it is supply's own `brand_page.read` over the recorded pampers.com
+pages, the value #33's harness stores on its reads. 2S-1: soa's tests no longer put it on the retailer-prices rows. Those
+rows, as recorded, already carry the brand page the way 2O-6 serves it (`json_ld`, `size_chart` and `bullets` on the two
+own-domain rows read Oct 20, beside their `observed_at`), and soa reads that. The earlier composition, under a
+`brand_page` key no supply route serves, hid that soa looked for a key production never sent, which is why the live
+site markup surface read "Not read yet". `brand-pages.json` stays for the tests that read the full read by hand.
 
 Not from #33 (the soa side of the test, unchanged): 2P-1's two cycles, and their `/reference` attributes and
 `/deals`, which are not 2R-1's routes.

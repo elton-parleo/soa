@@ -12,11 +12,12 @@ pointed at that merchant (`retag`), and its own supply answers (the /reference
 attributes the weight rows read, the deals) served for it too (`alias`): they
 are not 2R-1's routes, so nothing of #33's replaces them.
 
-The two compositions, both of #33's own values: `retailer_prices` puts
-brand-pages.json (supply's brand_page.read over the recorded pampers.com pages,
-the value #33's harness stores on its reads) on the own-domain retailer-prices
-rows of the same URL, where 2O-6 serves it; no route in #33's harness served it
-for this merchant.
+One composition, of #33's own values: `alias` above. The retailer-prices rows
+are #33's as recorded: its own-domain rows carry the brand page as 2O-6
+serves it (json_ld, size_chart, bullets on the row, beside its observed_at),
+which is what soa reads (manu.row_brand_page). 2S-1: before, this harness
+put brand-pages.json on those rows under a `brand_page` key no supply route
+serves, so the tests read a brand page production never sent.
 """
 import base64
 import copy
@@ -55,14 +56,8 @@ def mine(rows):
 
 
 def retailer_prices():
-    """#33's retailer-prices, with the brand pages its harness stores on its reads on the own rows of their URL."""
-    out = copy.deepcopy(body('retailer-prices'))
-    pages = {p['url']: p for p in recorded('brand-pages').values()}
-    for row in out.get('prices') or []:
-        page = pages.get(row.get('url'))
-        if page and row.get('retailer_domain') == 'pampers.com':
-            row['brand_page'], row['observed_at'] = page['brand_page'], page['observed_at']
-    return out
+    """#33's retailer-prices, as recorded."""
+    return copy.deepcopy(body('retailer-prices'))
 
 
 def retag(db):
