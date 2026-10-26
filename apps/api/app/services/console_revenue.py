@@ -181,6 +181,28 @@ TEMPLATES = {
     'missed.measured': ("{n} of the {of} price answers got the price wrong or quoted another brand's price, {pct}. "
                         "Counted once: only for shoppers the brand choice did not already send elsewhere, {once}."),
     'missed.no_price': "{n} {answers} gave no price at all.",
+    # 2T-1 (B2): a brand at retail with size questions: Missed is the size answers wrong, the prices a second clause
+    'missed.title.attribute': "Facts agents and retailers get wrong",
+    'missed.measured.attribute': ("{n} of the {of} size answers gave a weight range that doesn't match {site}, {pct}. "
+                                  "Prices: {pn} of the {pof} price answers got the price wrong or quoted another "
+                                  "brand's, {ppct}. Counted once: only for shoppers the brand choice did not already "
+                                  "send elsewhere, {once}."),
+    'missed.measured.attribute.no_price': ("{n} of the {of} size answers gave a weight range that doesn't match {site}, "
+                                           "{pct}. Counted once: only for shoppers the brand choice did not already "
+                                           "send elsewhere, {once}."),
+    'basis.attribute': ("Each share is measured on the questions where it can happen, over every agent, in cycle "
+                        "{cycle}. Brand choice: {lost_n} of {lost_of} {set} answers put another {rival} first "
+                        "({lost_pct}). Facts: {miss_n} of {miss_of} size answers gave a weight range that doesn't match "
+                        "{site} ({miss_raw}). Prices, beside it and not added: {price_n} of {price_of} price answers "
+                        "got the price wrong or quoted another brand's ({price_raw}). The model assumes an AI-assisted "
+                        "purchase passes through both, a brand choice and then a size check, and counts a size miss "
+                        "only where the brand choice didn't already go elsewhere, so no shopper counts twice "
+                        "({miss_pct} once). The {set} share is applied to all AI-touched sales, on the assumption that "
+                        "the study's question mix stands in for the shopper's journey. Deals agents miss are left out, "
+                        "since the price and the deal sit with the retailer. Gainable counts all of Missed, since you "
+                        "own the record, plus {win_back} of Lost, the win-back share set on Impact."),
+    'hero_basis.attribute': ("{lost_pct} of {set} answers put another {rival} first, plus {miss_raw} of size answers "
+                             "get {name} wrong, each shopper counted once"),
     'missed.fix.brand': "One record per SKU, on every surface retailers and agents read",
     'missed.fix.retailer': "One offer record with the price and program terms, published to every surface",
     'access.title': "Agents can't read {domain}, so they quote other sources",
@@ -217,13 +239,19 @@ def is_retailer_name(name: Optional[str]) -> bool:
     return bool(name) and bool(retailers_named(name))
 
 
-def revenue_shares(vis_rows: list, catalog_rows: list, lost_gainable: float = 0.0, *, kind: str = 'brand') -> dict:
+def revenue_shares(vis_rows: list, catalog_rows: list, lost_gainable: float = 0.0, *, kind: str = 'brand',
+                   attribute_answers: Optional[list] = None, site: Optional[str] = None) -> dict:
     """The two shares, the counts behind them and the runs in each set.
 
     vis_rows: Visibility's byQuestion (answered, unprompted, brand_choice,
     tier, first, agent, run) over every surface. catalog_rows: one per
     catalog-tier run (run_id, platform, answer_status, outcome, reason_code,
-    reference_price). 2K-1: Lost is over the brand-choice rows."""
+    reference_price). 2K-1: Lost is over the brand-choice rows.
+
+    2T-1 (B2): `attribute_answers` (a brand at retail's judged size answers,
+    rm.attribute_answers) make Missed the share of them that got the weight
+    range wrong (the demo's pg formula); the price share rides beside it
+    (`price`), never added. `site` the brand site the range is its chart's."""
     from soa_shared import surfaces
 
     def choice(v) -> bool:
@@ -253,12 +281,19 @@ def revenue_shares(vis_rows: list, catalog_rows: list, lost_gainable: float = 0.
 
     lost_share = len(lost) / len(unprompted) if unprompted else None
     raw = len(missed) / len(denom) if denom else None
+    price = {'raw': raw, 'n': len(missed), 'of': len(denom)}
+    sized = [a for a in attribute_answers or [] if a.get('verdict') is not None]
+    size_missed = [a for a in sized if a['verdict'] != 'match']
+    basis = 'attribute' if sized else 'price'
+    if sized:
+        raw = len(size_missed) / len(sized)
     once = raw * (1 - lost_share) if raw is not None and lost_share is not None else None
     reason = (None if unprompted else
               TEMPLATES['not_measured.no_answers'] if asked_unprompted else TEMPLATES['not_measured.no_unprompted'])
 
     agent_of = lambda r: surfaces.agent_of(r.get('platform')) or r.get('platform')  # noqa: E731
-    against = [v['agent'] for v in lost] + [agent_of(r) for r in missed]
+    against = [v['agent'] for v in lost] + ([agent_of(a) for a in size_missed] if sized else
+                                           [agent_of(r) for r in missed])
     per = {}
     for a in against:
         per[a] = per.get(a, 0) + 1
@@ -276,10 +311,14 @@ def revenue_shares(vis_rows: list, catalog_rows: list, lost_gainable: float = 0.
                  'rivals': sorted(rivals.items(), key=lambda kv: (-kv[1], kv[0])),
                  'first_answer': min((v['run'] for v in lost), key=run_key, default=None),
                  'gainable': float(lost_gainable or 0.0)},
-        'missed': {'raw': raw, 'share': once, 'n': len(missed), 'of': len(denom),
+        'missed': {'raw': raw, 'share': once, 'n': len(size_missed) if sized else len(missed),
+                   'of': len(sized) if sized else len(denom),
                    'unverifiable': sum(1 for r in answered if r.get('outcome') == 'unverifiable'),
                    'no_price_runs': len(no_price),
-                   'first_answer': f"run-{min(r['run_id'] for r in missed)}" if missed else None, 'gainable': 1.0},
+                   'first_answer': (f"run-{min(a['run_id'] for a in size_missed)}" if size_missed else None) if sized
+                   else (f"run-{min(r['run_id'] for r in missed)}" if missed else None), 'gainable': 1.0,
+                   # 2T-1 (B2): which answers Missed is over, and the price share beside it
+                   'basis': basis, 'price': price, 'site': site},
         'by_agent': by_agent, 'against': len(against),
         # 2K-1: what the Lost set is called in every sentence
         'set': set_words,
@@ -313,6 +352,9 @@ def build_model(shares: dict, inputs: dict, *, cycle: str, kind: str, name: str,
     L, M = shares['lost'], shares['missed']
     set_words = shares.get('set') or 'brand-choice'
     drivers = []
+    # 2T-1 (B2): Missed over the size answers, the prices beside it
+    attribute = M.get('basis') == 'attribute'
+    price = M.get('price') or {}
     if shares['measured']:
         rivals = L['rivals']
         lead = (TEMPLATES['lost.rivals'].format(lead=rivals[0][0], k=rivals[0][1],
@@ -325,10 +367,19 @@ def build_model(shares: dict, inputs: dict, *, cycle: str, kind: str, name: str,
                         'share': L['share'], 'gainable': L['gainable'], 'fix': TEMPLATES[f'lost.fix.{k}'],
                         'route': 'visibility', **({'answerId': L['first_answer']} if L['first_answer'] else {})})
         if M['share'] is not None:
+            if attribute:
+                measured = TEMPLATES['missed.measured.attribute' if price.get('of') else
+                                     'missed.measured.attribute.no_price'].format(
+                    n=M['n'], of=M['of'], site=M.get('site') or 'the brand site', pct=_pct(M['raw']), pn=price.get('n'),
+                    pof=price.get('of'), ppct=_pct(price['raw']) if price.get('raw') is not None else '0%',
+                    once=_pct(M['share']))
+            else:
+                measured = TEMPLATES['missed.measured'].format(n=M['n'], of=M['of'], pct=_pct(M['raw']),
+                                                               once=_pct(M['share']))
             drivers.append({'id': 'missed', 'kind': 'missed',
-                            'title': TEMPLATES[f'missed.title.{k}'].format(name=name, name_s=possessive(name)),
-                            'measured': TEMPLATES['missed.measured'].format(n=M['n'], of=M['of'], pct=_pct(M['raw']),
-                                                                            once=_pct(M['share'])),
+                            'title': TEMPLATES['missed.title.attribute'] if attribute else
+                            TEMPLATES[f'missed.title.{k}'].format(name=name, name_s=possessive(name)),
+                            'measured': measured, 'basis': M.get('basis', 'price'),
                             'share': M['share'], 'gainable': 1.0, 'fix': TEMPLATES[f'missed.fix.{k}'],
                             'route': 'true-value', **({'answerId': M['first_answer']} if M['first_answer'] else {}),
                             # 2K-4: the answers that gave no price, said on a second line, never counted
@@ -366,16 +417,23 @@ def build_model(shares: dict, inputs: dict, *, cycle: str, kind: str, name: str,
         'shares': {'lost': L['share'], 'missed_raw': M['raw'], 'missed': M['share']},
         'counts': {'lost': {k2: L[k2] for k2 in ('n', 'of', 'you_first')}, 'lost_set': set_words,
                    'lost_rivals': [list(x) for x in L['rivals']],
-                   'missed': {k2: M[k2] for k2 in ('n', 'of', 'unverifiable', 'no_price_runs')}, 'against': shares['against']},
-        'basis': (TEMPLATES['basis'].format(cycle=cycle, lost_n=L['n'], lost_of=L['of'], lost_pct=_pct(L['share']),
-                                            rival=rival, miss_n=M['n'], miss_of=M['of'],
-                                            miss_raw=_pct(M['raw']) if M['raw'] is not None else 'not measured',
-                                            choice='brand choice' if k == 'brand' else 'store choice',
-                                            miss_pct=_pct(M['share']) if M['share'] is not None else 'not measured',
-                                            win_back=_pct(L['gainable']), set=set_words)
+                   'missed': {**{k2: M[k2] for k2 in ('n', 'of', 'unverifiable', 'no_price_runs')},
+                              **({'basis': 'attribute', 'price': {k2: price.get(k2) for k2 in ('n', 'of')}}
+                                 if attribute else {})},
+                   'against': shares['against']},
+        'basis': ((TEMPLATES['basis.attribute' if attribute else 'basis'].format(
+            cycle=cycle, lost_n=L['n'], lost_of=L['of'], lost_pct=_pct(L['share']),
+            rival=rival, miss_n=M['n'], miss_of=M['of'],
+            miss_raw=_pct(M['raw']) if M['raw'] is not None else 'not measured',
+            choice='brand choice' if k == 'brand' else 'store choice',
+            miss_pct=_pct(M['share']) if M['share'] is not None else 'not measured',
+            win_back=_pct(L['gainable']), set=set_words, site=M.get('site') or 'the brand site',
+            price_n=price.get('n'), price_of=price.get('of'),
+            price_raw=_pct(price['raw']) if price.get('raw') is not None else 'not measured'))
                   if shares['measured'] else None),
-        'heroBasis': (TEMPLATES['hero_basis'].format(lost_pct=_pct(L['share']), rival=rival, set=set_words,
-                                                     miss_raw=_pct(M['raw']) if M['raw'] is not None else '0%', name=name)
+        'heroBasis': (TEMPLATES['hero_basis.attribute' if attribute else 'hero_basis'].format(
+            lost_pct=_pct(L['share']), rival=rival, set=set_words,
+            miss_raw=_pct(M['raw']) if M['raw'] is not None else '0%', name=name)
                       if shares['measured'] else None),
         'rules': TEMPLATES,
     }
