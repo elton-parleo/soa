@@ -977,6 +977,60 @@ def feed_sku_rows(feed: Optional[dict], catalog: Optional[dict]) -> List[dict]:
     return rows
 
 
+#: 2T-4 (3): a cell's second line, the page read after the one its runs were judged against
+T_TV_LATER = 'page read later: {live}, {day}'
+#: 2T-4 (3): the fields of a read that make it the same read
+_READ_KEYS = ('price', 'verifiable', 'observed_at', 'method')
+
+
+def judged_read(claim: Optional[dict], outcome: Optional[str], reason: Optional[str] = None) -> Optional[dict]:
+    """
+    2T-4 (3): the read a run was judged against: its deciding claim's
+    `reference` (the scorer's ReferenceRow: price, verifiable, read status,
+    source, method, observed_at), or, for a run stored unverifiable with no
+    claim carrying one ("no reference row for this page"), an unreadable
+    read with the scorer's reason. None when the run carries no read (scored
+    against the record, or before the scorer stored one): the cell's own
+    reference is then the read.
+    """
+    reference = (claim or {}).get('reference') if isinstance(claim, dict) else None
+    if isinstance(reference, dict) and reference:
+        return {k: reference.get(k) for k in ('price', 'currency', 'verifiable', 'unverifiable_reason', 'read_status',
+                                             'reference_source', 'method', 'observed_at', 'url')}
+    if outcome == 'unverifiable':
+        return {'price': None, 'verifiable': False, 'unverifiable_reason': reason, 'observed_at': None}
+    return None
+
+
+def _same_read(a: Optional[dict], b: Optional[dict]) -> bool:
+    if a is None or b is None:
+        return a is b
+    pa, pb = a.get('price'), b.get('price')
+    same_price = pa == pb or (pa not in (None, '') and pb not in (None, '') and _money_eq(pa, pb))
+    return same_price and bool(a.get('verifiable', True)) == bool(b.get('verifiable', True)) and \
+        (a.get('observed_at') is None or b.get('observed_at') is None or
+         str(a.get('observed_at'))[:19] == str(b.get('observed_at'))[:19])
+
+
+def _money_eq(a, b) -> bool:
+    try:
+        return abs(float(a) - float(b)) < 0.005
+    except (TypeError, ValueError):
+        return str(a) == str(b)
+
+
+def _judged_of(runs: List[dict]) -> Optional[dict]:
+    """The read a cell's runs were judged against: the one most of them carry (they share the cycle's
+    cached read), the newest on a tie; None when none carries one."""
+    reads = [r['judged'] for r in runs if isinstance(r.get('judged'), dict)]
+    if not reads:
+        return None
+    counts = Counter(json.dumps({k: rd.get(k) for k in _READ_KEYS}, sort_keys=True, default=str) for rd in reads)
+    top = max(counts.values())
+    tied = [rd for rd in reads if counts[json.dumps({k: rd.get(k) for k in _READ_KEYS}, sort_keys=True, default=str)] == top]
+    return max(tied, key=lambda rd: str(rd.get('observed_at') or ''))
+
+
 def build_true_value(reference: Optional[dict], scored: List[dict], *, own_domain: Optional[str],
                      record_variants: List[dict], reads: Optional[List[dict]] = None,
                      feed_rows: Optional[List[dict]] = None, brands: Optional[Dict[str, str]] = None) -> dict:
@@ -1103,6 +1157,8 @@ def build_true_value(reference: Optional[dict], scored: List[dict], *, own_domai
     default = keys[0] if keys else None
 
     def cell_for(runs, ref):
+        # 2T-4 (3): the verdict is the read the runs were judged against, never a later one
+        ref = _judged_of(runs) or ref
         outcome, stated = aggregate_cell(runs)
         if ref is not None and ref.get('method') == NOT_PRICED_METHOD:
             # 2K-1: the brand's own page sets no price: its quotes are not scored
@@ -1113,15 +1169,28 @@ def build_true_value(reference: Optional[dict], scored: List[dict], *, own_domai
             status = TV_STATUS.get(outcome, 'none') if outcome else 'none'
         return {'quoted': money(stated) if stated else '—', 'status': status, 'outcome': outcome, 'runs': len(runs)}
 
+    def live_of(read):
+        if read is None:
+            return '—'
+        if read.get('method') == NOT_PRICED_METHOD:
+            return NOT_PRICED
+        if not read.get('verifiable', True):
+            return 'unverifiable'
+        return money(read.get('price'), read.get('currency') or 'USD')
+
     def full_cell(runs, ref, surfaces_here):
-        if ref is None:
-            live_text = '—'
-        elif ref.get('method') == NOT_PRICED_METHOD:
-            live_text = NOT_PRICED
-        elif not ref.get('verifiable', True):
-            live_text = 'unverifiable'
-        else:
-            live_text = money(ref.get('price'), ref.get('currency') or 'USD')
+        # 2T-4 (3): one read per cell. The price and the verdict are the read the runs were judged against;
+        # a later read of the same page is a second line (`later`), never the price beside that verdict
+        judged = _judged_of(runs)
+        later = None
+        if judged is not None and ref is not None and not _same_read(judged, ref) and ref.get('observed_at') and \
+                (not judged.get('observed_at') or str(ref['observed_at']) > str(judged['observed_at'])):
+            later = {'live': live_of(ref), 'observed_at': ref.get('observed_at'),
+                     'text': T_TV_LATER.format(live=live_of(ref) if live_of(ref) != 'unverifiable' else
+                                               'could not be read', day=_short_day(ref.get('observed_at')))}
+        if judged is not None:
+            ref = {**(ref or {}), **{k: v for k, v in judged.items() if k != 'currency' or v}}
+        live_text = live_of(ref)
         by_surface = {s: cell_for([r for r in runs if surfaces.on_surface(surface_of_run(r), s)], ref)
                       for s in surfaces.with_all(surfaces_here)
                       if any(surfaces.on_surface(surface_of_run(r), s) for r in runs)}
@@ -1139,6 +1208,7 @@ def build_true_value(reference: Optional[dict], scored: List[dict], *, own_domai
             'live_basis': None if ref is None else ref.get('live_basis'),
             # 2C-2: every surface's cell, and every run's quote
             'surface': default if top['runs'] else None,
+            **({'later': later} if later else {}),
             'by_surface': by_surface,
             'quotes': [{'agent': r.get('agent'), 'surface': surface_of_run(r), 'outcome': r.get('outcome'),
                         'stated': None if r.get('stated') in (None, '') else str(r['stated']),

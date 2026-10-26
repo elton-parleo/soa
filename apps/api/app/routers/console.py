@@ -649,7 +649,7 @@ def _true_value_inputs(conn, row) -> tuple:
         WHERE q.study_type = :st AND q.tier = 'catalog_accuracy'
     """), {"st": row['study_type']}).mappings().all()
     outcomes = conn.execute(text("""
-        SELECT o.run_id, o.query_id, o.outcome, o.reason_code, o.claim_results, o.expected_answer,
+        SELECT o.run_id, o.query_id, o.outcome, o.reason_code, o.outcome_reason, o.claim_results, o.expected_answer,
                r.platform, r.surface
         FROM soa_expectation_outcomes o JOIN soa_runs r ON r.id = o.run_id
         WHERE o.cycle_id = :c AND o.tier = 'catalog_accuracy'
@@ -706,6 +706,8 @@ def _true_value_inputs(conn, row) -> tuple:
                        'pack': rm.pack_conflict(deciding),
                        # 2R-2 (B5): the variant it named, when the check found it is not one of the record's
                        'clash': rm.clash_named(deciding, o['reason_code']),
+                       # 2T-4 (3): the read the run was judged against, so the cell shows that one
+                       'judged': rm.judged_read(deciding, o['outcome'], o.get('outcome_reason')),
                        'run': f"run-{o['run_id']}", 'platform': o['platform'],
                        'agent': surfaces.agent_of(o['platform']) or o['platform'],
                        'surface': o['surface'] or surfaces.surface_of(o['platform']) or 'unlabelled'})

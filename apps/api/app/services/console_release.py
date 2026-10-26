@@ -396,9 +396,12 @@ def readback(variants: List[dict], *, attribute_answers: List[dict], true_value_
                 verdict = _PRICE_VERDICT.get(q.get('outcome'))
                 if verdict is None or not q.get('stated'):
                     continue
+                # 2T-4 (3): the truth is the read the quote was judged against (the cell's `live`), and a
+                # later read of the page is its own line, never the truth beside that verdict
                 out.append({'agent': q.get('agent'), 'fact': 'price', 'variant': v.get('label'),
                             'said': f"{name} ${q['stated']}",
                             'truth': f"{name} {cell['live']}" if cell.get('live') else None,
+                            **({'later': cell['later']['text']} if cell.get('later') else {}),
                             'verdict': verdict, 'run': q.get('run'), 'surface': q.get('surface')})
     ids = {v.get('variant_id') for v in variants} | {v.get('sku') for v in variants if v.get('sku')}
     for deal in (deals or {}).get('deals') or []:

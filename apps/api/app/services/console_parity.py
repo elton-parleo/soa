@@ -785,6 +785,8 @@ def build_products(true_value: dict, vis_rows: List[dict], surface: str, *, vari
                 'wrong_runs': sum(1 for q in quotes if q.get('outcome') in ('wrong', 'stale')),
                 'reference_source': cell.get('reference_source'), 'observed_at': cell.get('observed_at'),
                 'live_price': cell.get('live'),
+                # 2T-4 (3): the page read after the one the runs were judged against, its own line
+                **({'live_later': cell['later']['text']} if cell.get('later') else {}),
                 'answer_ids': [q['run'] for q in quotes if q.get('run')],
                 'quote_groups': quote_groups(quotes),
                 **_pack_field(quotes, row['product']),
@@ -822,10 +824,15 @@ def _product_across(row: dict, across: List[tuple], surface: str, counts) -> dic
         'quote_groups': quote_groups(quotes),
         **_pack_field(quotes, row['product']),
         'read_across': True,
+        # 2T-4 (3): each retailer's later page read, named, when one exists
+        **({'live_later': '. '.join(f"{rm._retailer_name(col)}: {cell['later']['text']}"
+                                    for col, cell, _qs in across if cell.get('later'))}
+           if any(cell.get('later') for _col, cell, _qs in across) else {}),
         'retailers': [{'retailer': col, 'name': rm._retailer_name(col), 'runs': len(qs),
                        'quote': ((cell.get('by_surface') or {}).get(surface) or {}).get('quoted'),
                        'cell_status': status_of(cell), 'live_price': cell.get('live'),
-                       'reference_source': cell.get('reference_source'), 'observed_at': cell.get('observed_at')}
+                       'reference_source': cell.get('reference_source'), 'observed_at': cell.get('observed_at'),
+                       **({'live_later': cell['later']['text']} if cell.get('later') else {})}
                       for col, cell, qs in across],
     }
 
