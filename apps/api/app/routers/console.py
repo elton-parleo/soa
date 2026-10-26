@@ -812,7 +812,7 @@ def _value_outcomes(conn, row) -> list:
 
 @router.get("/accessibility")
 async def get_accessibility(merchant: str = Query(...), scope: CustomerScope = Depends(console_scope)):
-    await check_merchant(scope, merchant)   # 2H: a slug that is not the org's is a 404
+    ms = await check_merchant(scope, merchant)   # 2H: a slug that is not the org's is a 404
     client = full_loop._client(scope)
     (status, payload, error), (_, reference, r_err), (_, retailers, o_err) = await asyncio.gather(
         client.get_access(merchant), client.get_reference(merchant), client.get_retailers(merchant))
@@ -828,9 +828,45 @@ async def get_accessibility(merchant: str = Query(...), scope: CustomerScope = D
     if not own and o_err is None:
         listed = (retailers or {}).get('own_domains') or [(retailers or {}).get('own_domain')]
         own = [str(d).lower().removeprefix('www.') for d in listed if d]
+    record_row = next((m for m in getattr(ms, 'merchants', None) or [] if m.get('slug') == merchant), None) or {}
+    if record_row.get('mode') == 'manufacturer':
+        return await _brand_accessibility(client, merchant, payload, reference if r_err is None else None, r_err,
+                                          retailers if o_err is None else None, own, record, cycle_code, record_row)
     return parity.extend_accessibility(rm.accessibility_from_supply(payload), reference if r_err is None else None,
                                        reference_error=r_err, robots=supply_fields.robots_by_domain(payload),
                                        own_domains=own, domain_checks=record, domain_cycle=cycle_code)
+
+
+async def _brand_accessibility(client, merchant: str, payload: dict, reference: Optional[dict], r_err,
+                               retailers: Optional[dict], own: list, record: Optional[dict], cycle_code,
+                               merchant_row: dict) -> dict:
+    """2T-4 (4): a brand at retail. `checks` are the demo's six over the brand's own pages
+    (console_accessibility_brand), `retailer_checks` the merchant-level checks over the retailer
+    pages only, `hero` the lead from the data. The feed and the retailer-prices rows are read beside
+    the three reads above; a failed one is named in read_errors and its checks say not checked."""
+    from app.services import console_accessibility_brand as acc
+    from app.services.console_manufacturer import _brand_word as manu_brand
+    (_ps, prices, p_err), (_fs, feed, f_err) = await asyncio.gather(
+        client.get_retailer_prices(merchant), client.get_feed(merchant))
+    own = own or [str(d).lower().removeprefix('www.') for d in merchant_row.get('own_domains') or [] if d]
+    robots = supply_fields.robots_by_domain(payload)
+    body = parity.extend_accessibility(rm.accessibility_from_supply(payload), acc.retailer_rows(reference, own),
+                                       reference_error=r_err, robots=robots, own_domains=own, domain_checks=record,
+                                       domain_cycle=cycle_code)
+    brand = merchant_row.get('brand') or manu_brand((feed or {}).get('rows') if f_err is None else None)
+    built = acc.build(prices=(prices or {}).get('prices') if p_err is None else None,
+                      feed_rows=(feed or {}).get('rows') if f_err is None else None, reference=reference,
+                      access=payload, robots=robots, own_domains=own,
+                      retailers=(retailers or {}).get('domains') or [], brand=brand)
+    body['retailer_checks'] = body['checks']
+    body['checks'] = built['checks']
+    body['brand_pages'] = built['brand_pages']
+    body['hero'] = built['hero']
+    body['mode'] = 'manufacturer'
+    errors = dict(body.get('read_errors') or {})
+    errors.update({k: e for k, e in (('retailer_prices', p_err), ('feed', f_err)) if e})
+    body['read_errors'] = errors
+    return body
 
 
 def _latest_domain_checks(merchant: str, scope: CustomerScope) -> tuple:
