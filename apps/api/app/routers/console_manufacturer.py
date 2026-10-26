@@ -342,7 +342,9 @@ async def brand_overview(scope: CustomerScope, ms: MerchantScope, merchant: str,
                                          {'c': row['id']}).fetchone()
     retired_named = vis.get('retired_named')
     # 2T-3 (2, 4): each line's truth is its own chart on the brand's page (rel.line_charts), as the matrix reads it
-    charts = rel.line_charts(reads['prices'], own_domains, _brand(catalog) or brand) if reads['prices'] is not None else None
+    # 2T-4 (5): each feed line's chart is the page its rows link to (rel.feed_line_charts), by name only without one
+    charts = rel.feed_line_charts(reads['prices'], feed_rows, own_domains, _brand(catalog) or brand) \
+        if reads['prices'] is not None else None
     size_signal = bo.size_chart_signal(drift, reference, accuracy, domain=domain, brand=_brand(catalog) or brand,
                                        charts=charts, feed_rows=feed_rows)
     new = [size_signal, bo.retired_signal(retired_named), bo.store_signal(clubs, _brand(catalog) or brand),
