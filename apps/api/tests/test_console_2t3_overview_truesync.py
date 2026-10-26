@@ -332,3 +332,113 @@ def test_truesync_serves_the_agents_count(http, db, upstream):
     _shape(db, http, upstream)
     ts = _read(http, 'truesync')
     assert ts['agents_count'] == 6
+
+
+# ── the console's samples: the 2T-1 harness with FL15's shape laid on it ──
+
+def _fl15_supply(upstream):
+    """Derived, and says so: #33's recorded answers with FL15's shape added where #33 has none. (a) Shelf reads on
+    #33's records (Amazon by our fetch, Target by the hosted render, Walmart walled on three SKUs), replacing #33's
+    unread shelf rows. (b) A fifth held record, Swaddlers Ultra Day + Night Size 3, its held rows cloned from
+    Swaddlers' and re-keyed (as 2T-1's step-2 test derives a merchant's row), its pampers.com row landing on the
+    Swaddlers page with that page's recorded markup and chart. (c) /deals: FL15's Amazon list price cut and Walmart
+    Rollback, on the pair's own question variants (v1, v5, v6) so the cycle's answers are judged against them."""
+    import copy
+    from tests import console_fixture_2r2 as f2r2
+    from tests import test_console_2m2_promo as t2m2
+    ultra_ref, ultra_sku = f'feed:{f2r2.SLUG}:sku:sku_pg_swultra_s3', 'sku_pg_swultra_s3'
+    prices = f2r2.retailer_prices()
+    rows = [r for r in prices['prices'] if r.get('role') == 'own' or r['retailer_domain'] == 'samsclub.com']
+    swd_page = next(r for r in rows if r.get('gtin') == '037000799818')
+    keys = [('sku', 'sku_pg_swd_nb_84'), ('sku', 'sku_pg_swd_s1_96'), ('gtin', '037000799818'), ('sku', 'sku_pg_pure_s1'),
+            ('sku', 'sku_pg_amore_s1_132'), ('gtin', '037000833970'), ('sku', ultra_sku)]
+    shelf_price = {'sku_pg_swd_nb_84': '27.97', 'sku_pg_swd_s1_96': '27.97', '037000799818': '49.77', 'sku_pg_pure_s1': '27.97',
+                   'sku_pg_amore_s1_132': '36.18', '037000833970': '44.99', ultra_sku: '46.79'}
+    walmart_walled = {'sku_pg_swd_nb_84', 'sku_pg_amore_s1_132', '037000799818'}
+    target_walled = {'037000833970', 'sku_pg_pure_s1', ultra_sku}
+    for field, key in keys:
+        for domain in ('amazon.com', 'target.com', 'walmart.com'):
+            walled = (domain == 'walmart.com' and key in walmart_walled) or (domain == 'target.com' and key in target_walled) \
+                or (domain == 'amazon.com' and key == ultra_sku)
+            method = 'none' if walled else {'amazon.com': 'regex', 'target.com': 'regex_rendered', 'walmart.com': 'json_ld'}[domain]
+            row = {**_shelf(domain, None, method, None if walled else shelf_price[key]), 'sku': None, 'gtin': None}
+            row[field] = key
+            rows.append(row)
+    rows.append({**copy.deepcopy(swd_page), 'sku': ultra_sku, 'gtin': None,
+                 'url': 'https://www.pampers.com/en-us/products/pampers-swaddlers-ultra-diapers',
+                 'final_url': 'https://www.pampers.com/en-us/products/pampers-swaddlers-diapers'})
+    prices['prices'] = rows
+    upstream.answer('GET', f'{f2r2.BASE}/retailer-prices', body=prices, token=f2r2.TOKEN_A)
+    catalog = f2r2.body('catalog')
+    catalog['listings'].append({**copy.deepcopy(catalog['listings'][0]), 'listing_id': 99, 'product_id': ultra_ref,
+                                'title': 'Pampers Swaddlers Ultra Day + Night',
+                                'product_url': 'https://www.pampers.com/en-us/products/pampers-swaddlers-ultra-diapers',
+                                'variants': [{'attributes': {}, 'count': 180, 'currency': None, 'gtin': None,
+                                              'list_price': None, 'size': None, 'status': 'active', 'successor': None,
+                                              'title': 'Size 3, 180 ct', 'variant_id': f'sku:{ultra_sku}',
+                                              'weight_range': None}]})
+    upstream.answer('GET', f'{f2r2.BASE}/catalog', body=catalog, token=f2r2.TOKEN_A)
+    feed = f2r2.body('feed')
+    feed['rows'].append({**copy.deepcopy(feed['rows'][0]), 'sku': ultra_sku, 'variant_key': f'sku:{ultra_sku}',
+                         'product_name': 'Pampers Swaddlers Ultra Day + Night', 'variant_label': 'Size 3, 180 ct',
+                         'pack_count': 180, 'retailers': [{'domain': 'pampers.com'}, {'domain': 'walmart.com'},
+                                                          {'domain': 'target.com'}]})
+    upstream.answer('GET', f'{f2r2.BASE}/feed', body=feed, token=f2r2.TOKEN_A)
+    pubs = f2r2.body('publications-held')
+    top = max(p['id'] for p in pubs)
+    swd = [p for p in pubs if p['record_ref'] == f'feed:{f2r2.SLUG}:sku:sku_pg_swd_nb_84']
+    pubs += [{**copy.deepcopy(p), 'id': top + i + 1, 'listing_id': 99, 'record_ref': ultra_ref} for i, p in enumerate(swd)]
+    upstream.answer('GET', '/api/truesync/publications', body=pubs, token=f2r2.TOKEN_A)
+
+    def v(vid, shelf, price, was, label, name):
+        return {**t2m2._variant(vid, shelf, price, was), 'variant_label': label, 'product_name': name}
+    cut = {'retailer_domain': 'amazon.com', 'kind': 'rollback_or_was', 'text': '$36.18 with 25 percent savings -25%',
+           'value': None, 'value_unit': None, 'terms': None, 'program': None,
+           'variants': [v('v1', '36.18', '36.18', '47.99', 'Size 1, 132 ct', 'Pampers AMORE')]}
+    rollback = {'retailer_domain': 'walmart.com', 'kind': 'rollback_or_was', 'text': 'Rollback', 'value': None,
+                'value_unit': None, 'terms': None, 'program': None,
+                'variants': [v(x, '49.77', '49.77', '59.77', 'Size 4, 150 ct', 'Pampers Swaddlers') for x in ('v5', 'v6')]}
+    deals = {**t2m2.DEALS, 'merchant': f2r2.SLUG, 'read_date': '2026-10-24', 'deals': [cut, rollback], 'walled': []}
+    upstream.routes.by_date = [('', deals)]
+
+
+def test_the_console_samples_with_fl15_s_shape(http, db, upstream):
+    """SOA_2T3_SAMPLE_DUMP=<dir>: overview-2t3.json and truesync-2t3.json, the console's samples."""
+    import json
+    import os
+    from app.services import console_cache
+    from tests import console_fixture_2p1 as f2p1
+    from tests.test_console_2t1_overview_truesync import _read, _shape
+    _shape(db, http, upstream)
+    _fl15_supply(upstream)
+    console_cache.clear()
+    overview = _read(http, 'overview', cycle=f2p1.CYCLE_2)
+    ts = _read(http, 'truesync')
+    out = os.environ.get('SOA_2T3_SAMPLE_DUMP')
+    if out:
+        os.makedirs(out, exist_ok=True)
+        for name, body in (('overview-2t3.json', overview), ('truesync-2t3.json', ts)):
+            with open(os.path.join(out, name), 'w') as fh:
+                json.dump(body, fh, indent=1, sort_keys=True)
+    # 1: the activity reads the shelf the way the timeline does
+    shelf = next(e for e in overview['activity'] if e['stage'] == 'shelf')
+    assert shelf['text'] == 'Shelf reads at 3 retailers: 3 read'
+    # 2: Ultra's row has no weight (its URL lands on the Swaddlers page); Swaddlers keeps its own chart
+    by = {p['name']: p for p in ts['products']}
+    ultra = by['Pampers Swaddlers Ultra Day + Night']
+    assert ultra['sub'] == 'Size 3, 180 ct' and ultra['variants'][0]['weight'] is None
+    assert {f['k']: f for f in ultra['record']}['Size and weight']['note'] == 'No chart on pampers.com'
+    assert by['Pampers Swaddlers']['sub'].endswith('Size 4, 15 to 34 lb')
+    # 3: one deal label on the signal and the Live cell
+    deal = next(s for s in overview['by_surface']['all']['signals'] if s['kind'] == 'deal')
+    assert 'percent savings' not in deal['title'] + deal['detail']
+    v1 = next(p for p in overview['by_surface']['all']['products'] if p['sku'] == 'v1')
+    assert v1['live_deals'] == ['Amazon: 25% off, $36.18 from $47.99']
+    # 6, 7, 8, 9, 10
+    comp = {c['channel']: c for c in by['Pampers Zzz']['compiler']}
+    assert comp['schema_org']['rules_line'] == 'r1, r2, r5 apply, none on'
+    where = next(f for f in by['Pampers Swaddlers']['record'] if f['k'].startswith('Where to buy'))
+    assert where['v'] == ('Newborn 84 ct: Amazon $27.97, Target $27.97 · Size 1 96 ct: Amazon $27.97, Target $27.97, '
+                          'Walmart $27.97 · Size 4: Amazon $49.77, Target $49.77')
+    assert by['Pampers Pure Protection']['variants'][0]['label'] == 'Size 1'
+    assert ts['agents_count'] == 6 and ts['workspace']['fields']['carried'] > ts['workspace']['fields']['approximated']
