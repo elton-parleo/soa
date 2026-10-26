@@ -257,3 +257,36 @@ def test_the_compiler_serves_the_rules_that_apply_apart_from_the_rules_on():
     # r6 applies only to a record with a retired variant
     assert 'r6' not in rel.compiler({'schema_org': on}, {}, [{'code': 'r6', 'on': True}])[0]['rules_relevant']
     assert rel.compiler({'schema_org': on}, {}, [{'code': 'r6', 'on': True}], retired=True)[0]['rules_applied'] == ['r6']
+
+
+# ── 7: the workspace counts fields per record, on one scale ─────────────
+
+def _old_fields(rows):
+    """2T-1's count: every expressiveness line of every held row (an info line counted as carried)."""
+    counts = {'carried': 0, 'approximated': 0, 'dropped': 0}
+    for row in rows:
+        for e in row.get('expressiveness') or []:
+            if rel.RULE_FLAG.match(str(e.get('field') or '')):
+                continue
+            sev = e.get('severity')
+            counts['carried' if sev == 'info' else 'approximated' if sev == 'approximated' else 'dropped'] += 1
+    return counts
+
+
+def test_the_workspace_counts_distinct_fields_per_record():
+    """On #33's recorded hold (4 records, held on Site markup and Manufacturer Center, blocked on ACP)."""
+    from tests import console_fixture_2r2 as f2r2
+    rows = f2r2.mine(f2r2.body('publications-held'))
+    held = [r for per in rel.hold(rows).values() for r in per.values()]
+    before, after = _old_fields(held), rel._fields(rel.hold(rows).values())
+    print(f"\n7 before {before} after {after}")
+    assert before == {'carried': 5, 'approximated': 0, 'dropped': 95}
+    per = []
+    for ref, chans in rel.hold(rows).items():
+        mine = [r for r in chans.values() if r['reason'] == 'held_for_merchant']
+        carried = {f for r in mine for f in rel.manu.carried_fields(r['payload'])}
+        dropped = {e['field'] for r in mine for e in r['expressiveness'] if e['severity'] == 'dropped'} - carried
+        per.append((len(carried), len(dropped)))
+    assert (after['carried'], after['dropped']) == (sum(c for c, _ in per), sum(d for _, d in per))
+    # one scale: no record's dropped count exceeds the fields it was asked to carry and drop
+    assert after['dropped'] < before['dropped'] and after['carried'] > before['carried']

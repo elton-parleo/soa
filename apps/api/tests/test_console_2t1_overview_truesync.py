@@ -169,9 +169,8 @@ def test_the_truesync_card_and_the_workspace_count_the_held_rows(http, db, upstr
     channels = {r['channel_slug'] for r in rows}
     assert (ws['records'], ws['compiled'], ws['blocked'], ws['published']) == \
         (len(records), {'n': len(held), 'of': len(records) * len(channels)}, len(blocked), 0)
-    lines = [e for r in rows for e in r['expressiveness'] if not e['field'].startswith('rule_')]
-    assert sum(ws['fields'].values()) == len(lines)
-    assert ws['fields']['dropped'] == sum(1 for e in lines if e['severity'] in ('dropped', 'blocked'))
+    # 2T-3 (7): distinct fields per record over its held channels (test_console_2t3's before and after)
+    assert ws['fields'] == rel._fields(rel.hold(rows).values())
     assert (ws['next_check'], ws['walled']) == (None, {'n': 0, 'domains': []})
     # the Overview's card is the same count, never a second one
     assert (card['products'], card['cells'], card['drifting'], card['surfaces']) == \

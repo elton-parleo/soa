@@ -674,17 +674,24 @@ def build_records(*, pubs: List[dict], catalog: Optional[dict], feed_rows: Optio
     return out
 
 
-def _fields(rows: Iterable[dict]) -> dict:
-    """{carried, approximated, dropped} over the rows' expressiveness lines
-    (a rule the compile applied is not a field)."""
+def _fields(per_record: Iterable[Dict[str, dict]]) -> dict:
+    """{carried, approximated, dropped}: 2T-3 (7), the distinct fields of each
+    record across its held (or published) channels, summed over records, so
+    the three are on one scale. A field is carried when any held channel's
+    payload carries it, else approximated when one approximates it, else
+    dropped when one drops it by spec. A rule's flag, an info line and a
+    blocked channel's lines are not fields."""
     counts = {'carried': 0, 'approximated': 0, 'dropped': 0}
-    for row in rows:
-        for e in row.get('expressiveness') or []:
-            if RULE_FLAG.match(str(e.get('field') or '')):
-                continue
-            sev = e.get('severity')
-            key = 'carried' if sev == 'info' else 'approximated' if sev == 'approximated' else 'dropped'
-            counts[key] += 1
+    for rows in per_record:
+        held = [r for r in rows.values() if manu.is_held(r) or r.get('status') == manu.LIVE_STATUS]
+        carried = {f for r in held for f in manu.carried_fields(r.get('payload'))}
+        marks = [(e.get('field'), e.get('severity')) for r in held for e in r.get('expressiveness') or []
+                 if e.get('field') and not RULE_FLAG.match(str(e['field']))]
+        approximated = {f for f, sev in marks if sev == 'approximated'} - carried
+        dropped = {f for f, sev in marks if sev in ('dropped', 'blocked')} - carried - approximated
+        counts['carried'] += len(carried)
+        counts['approximated'] += len(approximated)
+        counts['dropped'] += len(dropped)
     return counts
 
 
@@ -717,7 +724,7 @@ def build_workspace(*, pubs: List[dict], records: List[dict], prices: Optional[L
                      'of': len(records) * len(slugs)},
         'published': sum(1 for r in rows if r.get('status') == manu.LIVE_STATUS),
         'blocked': sum(1 for r in rows if manu.is_blocked(r)),
-        'fields': _fields(rows),
+        'fields': _fields(hold(pubs).values()),
         'disagree': sum(1 for rec in records if rec['disagree']['agents']),
         'walled': {'n': len(walled), 'domains': walled},
         'last_verified': verified, 'last_verified_day': manu.short_day(verified),
