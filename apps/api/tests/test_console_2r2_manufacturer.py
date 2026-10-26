@@ -456,3 +456,49 @@ def test_the_markup_reason_pairs_each_line_with_its_sizes():
         'Swaddlers Size 4 and Size 5 and Zzz Size 4 markup carry the wrong weights'
     assert manu.markup_reason(drift[2:], reference, []) == 'Zzz markup carries the wrong Size 4 weight'
     assert manu.markup_reason([], reference, []) is None
+
+
+# ── 2S-1: the brand page's read date, and possessives ─────────────────────
+
+def _markup(pages, read_at, own='pampers.com'):
+    surfaces = manu.build_surfaces(pubs=[], channels=[], drift=[], reference=None, pages=pages, flags=[],
+                                   own_domain=own, rules=None, held=None, read_at=read_at)
+    return next(s for s in surfaces if s['id'] == 'markup')
+
+
+def test_the_site_markup_date_is_the_newest_brand_page_read_on_the_recorded_rows():
+    rows = f2r2.body('retailer-prices')['prices']
+    # supply serves the brand page on the own row itself (2O-6), never under a `brand_page` key
+    assert not [r for r in rows if 'brand_page' in r]
+    assert manu.brand_page_read_at(rows) == '2026-10-20T04:00:06.882849+00:00'
+    pages = manu.brand_pages(rows, ['pampers.com'])
+    assert [p['url'] for p in pages] == ['https://www.pampers.com/en-us/products/pampers-zzz',
+                                         'https://www.pampers.com/en-us/products/pampers-swaddlers-diapers']
+    assert pages[0]['brand_page']['size_chart'] and pages[0]['brand_page']['json_ld']
+    assert _markup(pages, manu.brand_page_read_at(rows))['last'] == 'Read Oct 20'
+    # the date is read across the merchant's rows, with no own-domain match needed
+    assert _markup([], manu.brand_page_read_at(rows), own=None)['last'] == 'Read Oct 20'
+    # "Not read yet" only when no row carries a brand page
+    unread = [{k: v for k, v in r.items() if k not in manu.BRAND_PAGE_FIELDS} for r in rows]
+    assert manu.brand_page_read_at(unread) is None and manu.brand_pages(unread, ['pampers.com']) == []
+    assert _markup([], manu.brand_page_read_at(unread))['last'] == 'Not read yet'
+
+
+@pytest.mark.parametrize('name, said', [('Pampers', "Pampers'"), ('P&G', "P&G's"), ('Wiggle & Snug', "Wiggle & Snug's")])
+def test_one_possessive_for_every_brand_name(name, said):
+    from soa_shared.possessive import possessive
+
+    assert possessive(name) == said
+    cycle = {'cycle_code': 'c1', 'start_date': '2026-10-21'}
+    rows = manu.build_backtest({'attribute': (9, 15, ['Swaddlers'])}, cycle, None, None, None, name)
+    assert f"after {said} team sends the file" in rows[0]['note']
+    assert f"after {said} team publishes" in manu.locked_block(name=name, brand=None, domain=None)['text']
+    held = {'id': 'mfc', 'records_total': 4, 'compiled_at': '2026-10-25', 'status': 'held', 'records': '2 of 4 valid',
+            'records_valid': 2, 'errors': [], 'sent': None}
+    note = manu.build_preview(surfaces=[held], brand=name, name=name, domain='example.com')['note']
+    assert f"from {said} feed" in note and f"Held until {said} team sends it" in note
+    assert "s's" not in note
+    from app.services import console_revenue
+
+    assert console_revenue.TEMPLATES['missed.title.retailer'].format(name=name, name_s=possessive(name)) == \
+        f"{said} price is wrong"

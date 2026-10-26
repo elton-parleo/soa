@@ -143,12 +143,14 @@ async def publishing_view(scope: CustomerScope, ms: MerchantScope, merchant: str
         errors['feed'] = f_err
     pubs = manu.merchant_publications(publications, _listing_ids(catalog), merchant)
     own = _own_domain(retailers if o_err is None else None, record)
-    pages = manu.brand_pages((prices or {}).get('prices') if rp_err is None else None, [own] if own else [])
+    price_rows = (prices or {}).get('prices') if rp_err is None else None
+    pages = manu.brand_pages(price_rows, [own] if own else [])
+    read_at = manu.brand_page_read_at(price_rows)
     feed_rows = (feed or {}).get('rows') if f_err is None else None
     flags = manu.gtin_flags(pages, feed_rows, brand=_brand(catalog))
     held = (record or {}).get('held')
     surfaces = manu.build_surfaces(pubs=pubs, channels=channels, drift=drift, reference=reference, pages=pages,
-                                   flags=flags, own_domain=own, held=held,
+                                   flags=flags, own_domain=own, held=held, read_at=read_at,
                                    rules=(rules or {}).get('rules') if rules_err is None else None)
     cycles = _scored_cycles(ms)
     cycle = cycles[0] if cycles else None
@@ -161,7 +163,6 @@ async def publishing_view(scope: CustomerScope, ms: MerchantScope, merchant: str
             named = named_by_variant(conn, cycle)
         lifecycle = manu.lifecycle_rows(vis.get('retired_named'), cycle)
         sellers = manu.seller_rows(named, feed_rows, cycle, own_domains=[own] if own else [])
-    read_at = max((str(p['observed_at']) for p in pages if p.get('observed_at')), default=None)
     return {
         'mode': manu.MANUFACTURER,
         'surfaces': surfaces,

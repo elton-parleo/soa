@@ -24,6 +24,7 @@ from typing import Dict, Iterable, List, Optional
 
 from app.services import console_read_models as rm
 from soa_shared import attribute_accuracy, retailers as retailer_names
+from soa_shared.possessive import possessive
 
 MANUFACTURER = 'manufacturer'
 
@@ -82,9 +83,9 @@ MANUFACTURER_TEMPLATES = {
     'diff.lifecycle.now_none': 'retired',
     'preview.title': '{count} {brand} records, Manufacturer Center first',
     'preview.title.none': 'No {brand} record compiled yet',
-    'preview.note': "Compiled {day} from {name}'s feed and {domain}. {valid}. Held until {name}'s team sends it.",
-    'preview.note.blocked': "Compiled {day} from {name}'s feed and {domain}. {valid}, so nothing is ready to send: {error}",
-    'preview.note.sent': "Compiled {day} from {name}'s feed and {domain}. {valid}. {name}'s team says it sent it on {sent}.",
+    'preview.note': "Compiled {day} from {name_s} feed and {domain}. {valid}. Held until {name_s} team sends it.",
+    'preview.note.blocked': "Compiled {day} from {name_s} feed and {domain}. {valid}, so nothing is ready to send: {error}",
+    'preview.note.sent': "Compiled {day} from {name_s} feed and {domain}. {valid}. {name_s} team says it sent it on {sent}.",
     'backtest.attribute': "{size} weight answers giving only the chart's range",
     'backtest.retired': 'Category answers naming {line}',
     'backtest.promo': 'Cheapest-place answers naming a live deal',
@@ -93,12 +94,12 @@ MANUFACTURER_TEMPLATES = {
     'backtest.promo.note': '{deals}, {day}',
     'backtest.not_measured': 'Not measured',
     'backtest.next': 'Next read',
-    'backtest.after.unsent': ("After is the first cycle scored after {name}'s team sends the file. A held file changes "
+    'backtest.after.unsent': ("After is the first cycle scored after {name_s} team sends the file. A held file changes "
                               "nothing an agent reads, so holding it starts no clock."),
     'backtest.after.waiting': 'After is the first cycle scored after the send on {sent}. None has run yet.',
     'backtest.after.read': 'After is {code} ({day}), the first cycle scored after the send on {sent}.',
     'locked.title': 'Cause shows once {name} publishes the record',
-    'locked.text': ("TrueSync can tie a change in these answers to a fix only after {name}'s team publishes the {brand} "
+    'locked.text': ("TrueSync can tie a change in these answers to a fix only after {name_s} team publishes the {brand} "
                     "record to Manufacturer Center and {domain}. Until then every figure here is a count of answers "
                     "you can audit."),
     'unlocked.title': 'What moved since the record was sent ({sent})',
@@ -294,14 +295,38 @@ def _field_base(product_name: Optional[str], label: Optional[str], brand: Option
     return f"{rm.line_of(product_name or label, brand)}.{rm._slug(size or label)}"
 
 
+#: What supply's retailer-prices row says of a brand's own page (2O-6): served
+#: on the row itself, beside its observed_at, not under a `brand_page` key.
+BRAND_PAGE_FIELDS = ('json_ld', 'size_chart', 'bullets')
+
+
+def row_brand_page(row: dict) -> Optional[dict]:
+    """The brand page a retailer-prices row carries: its `brand_page`, else
+    2O-6's fields on the row ({json_ld, size_chart, bullets}); None when it
+    carries neither."""
+    page = row.get('brand_page')
+    if isinstance(page, dict):
+        return page
+    fields = {k: row.get(k) for k in BRAND_PAGE_FIELDS}
+    return fields if any(v is not None for v in fields.values()) else None
+
+
+def brand_page_read_at(prices: Optional[List[dict]]) -> Optional[str]:
+    """The newest read of a brand page across the merchant's retailer-prices
+    rows (its observed_at), None when no row carries one. Supply serves a
+    brand page only on its own pages, so no domain is matched here."""
+    return max((str(r['observed_at']) for r in prices or [] if r.get('observed_at') and row_brand_page(r)),
+               default=None)
+
+
 def brand_pages(prices: Optional[List[dict]], own_domains: Iterable[str]) -> List[dict]:
-    """The brand's own pages supply read (2O-6's `brand_page` on its
+    """The brand's own pages supply read (2O-6, row_brand_page on its
     retailer-prices rows), one per page URL, newest read first:
     [{url, observed_at, brand_page}]."""
     own = {str(d).lower().removeprefix('www.') for d in own_domains or () if d}
     seen: Dict[str, dict] = {}
     for r in sorted(prices or [], key=lambda r: str(r.get('observed_at') or ''), reverse=True):
-        page = r.get('brand_page')
+        page = row_brand_page(r)
         domain = str(r.get('retailer_domain') or '').lower().removeprefix('www.')
         if isinstance(page, dict) and (domain in own or r.get('role') == 'own'):
             seen.setdefault(r.get('final_url') or r.get('url') or str(len(seen)),
@@ -424,12 +449,14 @@ def _fields_of(rows: List[dict]) -> List[str]:
 
 def build_surfaces(*, pubs: List[dict], channels: List[dict], drift: List[dict], reference: Optional[dict],
                    pages: List[dict], flags: List[dict], own_domain: Optional[str], rules: Optional[List[dict]],
-                   held: Optional[dict]) -> List[dict]:
+                   held: Optional[dict], read_at: Optional[str] = None) -> List[dict]:
     """The Publishing screen's five surfaces, in the demo's order, each {id,
     name, status, last, fields, note} with the facts it was derived from
     beside. `pubs` are the merchant's rows; `held` supply's /tenant `held`
     (its counts and the newest stated send per channel); `rules` supply's
-    rules (None when unread); `pages` the brand pages supply read."""
+    rules (None when unread); `pages` the brand pages supply read;
+    `read_at` the newest brand-page read (brand_page_read_at), else the
+    newest of `pages`."""
     by_slug = {c.get('slug'): c for c in channels or []}
     domain = own_domain or 'the brand site'
     held = held or {}
@@ -498,7 +525,7 @@ def build_surfaces(*, pubs: List[dict], channels: List[dict], drift: List[dict],
                 'sent': sent_on.get('acp')})
 
     reason = markup_reason(drift, reference, flags)
-    read_at = max((str(p['observed_at']) for p in pages if p.get('observed_at')), default=None)
+    read_at = read_at or max((str(p['observed_at']) for p in pages if p.get('observed_at')), default=None)
     out.append({'id': 'markup', 'name': T['markup.name'].format(domain=domain), 'status': 'drift' if reason else 'none',
                 'last': T['markup.last'].format(day=short_day(read_at)) if read_at else T['markup.unread'],
                 'fields': ', '.join(['weight range'] + (['gtin'] if markup_gtins(pages) else [])),
@@ -616,14 +643,13 @@ def build_preview(*, surfaces: List[dict], brand: Optional[str], name: Optional[
         return {'title': T['preview.title.none'].format(brand=brand), 'note': T['not_compiled'], 'records': 0,
                 'valid': 0, 'compiled_at': None, 'held': False, 'sent': None}
     domain = domain or 'the brand site'
+    said = {'day': day, 'name': name, 'name_s': possessive(name), 'domain': domain, 'valid': mfc['records']}
     if mfc['status'] == 'blocked':
-        note = T['preview.note.blocked'].format(day=day, name=name, domain=domain, valid=mfc['records'],
-                                                error=(mfc['errors'] or [''])[0])
+        note = T['preview.note.blocked'].format(**said, error=(mfc['errors'] or [''])[0])
     elif mfc.get('sent'):
-        note = T['preview.note.sent'].format(day=day, name=name, domain=domain, valid=mfc['records'],
-                                             sent=short_day(mfc['sent']))
+        note = T['preview.note.sent'].format(**said, sent=short_day(mfc['sent']))
     else:
-        note = T['preview.note'].format(day=day, name=name, domain=domain, valid=mfc['records'])
+        note = T['preview.note'].format(**said)
     return {'title': T['preview.title'].format(count=_NUMBER_WORDS.get(n, str(n)), brand=brand), 'note': note,
             'records': n, 'valid': mfc['records_valid'], 'compiled_at': mfc.get('compiled_at'),
             'held': mfc['status'] == 'held' and not mfc.get('sent'), 'sent': mfc.get('sent')}
@@ -714,7 +740,7 @@ def build_backtest(before: dict, before_cycle: dict, after: Optional[dict], afte
     until the brand states a send, then the first cycle scored after it."""
     day = short_day(before_cycle.get('start_date'))
     if sent is None:
-        rule = T['backtest.after.unsent'].format(name=name)
+        rule = T['backtest.after.unsent'].format(name=name, name_s=possessive(name))
     elif after_cycle is None:
         rule = T['backtest.after.waiting'].format(sent=short_day(sent['sent_at']))
     else:
@@ -759,4 +785,5 @@ def around_send(cycles: List[dict], sent: Optional[dict]) -> tuple:
 
 def locked_block(*, name: str, brand: Optional[str], domain: Optional[str]) -> dict:
     return {'state': 'locked', 'title': T['locked.title'].format(name=name),
-            'text': T['locked.text'].format(name=name, brand=brand or name, domain=domain or 'the brand site')}
+            'text': T['locked.text'].format(name=name, name_s=possessive(name), brand=brand or name,
+                                            domain=domain or 'the brand site')}
