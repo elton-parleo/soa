@@ -130,10 +130,11 @@ def test_an_answer_naming_the_successor_is_grounded():
                                     'severity': 'ok', 'tone': 'ok'}, answer
 
 
-def test_an_answer_naming_neither_is_medium():
+def test_an_answer_naming_neither_is_high():
+    """2T-4 (2): the successor not named on the direct question is High (2Q-2 read it medium)."""
     for answer in ('Yes, still sold widely.', 'Still at Walmart.', 'Amorepacific makes skincare.'):
         assert _verdict(answer) == {'verdict': 'no_successor', 'line': f'did not name AMORE, its successor. {STILL}',
-                                    'severity': 'medium', 'tone': 'warn'}, answer
+                                    'severity': 'high', 'tone': 'bad'}, answer
 
 
 def test_no_successor_or_no_answer_is_not_judged():
@@ -165,6 +166,7 @@ def test_the_answer_row_is_never_high_for_a_store_on_a_retired_line():
     assert (named['severity'], named['tone'], named['intent_verdict'], named['flags']) == ('ok', 'ok', 'grounded', [])
     assert named['summary'] == f'named AMORE, its successor. {STILL}'
     neither = _answer('Yes, still at Walmart.', off_list)
+    # 2T-4 (2): the successor not named on the direct question is High (was 2Q-2's medium)
     assert (neither['severity'], neither['tone'], neither['intent_verdict'], neither['flags']) == \
-        ('medium', 'warn', 'no_successor', [])
+        ('high', 'bad', 'no_successor', [])
     assert neither['summary'] == f'did not name AMORE, its successor. {STILL}'

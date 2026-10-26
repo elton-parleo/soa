@@ -126,7 +126,7 @@ from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 from sqlalchemy import inspect, text
 
 from soa_shared import attribute_accuracy, claim_kinds, per_unit, promo_pass_through, surfaces
-from soa_shared import unprompted
+from soa_shared import severity, unprompted
 from soa_shared.expected_answers import UNVERIFIED, normalize_domain, normalize_money
 from soa_shared.retailers import KNOWN_RETAILERS, RETAILER_NAMES, retailer_name, retailers_named
 
@@ -638,7 +638,7 @@ def overall_direction(directions: Iterable[Optional[str]]) -> Optional[str]:
 
 def why_flagged(tier: Optional[str], outcome: Optional[dict], first: Optional[str], brand_choice: bool,
                 merchant: Merchant, attribute: Optional[dict] = None, promo_missed: bool = False,
-                catalog_intent: Optional[str] = None) -> List[str]:
+                catalog_intent: Optional[str] = None, merchant_kind: Optional[str] = None) -> List[str]:
     """The reasons an answer gets a line (empty: it keeps its template).
     2M-1: `attribute` is an accuracy answer's verdict (attribute_accuracy.
     answer_attribute); a mismatch or an absent range is flagged. 2M-2:
@@ -647,7 +647,10 @@ def why_flagged(tier: Optional[str], outcome: Optional[dict], first: Optional[st
     2N-1: a catalog-built question's answer (`catalog_intent`,
     claim_kinds.catalog_intent) is never flagged by the brand-claim rule.
     2P-2: a brand-direct answer stored unverified is never flagged, and its
-    answer flags count only beside a fabricated or misattributed verdict."""
+    answer flags count only beside a fabricated or misattributed verdict.
+    2T-4 (2): the flags that count are the severity's (soa_shared/severity.
+    counted_flags): fabricated_availability for a seller only, so a brand's
+    grounded where-to-buy answer flagged before coder 8 gets no line."""
     o = outcome or {}
     if (attribute or {}).get('verdict') in ('mismatch', 'absent'):
         return [f"attribute_{attribute['verdict']}"]
@@ -665,7 +668,7 @@ def why_flagged(tier: Optional[str], outcome: Optional[dict], first: Optional[st
     # 2P-2: on a brand-direct answer a flag is written only beside a flagged claim: alone, the facts
     # hold no claim (its sentences are grounded), and FL14's lines wrote about a grounded one
     claim_only = tier == BRAND_TIER and not catalog_intent and raw not in FLAGGED_BRAND
-    for f in [] if claim_only else _json(o.get('flags')) or []:
+    for f in [] if claim_only else severity.counted_flags(_json(o.get('flags')) or [], merchant_kind):
         if isinstance(f, dict) and f.get('flag') in FLAGGED_FLAGS:
             why.append(f['flag'])
     if brand_choice and first and not merchant.is_ours(first):
@@ -754,7 +757,7 @@ def answer_facts(run: dict, outcome: Optional[dict], mentions: List[dict], merch
     missed = promo_missed(run, deals) if outcome else []
     intent = claim_kinds.catalog_intent(ref) if run.get('tier') == BRAND_TIER else None
     why = why_flagged(run.get('tier'), outcome, first, brand_choice, merchant, attribute, promo_missed=bool(missed),
-                      catalog_intent=intent)
+                      catalog_intent=intent, merchant_kind=ref.get('merchant_kind'))
     if not why:
         return None
     if attribute is not None and why[0].startswith('attribute_'):
@@ -763,7 +766,8 @@ def answer_facts(run: dict, outcome: Optional[dict], mentions: List[dict], merch
     extraction = _json(o.get('extraction')) or {}
     expected = _json(o.get('expected_answer')) or {}
     claims = [c for c in _json(o.get('claim_results')) or [] if isinstance(c, dict)]
-    flags = [f for f in _json(o.get('flags')) or [] if isinstance(f, dict) and f.get('flag') in FLAGGED_FLAGS]
+    flags = [f for f in severity.counted_flags(_json(o.get('flags')) or [], ref.get('merchant_kind'))
+             if isinstance(f, dict) and f.get('flag') in FLAGGED_FLAGS]
     brand = run.get('tier') == BRAND_TIER
     reference = None
     if not brand and expected.get('type') in ('price', 'member_price'):

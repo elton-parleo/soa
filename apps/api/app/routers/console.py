@@ -58,7 +58,7 @@ from app.services import console_cache
 from app.services import console_score as score_svc
 from clients import truesync_client as supply_fields
 from clients.truesync_client import TrueSyncClient
-from soa_shared import customers, cycle_compare, surface_accuracy, surfaces
+from soa_shared import customers, cycle_compare, severity, surface_accuracy, surfaces
 from soa_shared.database import engine
 
 router = APIRouter(prefix="/console", tags=["console"])
@@ -83,10 +83,44 @@ async def get_answers(cycle: str = Query(...), scope: CustomerScope = Depends(co
     (_claim_features); a failed catalog read leaves 2K-1's lexicon with the
     endorsement words."""
     row = dict(cycle_in_scope(cycle, scope))
-    features, _error = await _claim_features(row, scope)
+    (features, _error), clubs = await asyncio.gather(_claim_features(row, scope), _club_keys(row, scope))
     with engine.connect() as conn:
         # 2L-3: each answer's narrative, null when it has none
-        return narratives_svc.with_answers(rm.load_answers(conn, row, features), narratives_svc.lines_for(conn, row['id']))
+        return narratives_svc.with_answers(rm.load_answers(conn, row, features, club_keys=clubs),
+                                           narratives_svc.lines_for(conn, row['id']))
+
+
+def _study_slug(row: dict) -> Optional[str]:
+    """The cycle's study's merchant: tier_config.merchant.slug, else its syndicated merchant."""
+    with engine.connect() as conn:
+        job = conn.execute(text(
+            "SELECT tier_config, syndicated_merchant FROM soa_query_generation_jobs WHERE study_type = :st "
+            "ORDER BY id DESC LIMIT 1"), {"st": row.get('study_type')}).mappings().first()
+    if not job:
+        return None
+    return ((_json(job['tier_config']) or {}).get('merchant') or {}).get('slug') or job['syndicated_merchant']
+
+
+async def _club_keys(row: dict, scope: CustomerScope, merchant: Optional[str] = None) -> Optional[set]:
+    """2T-4 (2): the keys of the feed's club-only variants (console_brand_overview.club_lines: every
+    retailer the feed lists for it, the brand's own sites aside, a warehouse club), for the severity's
+    club rule. None with no merchant, or when the feed or /retailers could not be read: the rule then
+    reads nothing, and a read never fails for want of it."""
+    from app.services import console_brand_overview as bo
+    slug = merchant or _study_slug(row)
+    if not slug:
+        return None
+    reads = _reads(scope)
+    try:
+        (_fs, feed, f_err), (_rs, retailers, r_err) = await asyncio.gather(
+            full_loop._client(scope).get_feed(slug), reads.get_retailers(slug))
+    except Exception:  # noqa: BLE001
+        return None
+    if f_err is not None or r_err is not None or not isinstance(feed, dict) or not isinstance(retailers, dict):
+        return None
+    own = retailers.get('own_domains') or [retailers.get('own_domain')]
+    lines = bo.club_lines(feed.get('rows'), [d for d in own if d])
+    return set().union(*(line['keys'] for line in lines)) if lines else set()
 
 
 async def _claim_features(row: dict, scope: CustomerScope, merchant: Optional[str] = None) -> tuple:
@@ -112,13 +146,18 @@ async def _claim_features(row: dict, scope: CustomerScope, merchant: Optional[st
 
 
 @router.get("/answers/summary")
-def get_answers_summary(cycle: str = Query(...), scope: CustomerScope = Depends(console_scope)):
+async def get_answers_summary(cycle: str = Query(...), scope: CustomerScope = Depends(console_scope)):
     """2C: per tier and per surface, every outcome counted, unverifiable on
     its own, and answered_with_other_brand. 2I-8: every agent together
-    (`all`) first, counts summed; each surface beside it."""
-    row = cycle_in_scope(cycle, scope)
+    (`all`) first, counts summed; each surface beside it. 2T-4 (2):
+    `severity`, the Answers list's flagged counts (soa_shared/severity.tally
+    over the answers /answers serves)."""
+    row = dict(cycle_in_scope(cycle, scope))
+    clubs = await _club_keys(row, scope)
     with engine.connect() as conn:
-        return rm.load_answers_summary(conn, dict(row))
+        body = rm.load_answers_summary(conn, row)
+        body['severity'] = severity.tally(rm.load_answers(conn, row, club_keys=clubs))
+        return body
 
 
 def _label_from_question(query_text: str) -> str:

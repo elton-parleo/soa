@@ -43,7 +43,7 @@ from app.services import console_manufacturer as manu
 from app.services import console_read_models as rm
 from app.services import console_release as rel
 from app.services import console_score as score_svc
-from soa_shared import surfaces
+from soa_shared import severity, surfaces
 from soa_shared.database import engine
 
 router = APIRouter(prefix="/console", tags=["console-manufacturer"])
@@ -333,7 +333,11 @@ async def brand_overview(scope: CustomerScope, ms: MerchantScope, merchant: str,
         site = next((a['site'] for a in attribute_answers if a.get('site')), None) or domain
         model = _revenue_model(conn, row, inputs, _merchant_meta(ms), None, vis.get('byQuestion') or [],
                                attribute_answers=attribute_answers or None, site=site)
-        clubs = bo.club_counts(bo.club_lines(feed_rows, own_domains), store_answers(conn, row))
+        club_lines = bo.club_lines(feed_rows, own_domains)
+        clubs = bo.club_counts(club_lines, store_answers(conn, row))
+        # 2T-4 (2): the Answers list's flagged counts, by the one severity rule (soa_shared/severity.py)
+        body['flagged'] = severity.tally(rm.load_answers(
+            conn, row, club_keys=set().union(*(line['keys'] for line in club_lines)) if club_lines else set()))
         first_at, last_at = conn.execute(text("SELECT MIN(run_at), MAX(run_at) FROM soa_runs WHERE cycle_id = :c"),
                                          {'c': row['id']}).fetchone()
     retired_named = vis.get('retired_named')
