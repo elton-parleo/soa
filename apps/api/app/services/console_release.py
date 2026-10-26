@@ -79,6 +79,7 @@ RELEASE_TEMPLATES = {
     'destination.other.status': 'Compiled, not sent',
     'destination.other.line': "{name}'s compiled records go out before {brand_s} file, so the push is proven first.",
     'record.price': 'Not set. Retailers price it',
+    'record.weight.none': 'No chart on {domain}',
     'record.gtin.none': 'None in the feed',
     'record.gtin.source': '{gtin} ({source})',
     'record.pack.page': '{domain} lists {counts}',
@@ -243,12 +244,52 @@ def _chart_entry(chart: Optional[List[dict]], label: Optional[str]) -> Optional[
     return next((c for c in chart or [] if str(c.get('size') or '').lower() == key), None)
 
 
-def record_chart(prices: Optional[List[dict]], variants: List[dict]) -> Optional[List[dict]]:
-    """The line's size chart: the one the brand page served on any of the
-    record's own rows (2O-6's size_chart), newest read first."""
-    rows = [r for v in variants for r in variant_rows(prices, v) if r.get('size_chart')]
+_MARKS = re.compile(r"[®™°℠©]")
+#: A product name's first word that names the product type, not the line (supply's brand_page._GENERIC).
+_GENERIC = re.compile(r"\b(?:diapers?|pull[- ]?ons?|pants|wipes|trainers?|nappies|for)\b", re.I)
+
+
+def page_line(name: Optional[str]) -> Optional[str]:
+    """A brand page's own line, as supply's brand_page.line_name reads it: marks out, the part
+    before "|", up to the first product-type word ("Pampers® Swaddlers™ Diapers for Babies and
+    Newborns" -> "Pampers Swaddlers", "Pampers® Zzz | Pampers" -> "Pampers Zzz")."""
+    text = _MARKS.sub('', str(name or '')).split('|')[0]
+    cut = _GENERIC.search(text)
+    text = re.sub(r'\s+', ' ', text[:cut.start()] if cut else text).strip(' -,:')
+    return text or None
+
+
+def line_key(name: Optional[str], brand: Optional[str]) -> Optional[str]:
+    """One key for a line however a feed or a page writes it."""
+    line = page_line(name)
+    return rm.line_of(line, brand) if line else None
+
+
+def line_charts(prices: Optional[List[dict]], own_domains: Iterable[str], brand: Optional[str]) -> Dict[str, list]:
+    """2T-3 (2): {line key: the size chart} from the brand's own pages, newest
+    read first, each keyed by the line the page itself names (its markup's
+    product name), never by the SKU whose URL led there: a URL that lands on
+    another line's page (pampers.com sends Swaddlers Ultra to Swaddlers) gives
+    that line's chart, not the record's. The facts supply's r5 reads (2S-1)."""
+    own = {_domain(d) for d in own_domains or () if d}
+    rows = [r for r in prices or [] if (r.get('role') == 'own' or _domain(r.get('retailer_domain')) in own)
+            and r.get('size_chart')]
     rows.sort(key=lambda r: str(r.get('observed_at') or ''), reverse=True)
-    return rows[0]['size_chart'] if rows else None
+    out: Dict[str, list] = {}
+    for r in rows:
+        key = line_key((r.get('json_ld') or {}).get('name'), brand)
+        if key and key not in out:
+            out[key] = r['size_chart']
+    return out
+
+
+def record_chart(prices: Optional[List[dict]], variants: List[dict], *, own_domains: Iterable[str] = (),
+                 brand: Optional[str] = None) -> Optional[List[dict]]:
+    """The record's size chart: its own line's chart on the brand's page
+    (line_charts), else None. Never a retailer page's, never another line's."""
+    charts = line_charts(prices, own_domains, brand)
+    keys = list(dict.fromkeys(line_key(v.get('product_name'), brand) for v in variants))
+    return next((charts[k] for k in keys if k in charts), None)
 
 
 def weight_of(chart: Optional[List[dict]], label: Optional[str]) -> Optional[str]:
@@ -303,15 +344,16 @@ _PRICE_VERDICT = {'exact': 'right', 'partial': 'partial', 'wrong': 'wrong', 'sta
 
 
 def readback(variants: List[dict], *, attribute_answers: List[dict], true_value_rows: List[dict],
-             promo: Optional[dict], deals: Optional[dict], brand: Optional[str]) -> List[dict]:
+             promo: Optional[dict], deals: Optional[dict], brand: Optional[str], charted: bool = True) -> List[dict]:
     """Every fact an agent stated about the record's variants in the cycle,
     against the record: weight (the attribute answers), price (the True
     Value quotes, against the retailer's live price), and one shelf row per
     deal live on the record's variants with how many answers named it.
     [{agent, fact, variant, said, truth, verdict (right | partial | wrong |
-    missed), run}], wrong first."""
+    missed), run}], wrong first. 2T-3 (2): a record whose line has no chart
+    on the brand's page (`charted` False) has no weight to read back against."""
     out = []
-    for a in attribute_answers or []:
+    for a in (attribute_answers or []) if charted else []:
         v = matches_variant(variants, variant_id=a.get('variant_id'), line_text=a.get('variant'), brand=brand)
         if v is None or a.get('verdict') is None:
             continue
@@ -406,11 +448,17 @@ def master_record(variants: List[dict], *, prices: Optional[List[dict]], retaile
     out = [{'k': 'GTIN', 'prov': 'brand',
             'v': each(lambda v: T['record.gtin.source'].format(gtin=v['gtin'], source='feed') if v.get('gtin')
                       else T['record.gtin.none'])}]
-    out.append({'k': 'Size and weight', 'prov': 'brand',
-                'v': each(lambda v: (weight_of(chart, v.get('label')) if many else
-                                     ', '.join(w for w in (attribute_accuracy.size_label(v.get('label')),
-                                                           weight_of(chart, v.get('label'))) if w)) or None),
-                'note': f"{domain} size chart" if chart else None})
+    if chart:
+        out.append({'k': 'Size and weight', 'prov': 'brand',
+                    'v': each(lambda v: (weight_of(chart, v.get('label')) if many else
+                                         ', '.join(w for w in (attribute_accuracy.size_label(v.get('label')),
+                                                               weight_of(chart, v.get('label'))) if w)) or None),
+                    'note': f"{domain} size chart"})
+    else:
+        # 2T-3 (2): no chart for the line on the brand's page: the size alone, never a range from elsewhere
+        sizes = list(dict.fromkeys(s for s in (attribute_accuracy.size_label(v.get('label')) for v in variants) if s))
+        out.append({'k': 'Size and weight', 'prov': 'brand', 'v': ', '.join(sizes) or None,
+                    'note': T['record.weight.none'].format(domain=domain)})
     page_counts = {v.get('variant_id'): _pack_counts(pages, v.get('label')) for v in variants}
     others = [c for v in variants for c in page_counts[v.get('variant_id')] if c != v.get('count')]
     out.append({'k': 'Pack', 'prov': 'brand', 'v': each(lambda v: f"{v['count']} ct" if v.get('count') else None) or None,
@@ -561,9 +609,9 @@ def build_records(*, pubs: List[dict], catalog: Optional[dict], feed_rows: Optio
     out = []
     for ref, rows in hold(pubs).items():
         variants = record_variants(ref, catalog, feed_rows)
-        chart = record_chart(prices, variants)
+        chart = record_chart(prices, variants, own_domains=own_domains, brand=brand)
         lines = readback(variants, attribute_answers=attribute_answers, true_value_rows=true_value_rows, promo=promo,
-                         deals=deals, brand=brand)
+                         deals=deals, brand=brand, charted=chart is not None)
         dis = disagree(lines, agents)
         retired = next((v for v in variants if v.get('status') == 'retired'), None)
         listing = _listing(catalog, ref) or {}

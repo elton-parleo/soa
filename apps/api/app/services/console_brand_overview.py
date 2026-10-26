@@ -94,7 +94,7 @@ BRAND_OVERVIEW_TEMPLATES = {
     'signal.size_chart.two': '{domain} runs two {size} charts, and agents repeat both.',
     'signal.size_chart.markup': "{domain_s} own markup contradicts its size chart on {n} {lines}.",
     'signal.size_chart.pages': 'Retailer pages state other weight ranges than {domain}.',
-    'signal.size_chart.detail.chart': '{line} {size} is {range}',
+    'signal.size_chart.detail.chart': '{line} {size} {verb} {range}',
     'signal.size_chart.detail.page': '{retailer} lists {line} {size} at {range}',
     'signal.size_chart.detail.markup': "{line} {size} markup says {was}, the chart {now}",
     'signal.size_chart.detail.answers': '{k} of {n} agent answers on {sizes} gave the range {domain} states',
@@ -185,32 +185,91 @@ def _line_label(product_name: Optional[str], brand: Optional[str]) -> str:
     return manu._line_display(product_name, brand)
 
 
+def _size_words(size) -> str:
+    """A chart entry's size as the copy names it: "4" -> "Size 4", "newborn" -> "Newborn"."""
+    size = str(size or '')
+    return f"Size {size}" if size.isdigit() else size[:1].upper() + size[1:]
+
+
+def chart_groups(charts: Dict[str, list], feed_rows: Optional[List[dict]], brand: Optional[str]) -> Dict[str, List[tuple]]:
+    """2T-3 (4): per size, [(range, [lines])] over the brand's own charts
+    (rel.line_charts, the facts supply's r5 reads, 2S-1): every line the feed
+    sells (retired lines aside), in feed order, grouped by the range its own
+    chart states for the size; ranges in the order their first line comes. A
+    line with no chart on the brand's page is in no group."""
+    lines: Dict[str, str] = {}
+    for row in feed_rows or []:
+        if row.get('lifecycle') == 'retired' or row.get('status') == 'retired':
+            continue
+        key = rel.line_key(row.get('product_name'), brand)
+        if key:
+            lines.setdefault(key, _line_label(row.get('product_name'), brand))
+    out: Dict[str, List[tuple]] = {}
+    for key, display in lines.items():
+        for entry in charts.get(key) or []:
+            rng = attribute_accuracy.phrase({'min': entry.get('min'), 'max': entry.get('max')})
+            if not rng:
+                continue
+            groups = out.setdefault(_size_words(entry.get('size')), [])
+            group = next((g for g in groups if g[0] == rng), None)
+            if group is None:
+                groups.append((rng, [display]))
+            elif display not in group[1]:
+                group[1].append(display)
+    return out
+
+
 def size_chart_signal(drift: List[dict], reference: Optional[dict], accuracy: Optional[dict], *,
-                      domain: str, brand: Optional[str]) -> Optional[dict]:
+                      domain: str, brand: Optional[str], charts: Optional[Dict[str, list]] = None,
+                      feed_rows: Optional[List[dict]] = None) -> Optional[dict]:
     """From 2M-1's weight rows (rm.build_weight_drift): the brand's own two
     charts for one size (two lines' truths differ), else its markup against
-    its chart, else retailer pages against it. None with no weight row."""
+    its chart, else retailer pages against it. None with no weight row.
+
+    2T-3 (2, 4): with `charts` (rel.line_charts) a variant's truth is its own
+    line's chart on the brand's page and nothing else: a variant whose line
+    has none drops out (never a retailer page's range, never another line's),
+    and the lines on each range come from the charts over the feed's lines
+    (chart_groups). Without `charts` (retailer-prices not read) the truths
+    are /reference's, as before."""
     if not drift:
         return None
     by_ref = {v.get('variant_ref'): v for v in (reference or {}).get('attributes') or []}
     phrase = attribute_accuracy.phrase
-    # the brand's truths per size, by line: two lines, one size, two ranges is two charts
-    truths: Dict[str, Dict[str, str]] = {}
-    for v in by_ref.values():
-        size = attribute_accuracy.size_label(v.get('variant_label'))
-        truth = phrase(v.get('truth') or v.get('chart'))
-        if size and truth:
-            truths.setdefault(size, {}).setdefault(truth, _line_label(v.get('product_name') or v.get('variant_label'),
-                                                                     brand))
-    two = [(size, lines) for size, lines in truths.items() if len(lines) > 1]
+
+    def truth_of(v: dict) -> Optional[str]:
+        if charts is None:
+            return phrase(v.get('truth') or v.get('chart'))
+        chart = charts.get(rel.line_key(v.get('product_name') or v.get('variant_label'), brand))
+        return rel.weight_of(chart, v.get('variant_label'))
+    drift = [r for r in drift if truth_of(by_ref.get(r.get('variant_ref')) or {})]
+    if not drift:
+        return None
+    if charts is not None:
+        groups = chart_groups(charts, feed_rows, brand)
+    else:
+        groups = {}
+        for v in by_ref.values():
+            size, truth = attribute_accuracy.size_label(v.get('variant_label')), truth_of(v)
+            if size and truth:
+                line = _line_label(v.get('product_name') or v.get('variant_label'), brand)
+                same = next((g for g in groups.setdefault(size, []) if g[0] == truth), None)
+                if same is None:
+                    groups[size].append((truth, [line]))
+                elif line not in same[1]:
+                    same[1].append(line)
+    # two charts for a size the records sell (the feed's sizes; /reference's without a feed)
+    sold = {attribute_accuracy.size_label(r.get('variant_label')) for r in feed_rows or []} or \
+        {attribute_accuracy.size_label(v.get('variant_label')) for v in by_ref.values()}
+    two = [(size, g) for size, g in groups.items() if len(g) > 1 and size in sold]
     rows_by_variant: Dict[str, List[dict]] = {}
     for r in drift:
         rows_by_variant.setdefault(r.get('variant_ref'), []).append(r)
 
     def disagreement(ref):
         rows = rows_by_variant[ref]
-        truth_ = phrase((by_ref.get(ref) or {}).get('truth') or (by_ref.get(ref) or {}).get('chart'))
-        return (len({r['was'] for r in rows} | {truth_}), sum(1 for r in rows if r.get('kind') == 'page'))
+        return (len({r['was'] for r in rows} | {truth_of(by_ref.get(ref) or {})}),
+                sum(1 for r in rows if r.get('kind') == 'page'))
     # the variant whose sources disagree most (the most ranges, then the most retailer pages against it);
     # a tie keeps the weight rows' order
     order = list(rows_by_variant)
@@ -218,7 +277,7 @@ def size_chart_signal(drift: List[dict], reference: Optional[dict], accuracy: Op
     top = by_ref.get(top_ref) or {}
     size = attribute_accuracy.size_label(top.get('variant_label'))
     line = _line_label(top.get('product_name') or top.get('variant_label'), brand)
-    truth = phrase(top.get('truth') or top.get('chart'))
+    truth = truth_of(top)
     sources = [{'who': domain, 'range': truth, 'prov': 'brand'}] if truth else []
     for r in rows_by_variant[top_ref]:
         if r.get('kind') == 'page' and r['was'] not in {s['range'] for s in sources}:
@@ -229,18 +288,26 @@ def size_chart_signal(drift: List[dict], reference: Optional[dict], accuracy: Op
                                       for r in markup))
     misses = (accuracy or {}).get('misses') or []
     answers = (accuracy or {}).get('answers') or {}
+    # the size shown: the top variant's when its charts disagree, else the size with the most ranges
+    shown = size if any(sz == size for sz, _ in two) else max(two, key=lambda t: len(t[1]))[0] if two else size
     if two:
-        sz, lines = max(two, key=lambda t: len(t[1]))
-        title = T['signal.size_chart.two'].format(domain=domain, size=sz)
+        title = T['signal.size_chart.two'].format(domain=domain, size=shown)
     elif markup:
         title = T['signal.size_chart.markup'].format(domain_s=possessive(domain), n=len(markup_lines),
                                                      lines='line' if len(markup_lines) == 1 else 'lines')
     else:
         title = T['signal.size_chart.pages'].format(domain=domain)
     parts = []
-    for sz, lines in two[:1]:
-        parts.append('. '.join(T['signal.size_chart.detail.chart'].format(line=l, size=sz, range=rng)
-                               for rng, l in lines.items()))
+    # the ranges the brand's charts state for the size shown, every line on each
+    if groups.get(shown):
+        parts.append(', '.join(T['signal.size_chart.detail.chart'].format(
+            line=manu._and(lines), size=shown, verb='is' if len(lines) == 1 else 'are', range=rng)
+            for rng, lines in groups[shown]))
+    for r in markup[:2]:
+        v = by_ref.get(r.get('variant_ref')) or {}
+        parts.append(T['signal.size_chart.detail.markup'].format(
+            line=_line_label(v.get('product_name') or v.get('variant_label'), brand),
+            size=attribute_accuracy.size_label(v.get('variant_label')) or '', was=r['was'], now=truth_of(v) or r['now']))
     for r in [r for r in drift if r.get('kind') == 'page'][:3]:
         v = by_ref.get(r.get('variant_ref')) or {}
         retailer = re.search(r'\(([^)]+)\)', r['field'])
@@ -248,11 +315,6 @@ def size_chart_signal(drift: List[dict], reference: Optional[dict], accuracy: Op
             retailer=_name(retailer.group(1)) if retailer else 'A retailer',
             line=_line_label(v.get('product_name') or v.get('variant_label'), brand),
             size=attribute_accuracy.size_label(v.get('variant_label')) or '', range=r['was']))
-    for r in markup[:2]:
-        v = by_ref.get(r.get('variant_ref')) or {}
-        parts.append(T['signal.size_chart.detail.markup'].format(
-            line=_line_label(v.get('product_name') or v.get('variant_label'), brand),
-            size=attribute_accuracy.size_label(v.get('variant_label')) or '', was=r['was'], now=r['now']))
     if answers.get('n'):
         sizes = list(dict.fromkeys(m['size'] for m in misses if m.get('kind') == 'answer' and m.get('size')))
         parts.append(T['signal.size_chart.detail.answers'].format(k=answers['k'], n=answers['n'],
@@ -262,8 +324,8 @@ def size_chart_signal(drift: List[dict], reference: Optional[dict], accuracy: Op
             'title': title, 'detail': '. '.join(p for p in parts if p) + '.', 'tag': 'Size chart', 'tone': 'bad',
             'route': 'record', 'count': len(misses) or len(drift),
             'facts': {'line': line, 'size': size, 'sources': sources, 'markup_lines': markup_lines,
-                      'two': [{'size': sz, 'lines': [{'line': l, 'range': rng} for rng, l in lines.items()]}
-                              for sz, lines in two],
+                      'two': [{'size': sz, 'lines': [{'line': l, 'range': rng} for rng, ls in g for l in ls],
+                               'groups': [{'range': rng, 'lines': ls} for rng, ls in g]} for sz, g in two],
                       'answers': answers, 'size_answers': [m for m in misses if m.get('size') == size]}}
 
 

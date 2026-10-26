@@ -335,7 +335,10 @@ async def brand_overview(scope: CustomerScope, ms: MerchantScope, merchant: str,
         first_at, last_at = conn.execute(text("SELECT MIN(run_at), MAX(run_at) FROM soa_runs WHERE cycle_id = :c"),
                                          {'c': row['id']}).fetchone()
     retired_named = vis.get('retired_named')
-    size_signal = bo.size_chart_signal(drift, reference, accuracy, domain=domain, brand=_brand(catalog) or brand)
+    # 2T-3 (2, 4): each line's truth is its own chart on the brand's page (rel.line_charts), as the matrix reads it
+    charts = rel.line_charts(reads['prices'], own_domains, _brand(catalog) or brand) if reads['prices'] is not None else None
+    size_signal = bo.size_chart_signal(drift, reference, accuracy, domain=domain, brand=_brand(catalog) or brand,
+                                       charts=charts, feed_rows=feed_rows)
     new = [size_signal, bo.retired_signal(retired_named), bo.store_signal(clubs, _brand(catalog) or brand),
            bo.deal_signal(promo, manu.short_day((promo or {}).get('read_date') or (promo or {}).get('as_of')))]
     values = bo.pool_values(model)

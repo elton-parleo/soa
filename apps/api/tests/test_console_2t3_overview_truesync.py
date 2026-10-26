@@ -77,3 +77,91 @@ def test_the_activity_counts_shelf_reads_the_way_the_timeline_does():
                                  agents=6, questions=0, prices=walled, own_domains=OWN, pubs=[], workspace=None)
     assert next(e for e in activity if e['stage'] == 'shelf')['text'] == \
         'Shelf reads at 3 retailers: 2 read, Walmart walled'
+
+
+# ── 2: a record's weight is its own line's chart on pampers.com, else absent ─
+
+SWADDLERS_PAGE = 'Pampers® Swaddlers™ Diapers for Babies and Newborns'
+SWADDLERS_CHART = [{'size': 'newborn', 'min': None, 'max': 10.0}, {'size': '1', 'min': 8.0, 'max': 14.0},
+                   {'size': '3', 'min': 13.0, 'max': 26.0}, {'size': '4', 'min': 15.0, 'max': 34.0}]
+ULTRA = {'variant_id': 'sku_pg_swultra_s3', 'sku': 'sku_pg_swultra_s3', 'label': 'Size 3, 180 ct', 'count': 180,
+         'product_name': 'Pampers Swaddlers Ultra Day + Night', 'gtin': None, 'retailers': [], 'status': 'active'}
+
+
+def _own(sku, name, chart, at='2026-10-24T02:00:00'):
+    """A pampers.com row in supply's served shape (2O-6: json_ld, size_chart, bullets beside observed_at)."""
+    return {'retailer_domain': 'pampers.com', 'role': 'own', 'sku': sku, 'gtin': None, 'observed_at': at,
+            'method': 'none_by_design', 'price': None, 'json_ld': {'name': name}, 'size_chart': chart, 'bullets': []}
+
+
+def _old_record_chart(prices, variants):
+    """2T-1's record_chart (any chart on the record's own rows), for the before."""
+    rows = [r for v in variants for r in rel.variant_rows(prices, v) if r.get('size_chart')]
+    return rows[0]['size_chart'] if rows else None
+
+
+def test_a_line_with_no_chart_gets_no_weight_never_another_line_s():
+    """Derived, FL15's Ultra row: the feed's pampers.com URL for Swaddlers Ultra Day + Night lands on the Swaddlers page
+    (supply's test_a_redirected_brand_page_serves_where_it_landed is this case), so supply serves the Ultra SKU's own
+    row with the Swaddlers page's markup and chart. 2T-1 took that chart for the Ultra record: Size 3, 13 to 26 lb."""
+    prices = [_own('sku_pg_swultra_s3', SWADDLERS_PAGE, SWADDLERS_CHART),
+              _own('sku_pg_swd_s1_96', SWADDLERS_PAGE, SWADDLERS_CHART)]
+    assert rel.weight_of(_old_record_chart(prices, [ULTRA]), ULTRA['label']) == '13 to 26 lb'   # what the walk saw
+    chart = rel.record_chart(prices, [ULTRA], own_domains=OWN, brand='Pampers')
+    assert chart is None
+    assert rel.subtitle([ULTRA], chart) == 'Size 3, 180 ct'
+    record = {f['k']: f for f in rel.master_record([ULTRA], prices=prices, retailers=[], own_domains=OWN, chart=chart)}
+    assert (record['Size and weight']['v'], record['Size and weight']['note']) == ('Size 3', 'No chart on pampers.com')
+    # Swaddlers itself keeps its own chart
+    swd = {**ULTRA, 'sku': 'sku_pg_swd_s1_96', 'variant_id': 'sku_pg_swd_s1_96', 'label': 'Size 1, 96 ct',
+           'product_name': 'Pampers Swaddlers'}
+    assert rel.weight_of(rel.record_chart(prices, [swd], own_domains=OWN, brand='Pampers'), swd['label']) == '8 to 14 lb'
+    # no weight to read back against: the record's weight answers are not judged on it
+    answer = {'platform': 'chatgpt', 'variant_id': 'sku_pg_swultra_s3', 'verdict': 'match', 'run_id': 1,
+              'stated': {'min': 13, 'max': 26}, 'truth': {'min': 13, 'max': 26}}
+    assert rel.readback([ULTRA], attribute_answers=[answer], true_value_rows=[], promo=None, deals=None,
+                        brand='Pampers', charted=False) == []
+    # the lead signal's facts: /reference's truth for Ultra (supply's, from the same page) is not Ultra's
+    reference = {'attributes': [{'variant_ref': 'feed_sku:9', 'variant_label': 'Size 3, 180 ct',
+                                 'product_name': 'Pampers Swaddlers Ultra Day + Night', 'truth': {'min': 13, 'max': 26}}]}
+    drift = [{'variant_ref': 'feed_sku:9', 'kind': 'page', 'field': 'swaddlers_ultra.size_3.weight (walmart.com)',
+              'was': '12 to 22 lb', 'now': '13 to 26 lb'}]
+    charts = rel.line_charts(prices, OWN, 'Pampers')
+    assert bo.size_chart_signal(drift, reference, None, domain='pampers.com', brand='Pampers', charts=charts,
+                                feed_rows=[]) is None
+    assert bo.size_chart_signal(drift, reference, None, domain='pampers.com', brand='Pampers')['facts']['sources'][0] == \
+        {'who': 'pampers.com', 'range': '13 to 26 lb', 'prov': 'brand'}   # 2T-1's reading, for the before
+
+
+# ── 4: the size-chart signal names both ranges and the lines on each ─────
+
+def _chart(*ranges):
+    return [{'size': s, 'min': lo, 'max': hi} for s, lo, hi in ranges]
+
+
+def test_the_size_chart_detail_names_both_ranges_and_their_lines():
+    """FL15-shaped: five lines' own pages on pampers.com, each with its own chart (the facts r5 reads)."""
+    small = _chart(('3', 13.0, 26.0), ('4', 15.0, 34.0))
+    big = _chart(('3', 16.0, 28.0), ('4', 22.0, 37.0))
+    prices = [_own('a', SWADDLERS_PAGE, small), _own('b', 'Pampers® Baby-Dry™ Diapers', small),
+              _own('c', 'Pampers® AMORE Diapers', small), _own('d', 'Pampers® Cruisers 360° Pull-on Diapers | Pampers', big),
+              _own('e', 'Pampers® Zzz | Pampers', big)]
+    feed = [{'product_name': n, 'variant_label': 'Size 4'} for n in (
+        'Pampers Swaddlers', 'Pampers Baby-Dry', 'Pampers AMORE', 'Pampers Cruisers 360', 'Pampers Zzz')] + \
+        [{'product_name': 'Pampers Pure Protection', 'variant_label': 'Size 1', 'lifecycle': 'retired'}]
+    reference = {'attributes': [
+        {'variant_ref': 'r1', 'variant_label': 'Size 4', 'product_name': 'Pampers Swaddlers', 'truth': {'min': 15, 'max': 34}},
+        {'variant_ref': 'r2', 'variant_label': 'Size 4, 104 ct', 'product_name': 'Pampers Zzz',
+         'truth': {'min': 22, 'max': 37}}]}
+    drift = [{'variant_ref': 'r1', 'kind': 'page', 'field': 'swaddlers.size_4.weight (amazon.com)', 'was': '22 to 37 lb',
+              'now': '15 to 34 lb'},
+             {'variant_ref': 'r2', 'kind': 'markup', 'field': 'zzz.size_4.weight (markup)', 'was': '15 to 34 lb',
+              'now': '22 to 37 lb'}]
+    signal = bo.size_chart_signal(drift, reference, None, domain='pampers.com', brand='Pampers',
+                                  charts=rel.line_charts(prices, OWN, 'Pampers'), feed_rows=feed)
+    assert signal['title'] == 'pampers.com runs two Size 4 charts, and agents repeat both.'
+    assert signal['detail'].startswith('Swaddlers, Baby-Dry and AMORE Size 4 are 15 to 34 lb, Cruisers 360 and Zzz '
+                                       'Size 4 are 22 to 37 lb. Zzz Size 4 markup says 15 to 34 lb, the chart 22 to 37 lb.')
+    assert signal['facts']['two'][0]['groups'] == [
+        {'range': '15 to 34 lb', 'lines': ['Swaddlers', 'Baby-Dry', 'AMORE']},
+        {'range': '22 to 37 lb', 'lines': ['Cruisers 360', 'Zzz']}]
