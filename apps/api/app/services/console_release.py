@@ -45,8 +45,16 @@ SURFACE_SHORT = {'schema_org': 'Site markup', 'manufacturer_center': 'Manufactur
 #: supply's expressiveness severity -> the compiler line's mark.
 MARKS = {'info': 'info', 'dropped': 'dropped', 'approximated': 'approximated', 'blocked': 'conflict'}
 
-#: The rules a compile applied are journaled as expressiveness lines named so.
+#: A rule that is off is journaled as an expressiveness line named so ("rule rN off: ...").
 RULE_FLAG = re.compile(r'^rule_(r\d+)$')
+
+#: 2T-3 (6): the compliance rules a manufacturer-mode compile reads on each
+#: channel (parleo-supply-app truesync/channels/manufacturer_mode.py): r1 no
+#: price, everywhere; r2 retailers in one order, where retailers are listed;
+#: r5 one size chart per line, where a weight range goes; r6 a retired line's
+#: successor, everywhere, on a record with a retired variant.
+CHANNEL_RULES = {'schema_org': ('r1', 'r2', 'r5', 'r6'), 'manufacturer_center': ('r1', 'r5', 'r6'),
+                 'acp': ('r1', 'r2', 'r6')}
 
 RELEASE_TEMPLATES = {
     'workspace.mode_note': ("Manufacturer records compiled from the feed and {domain}. Nothing publishes until {brand_s} "
@@ -79,6 +87,7 @@ RELEASE_TEMPLATES = {
     'destination.other.status': 'Compiled, not sent',
     'destination.other.line': "{name}'s compiled records go out before {brand_s} file, so the push is proven first.",
     'record.price': 'Not set. Retailers price it',
+    'record.weight.none': 'No chart on {domain}',
     'record.gtin.none': 'None in the feed',
     'record.gtin.source': '{gtin} ({source})',
     'record.pack.page': '{domain} lists {counts}',
@@ -105,6 +114,10 @@ RELEASE_TEMPLATES = {
     'timeline.compiled.blocked': ', blocked on {blocked}',
     'timeline.sent': '{who} says it sent the {channel} file',
     'compiler.carried': 'Validated against {spec}',
+    'compiler.rules': '{rules} {verb}, {on}',
+    'compiler.rules.none_on': 'none on',
+    'compiler.rules.all_on': 'all on',
+    'compiler.rules.some_on': '{codes} on',
     'compiler.rule.manufacturer_center': ('Manufacturer Center keys every product by GTIN and excludes price and '
                                           'availability by spec.'),
     'compiler.rule.schema_org': 'Product with its GTIN, size and pack count. No price: retailers set it.',
@@ -173,6 +186,10 @@ def _feed_row(feed_rows: List[dict], variant: dict) -> Optional[dict]:
     return None
 
 
+#: 2T-3 (9): a feed's variant label that says it is retired ("Size 1 (retired)"): the record says so once, itself.
+_RETIRED_MARK = re.compile(r'\s*\(\s*retired\s*\)', re.I)
+
+
 def record_variants(record_ref: str, catalog: Optional[dict], feed_rows: Optional[List[dict]]) -> List[dict]:
     """The held record's variants: the catalog listing whose product_id is
     the record_ref, each with its feed row. [{variant_id, label, count, gtin,
@@ -181,7 +198,8 @@ def record_variants(record_ref: str, catalog: Optional[dict], feed_rows: Optiona
     out = []
     for v in listing.get('variants') or []:
         row = _feed_row(feed_rows or [], v) or {}
-        out.append({'variant_id': v.get('variant_id'), 'label': v.get('title') or row.get('variant_label'),
+        label = v.get('title') or row.get('variant_label')
+        out.append({'variant_id': v.get('variant_id'), 'label': _RETIRED_MARK.sub('', label).strip() if label else label,
                     'count': v.get('count') if v.get('count') is not None else row.get('pack_count'),
                     'gtin': v.get('gtin') or row.get('gtin'), 'sku': row.get('sku'), 'status': v.get('status'),
                     'successor': v.get('successor'),
@@ -202,6 +220,39 @@ def variant_rows(prices: Optional[List[dict]], variant: dict) -> List[dict]:
     return [r for r in prices or [] if _row_matches(r, variant)]
 
 
+#: A reference read's price method when the page was walled: nothing read it.
+WALLED_METHODS = (None, 'none', 'wall')
+
+
+def shelf_reads(rows: Optional[List[dict]], own_domains: Iterable[str]) -> dict:
+    """2T-3 (1): what the shelf reads say per retailer, the one rule the
+    record timeline and the Overview's activity both read. A retailer is
+    read when at least one SKU's reference read on it has a price method
+    other than none (an own fetch, a hosted render), walled only when every
+    read on it walled, unread when no read of it is dated. {read, walled,
+    unread: [names], walled_skus: {name: SKUs walled on a retailer read}, at}."""
+    own = {_domain(d) for d in own_domains or () if d}
+    shelf = [r for r in rows or [] if r.get('role') != 'own' and _domain(r.get('retailer_domain')) not in own]
+    by: Dict[str, List[dict]] = {}
+    for r in shelf:
+        by.setdefault(rm._retailer_name(_domain(r.get('retailer_domain'))), []).append(r)
+    read, walled, unread, walled_skus = [], [], [], {}
+    for name, mine in by.items():
+        dated = [r for r in mine if r.get('observed_at')]
+        if not dated:
+            unread.append(name)
+            continue
+        walls = [r for r in dated if r.get('method') in WALLED_METHODS]
+        if len(walls) == len(dated):
+            walled.append(name)
+        else:
+            read.append(name)
+            if walls:
+                walled_skus[name] = len({r.get('sku') or r.get('gtin') or r.get('variant_ref') for r in walls})
+    return {'read': sorted(read), 'walled': sorted(walled), 'unread': sorted(unread), 'walled_skus': walled_skus,
+            'at': max((str(r['observed_at']) for r in shelf if r.get('observed_at')), default=None)}
+
+
 def _chart_entry(chart: Optional[List[dict]], label: Optional[str]) -> Optional[dict]:
     size = attribute_accuracy.size_of(label)
     if size is None:
@@ -210,12 +261,52 @@ def _chart_entry(chart: Optional[List[dict]], label: Optional[str]) -> Optional[
     return next((c for c in chart or [] if str(c.get('size') or '').lower() == key), None)
 
 
-def record_chart(prices: Optional[List[dict]], variants: List[dict]) -> Optional[List[dict]]:
-    """The line's size chart: the one the brand page served on any of the
-    record's own rows (2O-6's size_chart), newest read first."""
-    rows = [r for v in variants for r in variant_rows(prices, v) if r.get('size_chart')]
+_MARKS = re.compile(r"[®™°℠©]")
+#: A product name's first word that names the product type, not the line (supply's brand_page._GENERIC).
+_GENERIC = re.compile(r"\b(?:diapers?|pull[- ]?ons?|pants|wipes|trainers?|nappies|for)\b", re.I)
+
+
+def page_line(name: Optional[str]) -> Optional[str]:
+    """A brand page's own line, as supply's brand_page.line_name reads it: marks out, the part
+    before "|", up to the first product-type word ("Pampers® Swaddlers™ Diapers for Babies and
+    Newborns" -> "Pampers Swaddlers", "Pampers® Zzz | Pampers" -> "Pampers Zzz")."""
+    text = _MARKS.sub('', str(name or '')).split('|')[0]
+    cut = _GENERIC.search(text)
+    text = re.sub(r'\s+', ' ', text[:cut.start()] if cut else text).strip(' -,:')
+    return text or None
+
+
+def line_key(name: Optional[str], brand: Optional[str]) -> Optional[str]:
+    """One key for a line however a feed or a page writes it."""
+    line = page_line(name)
+    return rm.line_of(line, brand) if line else None
+
+
+def line_charts(prices: Optional[List[dict]], own_domains: Iterable[str], brand: Optional[str]) -> Dict[str, list]:
+    """2T-3 (2): {line key: the size chart} from the brand's own pages, newest
+    read first, each keyed by the line the page itself names (its markup's
+    product name), never by the SKU whose URL led there: a URL that lands on
+    another line's page (pampers.com sends Swaddlers Ultra to Swaddlers) gives
+    that line's chart, not the record's. The facts supply's r5 reads (2S-1)."""
+    own = {_domain(d) for d in own_domains or () if d}
+    rows = [r for r in prices or [] if (r.get('role') == 'own' or _domain(r.get('retailer_domain')) in own)
+            and r.get('size_chart')]
     rows.sort(key=lambda r: str(r.get('observed_at') or ''), reverse=True)
-    return rows[0]['size_chart'] if rows else None
+    out: Dict[str, list] = {}
+    for r in rows:
+        key = line_key((r.get('json_ld') or {}).get('name'), brand)
+        if key and key not in out:
+            out[key] = r['size_chart']
+    return out
+
+
+def record_chart(prices: Optional[List[dict]], variants: List[dict], *, own_domains: Iterable[str] = (),
+                 brand: Optional[str] = None) -> Optional[List[dict]]:
+    """The record's size chart: its own line's chart on the brand's page
+    (line_charts), else None. Never a retailer page's, never another line's."""
+    charts = line_charts(prices, own_domains, brand)
+    keys = list(dict.fromkeys(line_key(v.get('product_name'), brand) for v in variants))
+    return next((charts[k] for k in keys if k in charts), None)
 
 
 def weight_of(chart: Optional[List[dict]], label: Optional[str]) -> Optional[str]:
@@ -233,6 +324,14 @@ def _variant_words(v: dict, chart) -> str:
     if weight:
         parts.append(weight)
     return ', '.join(parts)
+
+
+def _variant_short(v: dict) -> str:
+    """"Newborn 84 ct": the label without its commas, the count when the label does not say it."""
+    label = re.sub(r'\s*,\s*', ' ', v.get('label') or '').strip()
+    if v.get('count') and not re.search(r'\b\d+\s*ct\b', label):
+        label = f"{label} {v['count']} ct".strip()
+    return label
 
 
 def subtitle(variants: List[dict], chart) -> str:
@@ -270,15 +369,16 @@ _PRICE_VERDICT = {'exact': 'right', 'partial': 'partial', 'wrong': 'wrong', 'sta
 
 
 def readback(variants: List[dict], *, attribute_answers: List[dict], true_value_rows: List[dict],
-             promo: Optional[dict], deals: Optional[dict], brand: Optional[str]) -> List[dict]:
+             promo: Optional[dict], deals: Optional[dict], brand: Optional[str], charted: bool = True) -> List[dict]:
     """Every fact an agent stated about the record's variants in the cycle,
     against the record: weight (the attribute answers), price (the True
     Value quotes, against the retailer's live price), and one shelf row per
     deal live on the record's variants with how many answers named it.
     [{agent, fact, variant, said, truth, verdict (right | partial | wrong |
-    missed), run}], wrong first."""
+    missed), run}], wrong first. 2T-3 (2): a record whose line has no chart
+    on the brand's page (`charted` False) has no weight to read back against."""
     out = []
-    for a in attribute_answers or []:
+    for a in (attribute_answers or []) if charted else []:
         v = matches_variant(variants, variant_id=a.get('variant_id'), line_text=a.get('variant'), brand=brand)
         if v is None or a.get('verdict') is None:
             continue
@@ -310,8 +410,10 @@ def readback(variants: List[dict], *, attribute_answers: List[dict], true_value_
                   and (j.get('variant_id') in ids or any(_row_matches(e, {'sku': j.get('variant_id')}) for e in mine))]
         named = sum(1 for j in judged if did in j.get('named') or [])
         out.append({'agent': 'shelf', 'fact': 'deal', 'variant': mine[0].get('variant_label'),
-                    'said': ppt.title(deal), 'truth': T['drift.shelf.truth'].format(named=named, asked=len(judged)),
-                    'verdict': 'right' if named else 'missed', 'run': None, 'surface': None,
+                    'said': ppt.label(deal, mine[0]), 'truth': T['drift.shelf.truth'].format(named=named, asked=len(judged)),
+                    # 2T-3 (5): the promo rule: right when every answer on the SKU named it, left out when none did
+                    'verdict': 'right' if judged and named == len(judged) else 'missed' if not named else 'partial',
+                    'run': None, 'surface': None,
                     'named': named, 'asked': len(judged)})
     rank = {'wrong': 0, 'partial': 1, 'missed': 2, 'right': 3}
     return sorted(out, key=lambda r: (r['agent'] == 'shelf', rank.get(r['verdict'], 4), r['fact'], str(r['agent'])))
@@ -373,11 +475,17 @@ def master_record(variants: List[dict], *, prices: Optional[List[dict]], retaile
     out = [{'k': 'GTIN', 'prov': 'brand',
             'v': each(lambda v: T['record.gtin.source'].format(gtin=v['gtin'], source='feed') if v.get('gtin')
                       else T['record.gtin.none'])}]
-    out.append({'k': 'Size and weight', 'prov': 'brand',
-                'v': each(lambda v: (weight_of(chart, v.get('label')) if many else
-                                     ', '.join(w for w in (attribute_accuracy.size_label(v.get('label')),
-                                                           weight_of(chart, v.get('label'))) if w)) or None),
-                'note': f"{domain} size chart" if chart else None})
+    if chart:
+        out.append({'k': 'Size and weight', 'prov': 'brand',
+                    'v': each(lambda v: (weight_of(chart, v.get('label')) if many else
+                                         ', '.join(w for w in (attribute_accuracy.size_label(v.get('label')),
+                                                               weight_of(chart, v.get('label'))) if w)) or None),
+                    'note': f"{domain} size chart"})
+    else:
+        # 2T-3 (2): no chart for the line on the brand's page: the size alone, never a range from elsewhere
+        sizes = list(dict.fromkeys(s for s in (attribute_accuracy.size_label(v.get('label')) for v in variants) if s))
+        out.append({'k': 'Size and weight', 'prov': 'brand', 'v': ', '.join(sizes) or None,
+                    'note': T['record.weight.none'].format(domain=domain)})
     page_counts = {v.get('variant_id'): _pack_counts(pages, v.get('label')) for v in variants}
     others = [c for v in variants for c in page_counts[v.get('variant_id')] if c != v.get('count')]
     out.append({'k': 'Pack', 'prov': 'brand', 'v': each(lambda v: f"{v['count']} ct" if v.get('count') else None) or None,
@@ -394,8 +502,15 @@ def master_record(variants: List[dict], *, prices: Optional[List[dict]], retaile
     listed = list(dict.fromkeys(d for v in variants for d in v.get('retailers') or [] if _domain(d) not in own))
     if priced:
         day = manu.short_day(max(str(r.get('observed_at') or '') for r in priced))
+
+        def where(v):
+            mine = [r for r in variant_rows(priced, v)]
+            return ', '.join(dict.fromkeys(f"{rm._retailer_name(_domain(r.get('retailer_domain')))} ${r['price']}"
+                                           for r in mine)) or None
+        # 2T-3 (8): per variant, "Newborn 84 ct: Amazon $27.97, Walmart $27.97 · Size 1 96 ct: ..."
+        parts = [(v, where(v)) for v in variants]
         out.append({'k': f"Where to buy ({day})", 'prov': 'retail',
-                    'v': ' · '.join(f"{rm._retailer_name(_domain(r.get('retailer_domain')))} ${r['price']}" for r in priced)})
+                    'v': ' · '.join(f"{_variant_short(v)}: {text}" if many else text for v, text in parts if text)})
     elif listed:
         out.append({'k': 'Where to buy', 'prov': 'retail',
                     'v': T['record.where.unread'].format(names=manu._and([rm._retailer_name(_domain(d)) for d in listed]))})
@@ -404,9 +519,8 @@ def master_record(variants: List[dict], *, prices: Optional[List[dict]], retaile
     if missing:
         out.append({'k': 'Not in the feed', 'v': ', '.join(rm._retailer_name(_domain(d)) for d in missing),
                     'prov': 'brand', 'note': T['record.not_in_feed']})
-    walled = sorted({rm._retailer_name(_domain(r.get('retailer_domain'))) for r in shelf
-                     if r.get('observed_at') and r.get('method') in ('none', 'wall') and r.get('price') is None})
-    unread = sorted({rm._retailer_name(_domain(r.get('retailer_domain'))) for r in shelf if not r.get('observed_at')})
+    reads = shelf_reads(shelf, own)
+    walled, unread = reads['walled'], reads['unread']
     cant = [T['record.walled'].format(names=manu._and(walled))] if walled else []
     cant += [T['record.unread'].format(names=manu._and(unread))] if unread else []
     if cant:
@@ -442,17 +556,13 @@ def timeline(variants: List[dict], rows: Dict[str, dict], *, prices: Optional[Li
         out.append({'at': newest['observed_at'], 'what': T['timeline.brand_page'].format(domain=domain,
                                                                                           what=manu._and(what)),
                     'tone': 'neu'})
-    shelf = [r for r in mine if r.get('role') != 'own' and _domain(r.get('retailer_domain')) not in own]
-    if shelf:
-        name = lambda r: rm._retailer_name(_domain(r.get('retailer_domain')))  # noqa: E731
-        read = sorted({name(r) for r in shelf if r.get('observed_at') and r.get('price') is not None})
-        walled = sorted({name(r) for r in shelf if r.get('observed_at') and r.get('price') is None})
-        unread = sorted({name(r) for r in shelf if not r.get('observed_at')})
+    reads = shelf_reads(mine, own)
+    if reads['read'] or reads['walled'] or reads['unread']:
+        read, walled, unread = reads['read'], reads['walled'], reads['unread']
         parts = ([T['timeline.shelf.read'].format(names=manu._and(read))] if read else []) + \
             ([T['timeline.shelf.walled'].format(names=manu._and(walled))] if walled else []) + \
             ([T['timeline.shelf.unread'].format(names=manu._and(unread))] if unread else [])
-        at = max((str(r['observed_at']) for r in shelf if r.get('observed_at')), default=None)
-        out.append({'at': at, 'what': T['timeline.shelf'].format(read='. '.join(parts)),
+        out.append({'at': reads['at'], 'what': T['timeline.shelf'].format(read='. '.join(parts)),
                     'tone': 'warn' if walled or unread else 'ok'})
     if cycle is not None and lines:
         parts = []
@@ -489,15 +599,31 @@ def timeline(variants: List[dict], rows: Dict[str, dict], *, prices: Optional[Li
     return out
 
 
-def compiler(rows: Dict[str, dict], channels: Dict[str, dict]) -> List[dict]:
+def rules_line(relevant: List[str], applied: List[str]) -> Optional[str]:
+    """"r1, r2, r5 apply, none on"."""
+    if not relevant:
+        return None
+    on = T['compiler.rules.none_on'] if not applied else T['compiler.rules.all_on'] if len(applied) == len(relevant) \
+        else T['compiler.rules.some_on'].format(codes=manu._and(applied))
+    return T['compiler.rules'].format(rules=', '.join(relevant), verb='applies' if len(relevant) == 1 else 'apply', on=on)
+
+
+def compiler(rows: Dict[str, dict], channels: Dict[str, dict], rules: Optional[List[dict]] = None,
+             retired: bool = False) -> List[dict]:
     """Per surface the record was compiled for: its spec version, the
-    one-line rule, the compliance rules the compile applied, and the
-    validator's and the expressiveness check's lines, each {mark (carried |
-    info | approximated | conflict | dropped), field, note}."""
+    one-line rule, the compliance rules, and the validator's and the
+    expressiveness check's lines, each {mark (carried | info | approximated |
+    conflict | dropped), field, note}.
+
+    2T-3 (6): `rules_relevant` the rules that apply to the surface (a rule
+    that is off says so in the compile's flags; one that is on, from
+    /rules, by CHANNEL_RULES), `rules_applied` those that are on, and
+    `rules_line` both in one: "r1, r2, r5 apply, none on"."""
+    on = {r.get('code') for r in rules or [] if r.get('on')}
     out = []
     for slug, row in rows.items():
         spec = (channels.get(slug) or {}).get('spec_version') or row.get('spec_version')
-        lines, applied = [], []
+        lines, off = [], []
         validation = row.get('validation') or {}
         carried = manu.carried_fields(row.get('payload'))
         if manu.is_valid(row) and carried:
@@ -507,11 +633,15 @@ def compiler(rows: Dict[str, dict], channels: Dict[str, dict]) -> List[dict]:
         for e in row.get('expressiveness') or []:
             flag = RULE_FLAG.match(str(e.get('field') or ''))
             if flag:
-                applied.append(flag.group(1))
+                off.append(flag.group(1))
                 continue
             lines.append({'mark': MARKS.get(e.get('severity'), 'info'), 'field': e.get('field'), 'note': e.get('note')})
+        applies = [c for c in CHANNEL_RULES.get(slug, ()) if c in on and (c != 'r6' or retired)]
+        relevant = sorted(set(off) | set(applies), key=lambda c: int(c[1:]))
+        applied = [c for c in relevant if c in on and c not in off]
         out.append({'channel': slug, 'name': _channel_short(slug, channels), 'spec_version': spec,
-                    'rule': T.get(f'compiler.rule.{slug}'), 'rules_applied': applied, 'state': cell_state(row),
+                    'rule': T.get(f'compiler.rule.{slug}'), 'rules_relevant': relevant, 'rules_applied': applied,
+                    'rules_line': rules_line(relevant, applied), 'state': cell_state(row),
                     'spec_clause': row.get('spec_clause'), 'lines': lines})
     return out
 
@@ -522,7 +652,7 @@ def build_records(*, pubs: List[dict], catalog: Optional[dict], feed_rows: Optio
                   prices: Optional[List[dict]], retailers: List[str], own_domains: Iterable[str],
                   channels: List[dict], brand: Optional[str], cycle: Optional[dict], attribute_answers: List[dict],
                   true_value_rows: List[dict], promo: Optional[dict], deals: Optional[dict],
-                  agents: Iterable[str]) -> List[dict]:
+                  agents: Iterable[str], rules: Optional[List[dict]] = None) -> List[dict]:
     """The matrix, one row per held record (supply's record_ref), cells for
     the channels in this pass only: {record_ref, name, sub, variants,
     retired, successor, disagree, cells: {channel: {s, disagree, at,
@@ -533,9 +663,9 @@ def build_records(*, pubs: List[dict], catalog: Optional[dict], feed_rows: Optio
     out = []
     for ref, rows in hold(pubs).items():
         variants = record_variants(ref, catalog, feed_rows)
-        chart = record_chart(prices, variants)
+        chart = record_chart(prices, variants, own_domains=own_domains, brand=brand)
         lines = readback(variants, attribute_answers=attribute_answers, true_value_rows=true_value_rows, promo=promo,
-                         deals=deals, brand=brand)
+                         deals=deals, brand=brand, charted=chart is not None)
         dis = disagree(lines, agents)
         retired = next((v for v in variants if v.get('status') == 'retired'), None)
         listing = _listing(catalog, ref) or {}
@@ -559,22 +689,29 @@ def build_records(*, pubs: List[dict], catalog: Optional[dict], feed_rows: Optio
             'drift': drift_rows(lines), 'drift_all': lines,
             'timeline': timeline(variants, rows, prices=prices, own_domains=own_domains, lines=lines, cycle=cycle,
                                  channels=by_slug),
-            'compiler': compiler(rows, by_slug),
+            'compiler': compiler(rows, by_slug, rules, retired=retired is not None),
         })
     return out
 
 
-def _fields(rows: Iterable[dict]) -> dict:
-    """{carried, approximated, dropped} over the rows' expressiveness lines
-    (a rule the compile applied is not a field)."""
+def _fields(per_record: Iterable[Dict[str, dict]]) -> dict:
+    """{carried, approximated, dropped}: 2T-3 (7), the distinct fields of each
+    record across its held (or published) channels, summed over records, so
+    the three are on one scale. A field is carried when any held channel's
+    payload carries it, else approximated when one approximates it, else
+    dropped when one drops it by spec. A rule's flag, an info line and a
+    blocked channel's lines are not fields."""
     counts = {'carried': 0, 'approximated': 0, 'dropped': 0}
-    for row in rows:
-        for e in row.get('expressiveness') or []:
-            if RULE_FLAG.match(str(e.get('field') or '')):
-                continue
-            sev = e.get('severity')
-            key = 'carried' if sev == 'info' else 'approximated' if sev == 'approximated' else 'dropped'
-            counts[key] += 1
+    for rows in per_record:
+        held = [r for r in rows.values() if manu.is_held(r) or r.get('status') == manu.LIVE_STATUS]
+        carried = {f for r in held for f in manu.carried_fields(r.get('payload'))}
+        marks = [(e.get('field'), e.get('severity')) for r in held for e in r.get('expressiveness') or []
+                 if e.get('field') and not RULE_FLAG.match(str(e['field']))]
+        approximated = {f for f, sev in marks if sev == 'approximated'} - carried
+        dropped = {f for f, sev in marks if sev in ('dropped', 'blocked')} - carried - approximated
+        counts['carried'] += len(carried)
+        counts['approximated'] += len(approximated)
+        counts['dropped'] += len(dropped)
     return counts
 
 
@@ -589,8 +726,9 @@ def build_workspace(*, pubs: List[dict], records: List[dict], prices: Optional[L
     slugs = pass_channels(pubs)
     own = {_domain(d) for d in own_domains or () if d}
     shelf = [r for r in prices or [] if r.get('role') != 'own' and _domain(r.get('retailer_domain')) not in own]
+    names = shelf_reads(shelf, own)['walled']
     walled = sorted({_domain(r.get('retailer_domain')) for r in shelf
-                     if r.get('observed_at') and r.get('method') in ('none', 'wall') and r.get('price') is None})
+                     if rm._retailer_name(_domain(r.get('retailer_domain'))) in names})
     verified = max((str(r['observed_at']) for r in prices or [] if r.get('observed_at')), default=None)
     per_surface = []
     for slug in slugs:
@@ -606,7 +744,7 @@ def build_workspace(*, pubs: List[dict], records: List[dict], prices: Optional[L
                      'of': len(records) * len(slugs)},
         'published': sum(1 for r in rows if r.get('status') == manu.LIVE_STATUS),
         'blocked': sum(1 for r in rows if manu.is_blocked(r)),
-        'fields': _fields(rows),
+        'fields': _fields(hold(pubs).values()),
         'disagree': sum(1 for rec in records if rec['disagree']['agents']),
         'walled': {'n': len(walled), 'domains': walled},
         'last_verified': verified, 'last_verified_day': manu.short_day(verified),

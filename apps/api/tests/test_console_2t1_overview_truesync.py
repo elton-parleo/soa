@@ -169,9 +169,8 @@ def test_the_truesync_card_and_the_workspace_count_the_held_rows(http, db, upstr
     channels = {r['channel_slug'] for r in rows}
     assert (ws['records'], ws['compiled'], ws['blocked'], ws['published']) == \
         (len(records), {'n': len(held), 'of': len(records) * len(channels)}, len(blocked), 0)
-    lines = [e for r in rows for e in r['expressiveness'] if not e['field'].startswith('rule_')]
-    assert sum(ws['fields'].values()) == len(lines)
-    assert ws['fields']['dropped'] == sum(1 for e in lines if e['severity'] in ('dropped', 'blocked'))
+    # 2T-3 (7): distinct fields per record over its held channels (test_console_2t3's before and after)
+    assert ws['fields'] == rel._fields(rel.hold(rows).values())
     assert (ws['next_check'], ws['walled']) == (None, {'n': 0, 'domains': []})
     # the Overview's card is the same count, never a second one
     assert (card['products'], card['cells'], card['drifting'], card['surfaces']) == \
@@ -231,7 +230,9 @@ def test_a_record_its_readback_timeline_and_compiler(http, db, upstream):
         'Nothing published']
     compiler = {c['channel']: c for c in zzz['compiler']}
     assert compiler['manufacturer_center']['spec_version'] == 'manufacturers-v1-2026-10-05'
-    assert compiler['manufacturer_center']['rules_applied'] == ['r1', 'r5']
+    # 2T-3 (6): r1 and r5 apply to Manufacturer Center; #33's rules are all off, so none is applied
+    assert (compiler['manufacturer_center']['rules_relevant'], compiler['manufacturer_center']['rules_applied']) == \
+        (['r1', 'r5'], [])
     assert compiler['manufacturer_center']['lines'][0]['mark'] == 'carried'
     assert {l['mark'] for l in compiler['acp']['lines']} <= {'carried', 'info', 'approximated', 'conflict', 'dropped'}
     assert compiler['acp']['state'] == 'blocked'
@@ -339,8 +340,9 @@ def test_products_live_deals_check_weight_and_quotes(http, db, upstream):
     _shape(db, http, upstream)
     products = {p['sku']: p for p in _overview(http)['by_surface']['all']['products']}
     v1 = products['v1']
-    assert v1['live_deals'] == ['Amazon $27.97 with save 40% on 1 when you buy 2']
-    assert v1['live'].endswith('. Amazon $27.97 with save 40% on 1 when you buy 2')
+    # 2T-3 (3): the deal's one label (ppt.label)
+    assert v1['live_deals'] == ['Amazon: save 40% on 1 when you buy 2']
+    assert v1['live'].endswith('. Amazon: save 40% on 1 when you buy 2')
     assert v1['issue'].startswith('Weight right in 5 of 5.')
     assert v1['check'] == 'partly_right'
     assert v1['quoted_all'].count('$') == 3 and v1['quoted'] == v1['quoted_all']   # three amounts: nothing collapsed

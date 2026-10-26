@@ -8333,7 +8333,7 @@ The spec is the console demo (`parleohq/truesync` `console-demo`: `data/pg.ts`, 
 * `products[]` (the matrix) one row per held record (`record_ref`), cells on the channels this pass compiled only, in
   `cell_states` (`held | published | blocked | na`) with `disagree`; each row `sub`, `variants`, `retired`, `successor`,
   `disagree {agents, of, which}`, `record[]` `{k, v, prov, note}`, `drift[]`/`drift_all[]` (weight, price, one shelf row
-  per live deal), `timeline[]`, `compiler[]` `{channel, spec_version, rule, rules_applied, state, lines[{mark, field,
+  per live deal), `timeline[]`, `compiler[]` `{channel, spec_version, rule, rules_relevant, rules_applied, rules_line, state, lines[{mark, field,
   note}]}`. Answers match a record's variant by id, else by the same label, else by line and size when one variant has
   them. `channels` narrows to the pass; `diff` stays on `/publishing` only.
 
@@ -8351,3 +8351,36 @@ the record says "Not in the feed").
 `tests/test_console_2t1_overview_truesync.py` on 2P-1's pair with 2R-2's recordings and #33's `/deals`
 (`deals-20261020.json`, `deals-20261021.json`, recorded by `supply_2r1/recorder_deals.py` in #33's harness at
 4ec9a8a; its merchant has no live deal). `SOA_2T1_SAMPLE_DUMP=<dir>` writes the samples.
+
+## 2T-3: eleven items from the Oct 26 walk (FL15, org 12), brand mode only
+
+Every other merchant's reads are unchanged. No migration, no model call, `SCORER_VERSION` unchanged.
+
+* **Shelf reads, one rule** (`console_release.shelf_reads`): a retailer is read when at least one SKU's reference read
+  on it has a price method other than none (an own fetch, a hosted render), walled only when every read on it walled,
+  unread when none is dated. The activity's shelf line (`activity[stage=shelf]` adds `read`, `walled`, `walled_skus`),
+  a record's timeline, its master record's Couldn't read and `workspace.walled` all read it.
+* **A record's weight** (`console_release.line_charts`, `record_chart`): the brand page's chart for the record's own
+  line, the line the page itself names in its markup, never the SKU whose URL led there; else absent. A line with no
+  chart: no weight on its `sub` or `variants[].weight`, the master record's `Size and weight` is the size alone with
+  `note` "No chart on <domain>", no weight lines in its readback, and the size-chart signal drops it.
+* **The size-chart signal** reads the same charts over the feed's lines (retired aside): `detail` names every line on
+  each range ("Swaddlers, Baby-Dry and AMORE Size 4 are 15 to 34 lb, Cruisers 360 and Zzz Size 4 are 22 to 37 lb"),
+  then the markup lines; `facts.two[].groups[{range, lines}]` beside `lines`. "Two charts" counts sizes the feed sells.
+* **One deal label** (`promo_pass_through.label`, `per_deal[].label`): "Amazon: 25% off, $36.18 from $47.99". The deal
+  signal's title, detail and `facts.deal`, a product's `live_deals` and a record's shelf readback `said` read it.
+  `title` stays as Trade promotions and the narratives key on it.
+* **The shelf readback verdict**: `right` when every answer on the SKU named the deal, `missed` when none, `partial`
+  otherwise.
+* **The compiler**: `compiler[]` serves `rules_relevant` (the rules the surface reads: an off rule's `rule_rN` flag, an
+  on rule by `CHANNEL_RULES`), `rules_applied` (those on) and `rules_line` ("r1, r2, r5 apply, none on").
+  `rules_applied` used to list the off flags.
+* **`workspace.fields`**: each record's distinct fields across its held channels (carried when a payload carries it,
+  else approximated, else dropped), summed over records.
+* **Master record**: `Where to buy` grouped per variant ("Newborn 84 ct: Amazon $27.97, Walmart $27.97 · ..."); a
+  feed label's "(retired)" stripped from the variant label.
+* **`/truesync.agents_count`**: the agents the readback cycle ran.
+
+Tests: `tests/test_console_2t3_overview_truesync.py`. FL15's own rows are production reads, so its shape (Amazon read
+by our fetch, Target by the hosted render, Walmart walled on three SKUs; the Amazon list price cut and the Walmart
+Rollback; the Ultra URL landing on the Swaddlers page) is built in the test in supply's served shape and says so.
