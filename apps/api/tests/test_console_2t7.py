@@ -87,6 +87,8 @@ def test_the_previous_block_and_the_copy_read_the_label(http, db, upstream):
     assert all(re.search(r'in the Oct 14 cycle\.$', b['detail']) for b in vis['moved']['all']['brands'])
     over = _read(http, 'overview', cycle=f2p1.CYCLE_2)
     assert over['vs_label'] == 'vs Oct 14' and over['vs_cycle'] == f2p1.CYCLE_1
+    assert over['previous_label'] == {'code': f2p1.CYCLE_1, 'day': 'Oct 14', 'name': 'the Oct 14 cycle',
+                                      'since': 'Since Oct 14', 'vs': 'vs Oct 14'}
     assert all(c['detail'].endswith('in the Oct 14 cycle.') for c in over['by_surface']['all']['changes'])
     score = _read(http, 'score', cycle=f2p1.CYCLE_2)
     assert (score['previous']['cycle'], score['previous']['vs']) == (f2p1.CYCLE_1, 'vs Oct 14')

@@ -3,8 +3,8 @@
 prove nothing else moved. Copy named a cycle by its code ("in
 FL3-wiggle-and-snug-20261014", "in cycle FL4-…"); it now names it by its day
 ("in the Oct 14 cycle", rm.cycle_label), and each `previous` block carries
-{day, name, since, vs} beside `cycle`. This puts the codes back and drops the
-four keys.
+{day, name, since, vs} beside `cycle` (the Overview its `previous_label`). This
+puts the codes back and drops those keys.
 """
 import copy
 import re
@@ -36,7 +36,7 @@ def before_2t7(body, names: dict):
         if isinstance(x, dict):
             if 'cycle' in x and all(k in x for k in LABEL_KEYS):
                 x = {k: v for k, v in x.items() if k not in LABEL_KEYS}
-            return {k: walk(v) for k, v in x.items()}
+            return {k: walk(v) for k, v in x.items() if k != 'previous_label'}
         if isinstance(x, list):
             return [walk(v) for v in x]
         return back(x) if isinstance(x, str) else x

@@ -415,7 +415,8 @@ async def get_overview(cycle: str = Query(...), merchant: Optional[str] = Query(
             # 2N-1: with the merchant's facts, so its routing (Retailer coverage) compares
             prev_rows = _rows(conn, prev, features)
             # 2P-1 (B2): with the version its outcomes compare under, as the score's previous is
-            previous = {'code': prev['cycle_code'], 'name': rm.cycle_name(conn, prev), 'rows': prev_rows,
+            label = rm.cycle_label_of(conn, prev)
+            previous = {'code': prev['cycle_code'], 'name': label['name'], 'label': label, 'rows': prev_rows,
                         'visibility': _visibility(conn, prev, facts),
                         'study': {**rm.study_identity(conn, prev), 'scorer_version': score_svc.outcomes_version(prev_rows)}}
         # 2K-4 (B1): the study and its questions, compared first; 2P-1: and the outcomes' version

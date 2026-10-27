@@ -8558,7 +8558,8 @@ No migration, no model call, no new production read, no scorer change. Findings 
    Visibility's moved rows and lede ("in the Oct 21 cycle"), True Value's drift, Prove's change notes, the
    since-baseline rows, the revenue basis, the Overview's `vs_label`. The code stays the identifier where one is
    served (`previous.cycle`, `vs_cycle`, `baseline_cycle`). Every `previous` block (Visibility, True Value, the
-   score) adds {day, name, since, vs} for the console's headers ("Since Oct 14", "-3 vs Oct 14").
+   score) adds {day, name, since, vs} for the console's headers ("Since Oct 14", "-3 vs Oct 14"), and the Overview
+   serves the same as `previous_label` beside `previous_cycle`.
 3. **Accessibility's checks**: `weight` is "Weight in markup contradicts the size selector", its count the
    contradicting pages (good when zero), its value "3 of 4 pages: Baby-Dry, Cruisers 360 and Zzz" ("0 of 4 pages"
    when none), its note naming them. `gtin`'s value names the lines that drop a digit, "AMORE and Ultra drop the

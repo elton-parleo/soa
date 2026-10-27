@@ -1069,6 +1069,8 @@ def build_overview(cycle: dict, *, rows: List[dict], visibility: dict, true_valu
         'by_surface': by_surface,
         'scored_cycles': scored_cycles,
         'previous_cycle': (previous or {}).get('code'),
+        # 2T-7 (2): the previous cycle's label for the console's headers ("Against Oct 14"), rm.cycle_label
+        'previous_label': (previous or {}).get('label'),
         'changes_note': None if previous else TEMPLATES['changes.first_cycle'],
         'ranking': visibility.get('ranking'),
         # 2C-2c: questions is the study's count, the one Studies shows; asked
