@@ -531,19 +531,60 @@ def product_line(row: dict, *, deals: Optional[dict], promo: Optional[dict], att
     return ' '.join(parts) or None
 
 
-def anatomy(rows: List[dict], *, reads: Optional[List[dict]], deals: Optional[dict], promo: Optional[dict],
-            brand: Optional[str], day: Optional[str]) -> Optional[dict]:
-    """TV6: the most-asked SKU on its most-asked retailer, line by line, from the reference row and the
-    quotes: list price, the price cut (sale against list), the one-time price, each deal live there with how
-    many answers named it, what agents quoted and who. No modeled dollars."""
-    best = None
+#: 2T-7 (6): why the receipt shows its SKU, in the order anatomy_pick tries them
+PICKED_BY = ('live_deal', 'list_vs_sale', 'most_asked')
+
+
+def _cells(row: dict) -> dict:
+    return row.get('retailer_cells') or row.get('cells') or {}
+
+
+def anatomy_pick(rows: List[dict], *, reads: Optional[List[dict]], deals: Optional[dict]) -> Optional[tuple]:
+    """2T-7 (6): (row, domain, cell, picked_by) for the receipt. Each SKU on its most-asked retailer, the SKUs
+    most asked first (their runs over every retailer): the first with a deal live there (FL15: Swaddlers Size 4
+    on Walmart, its Rollback), else the first whose read there lists a price above the one it sells at, else
+    the most-asked (2T-5's pick). None when no cell was asked."""
+    cands = []
+    for i, row in enumerate(rows):
+        asked = [(d, c) for d, c in _cells(row).items() if c.get('runs')]
+        if not asked:
+            continue
+        domain, cell = max(asked, key=lambda dc: dc[1]['runs'])   # max keeps the first of a tie
+        cands.append((-sum(c['runs'] for _d, c in asked), i, row, domain, cell))
+    cands.sort(key=lambda c: c[:2])
+
+    def has_deal(row, domain):
+        return any(_domain(d.get('retailer_domain')) == _domain(domain) for d in ppt.live_for(deals, _ref_of(row)))
+
+    def has_cut(row, domain):
+        read = next(iter(_reads_for(reads, row, _domain(domain))), None) or {}
+        try:
+            return bool(_money(read.get('list_price')) and _money(read.get('price'))) and \
+                Decimal(str(read['list_price'])) > Decimal(str(read['price']))
+        except (InvalidOperation, ValueError):
+            return False
+
+    for why, test in (('live_deal', has_deal), ('list_vs_sale', has_cut)):
+        hit = next((c for c in cands if test(c[2], c[3])), None)
+        if hit:
+            return hit[2], hit[3], hit[4], why
+    best = None   # 2T-5's pick: the most-asked cell
     for row in rows:
-        for domain, cell in (row.get('retailer_cells') or row.get('cells') or {}).items():
+        for domain, cell in _cells(row).items():
             if cell.get('runs') and (best is None or cell['runs'] > best[2]['runs']):
                 best = (row, domain, cell)
-    if best is None:
+    return (*best, 'most_asked') if best else None
+
+
+def anatomy(rows: List[dict], *, reads: Optional[List[dict]], deals: Optional[dict], promo: Optional[dict],
+            brand: Optional[str], day: Optional[str]) -> Optional[dict]:
+    """TV6: a SKU on its most-asked retailer, line by line, from the reference row and the quotes: list price,
+    the price cut (sale against list), the one-time price, each deal live there with how many answers named
+    it, what agents quoted and who. No modeled dollars. 2T-7 (6): the SKU is anatomy_pick's."""
+    pick = anatomy_pick(rows, reads=reads, deals=deals)
+    if pick is None:
         return None
-    row, domain, cell = best
+    row, domain, cell, why = pick
     read = next(iter(_reads_for(reads, row, _domain(domain))), None) or {}
     price, listed = read.get('price'), read.get('list_price')
     lines = []
@@ -574,7 +615,7 @@ def anatomy(rows: List[dict], *, reads: Optional[List[dict]], deals: Optional[di
             'sub': T['tv.anatomy.sub'].format(product=row.get('product'), retailer=rm._retailer_name(domain),
                                               day=day or 'the read day'),
             'sku': row.get('sku'), 'variant_id': row.get('variant_id'), 'retailer': domain, 'runs': cell['runs'],
-            'rows': lines, 'observed_at': read.get('observed_at')}
+            'rows': lines, 'observed_at': read.get('observed_at'), 'picked_by': why}
 
 
 def true_value_hero(rows: List[dict]) -> dict:

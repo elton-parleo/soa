@@ -211,3 +211,60 @@ def test_the_clash_shows_whenever_the_shown_run_has_one():
     amazon['quotes'][0].pop('clash')
     amazon['quotes'][2]['clash'] = 'Pampers Zzz Size 3, 116-count'
     assert measure.clash_text(amazon) is None
+
+
+# ── 6: the receipt's SKU ──────────────────────────────────────────────────
+
+ROLLBACK = {'retailer_domain': 'walmart.com', 'kind': 'rollback', 'text': 'Rollback', 'terms': 'Rollback, 17% off',
+            'variants': [{'sku': 's4', 'variant_ref': 'feed_sku:s4', 'price': '49.77'}]}
+
+
+def _rcell(runs, quotes=()):
+    return {'quoted': '—', 'live': '—', 'status': 'exact', 'runs': runs, 'quotes': list(quotes)}
+
+
+def _receipt_rows():
+    """FL15's shape, DERIVED: Swaddlers Newborn asked most (on Amazon, one-time price only), Swaddlers Size 4
+    asked next, most on Walmart, where its Rollback was live and the page listed $59.77 against $49.77."""
+    quotes = [{'agent': 'chatgpt', 'stated': '49.77', 'outcome': 'exact'},
+              {'agent': 'gemini', 'stated': '59.77', 'outcome': 'wrong'}]
+    return [
+        {'product': 'Newborn, 84 ct', 'sku': 'nb', 'feed_sku': 'nb', 'variant_id': 'feed_sku:nb', 'gtin': None,
+         'cells': {'amazon.com': _rcell(12), 'walmart.com': _rcell(4)}},
+        {'product': 'Size 4, 150 ct', 'sku': 's4', 'feed_sku': 's4', 'variant_id': 'feed_sku:s4', 'gtin': None,
+         'cells': {'amazon.com': _rcell(3), 'walmart.com': _rcell(10, quotes)}},
+    ]
+
+
+READS = [{'retailer_domain': 'amazon.com', 'sku': 'nb', 'variant_ref': 'feed_sku:nb', 'price': '27.97',
+          'observed_at': '2026-10-24T14:00:00+00:00'},
+         {'retailer_domain': 'walmart.com', 'sku': 's4', 'variant_ref': 'feed_sku:s4', 'price': '49.77',
+          'list_price': '59.77', 'observed_at': '2026-10-24T14:00:00+00:00'}]
+
+
+def test_the_receipt_takes_the_most_asked_sku_with_a_live_deal():
+    deals = {'read_date': '2026-10-24', 'deals': [ROLLBACK]}
+    deal_id = measure.ppt.deal_id(ROLLBACK)
+    promo = {'judged': [{'variant_id': 'feed_sku:s4', 'live': [deal_id], 'named': [deal_id] if i < 1 else []}
+                        for i in range(4)]}
+    a = measure.anatomy(_receipt_rows(), reads=READS, deals=deals, promo=promo, brand='Pampers', day='Oct 24')
+    assert (a['sku'], a['retailer'], a['picked_by']) == ('s4', 'walmart.com', 'live_deal')
+    assert a['sub'] == 'Size 4, 150 ct on Walmart, Oct 24'
+    # list, the price cut, the one-time price, the deal with its named count, what agents quoted
+    assert [(r['k'], r['v'], r.get('tag')) for r in a['rows']] == [
+        ('List price', '$59.77', 'walmart.com'),
+        ('Walmart price cut', '-$10.00', '-17% vs list'),
+        ('One-time price', '$49.77', None),
+        (f"Or {measure.ppt.label(ROLLBACK, ROLLBACK['variants'][0]).split(': ', 1)[1]}", '$49.77', 'Named 1 of 4'),
+        ('What agents quoted', '$49.77, $59.77', 'ChatGPT and Gemini'),
+    ]
+
+
+def test_with_no_live_deal_a_list_vs_sale_difference_then_the_most_asked():
+    a = measure.anatomy(_receipt_rows(), reads=READS, deals=None, promo=None, brand='Pampers', day='Oct 24')
+    assert (a['sku'], a['retailer'], a['picked_by']) == ('s4', 'walmart.com', 'list_vs_sale')
+    flat = [{**r, 'list_price': None} for r in READS]
+    a = measure.anatomy(_receipt_rows(), reads=flat, deals=None, promo=None, brand='Pampers', day='Oct 24')
+    # 2T-5's pick: the most-asked cell, Swaddlers Newborn on Amazon, one line
+    assert (a['sku'], a['retailer'], a['picked_by']) == ('nb', 'amazon.com', 'most_asked')
+    assert [r['k'] for r in a['rows']] == ['One-time price']
