@@ -72,6 +72,9 @@ def comparison(db, encode, cycle_id: int = f2p1.ID_2):
     added = []
     with db.begin() as c:
         ids = {r['name']: r['id'] for r in c.execute(text("SELECT id, name FROM soa_entities")).mappings()}
+        # explicit ids: the harness inserts its own, so Postgres's sequences lag behind them
+        mention_id = (c.execute(text("SELECT MAX(id) FROM soa_coded_mentions")).scalar() or 0) + 1
+        outcome_id = (c.execute(text("SELECT MAX(id) FROM soa_expectation_outcomes")).scalar() or 0) + 1
         for q, (wording, coded) in enumerate(COMPARISON):
             qid = QID + q
             c.execute(text("INSERT INTO soa_queries (id, query_code, query_text, stage, status, study_type, "
@@ -94,15 +97,18 @@ def comparison(db, encode, cycle_id: int = f2p1.ID_2):
                     continue
                 added.append(rid)
                 for name, pos in positions.items():
-                    c.execute(text("INSERT INTO soa_coded_mentions (run_id, entity_id, mentioned, position, strength) "
-                                   "VALUES (:r, :e, :m, :p, 'Neutral')"),
-                              {'r': rid, 'e': ids[name], 'm': True, 'p': pos})
+                    c.execute(text("INSERT INTO soa_coded_mentions (id, run_id, entity_id, mentioned, position, "
+                                   "strength) VALUES (:i, :r, :e, :m, :p, 'Neutral')"),
+                              {'i': mention_id, 'r': rid, 'e': ids[name], 'm': True, 'p': pos})
+                    mention_id += 1
                 coding = {'spans': [], 'other_brands_named': [{'name': n, 'relation': 'comparison'} for n in names],
                           'retailer_mentions': []}
-                c.execute(text("INSERT INTO soa_expectation_outcomes (run_id, query_id, cycle_id, platform, tier, "
-                               "outcome, outcome_reason, flags, surface, extraction) VALUES (:r, :q, :cy, :p, "
+                c.execute(text("INSERT INTO soa_expectation_outcomes (id, run_id, query_id, cycle_id, platform, tier, "
+                               "outcome, outcome_reason, flags, surface, extraction) VALUES (:i, :r, :q, :cy, :p, "
                                "'comparison', 'unscoreable', NULL, '[]', :s, :x)"),
-                          {'r': rid, 'q': qid, 'cy': cycle_id, 'p': platform, 's': surface, 'x': encode(coding)})
+                          {'i': outcome_id, 'r': rid, 'q': qid, 'cy': cycle_id, 'p': platform, 's': surface,
+                           'x': encode(coding)})
+                outcome_id += 1
     return added
 
 
