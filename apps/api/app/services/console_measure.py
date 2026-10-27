@@ -35,8 +35,7 @@ MEASURE_TEMPLATES = {
     'vis.gap.behind': '{n} first {picks} behind {rival}',
     'vis.gap.ahead': '{n} first {picks} ahead of {rival}',
     'vis.gap.level': 'Level with {rival} on first picks',
-    'vis.gap.close': 'Named almost as often as {rival}, picked first {how} often',
-    'vis.gap.far': '{rival} is picked first in {rival_first}, {brand} in {first}',
+    'vis.gap.claim': 'Named {named} {rival}, picked first {first} often',
     'vis.gap.level_line': "Level with {rival} on first picks, named {named} to {rival_s} {rival_named}",
     'vis.outside': '{names} {verb} named too, outside the category.',
     # True Value (TV1, TV5, TV6, TV9)
@@ -230,31 +229,61 @@ def visibility_headline(vis: dict, brand: Optional[str]) -> Optional[dict]:
             'question_short_reason': 'soa stores no short form of a question, so it is served whole'}
 
 
+#: 2T-7 (1): "about as often" is within this share of the rival's count
+ABOUT = Decimal('0.10')
+
+
+def _compare(you: int, rival: int) -> str:
+    """'more', 'about' (within 10% of the rival's count) or 'less'."""
+    if abs(you - rival) <= ABOUT * rival:
+        return 'about'
+    return 'more' if you > rival else 'less'
+
+
+def named_words(you: int, rival: int) -> str:
+    """"more often than", "almost as often as" (within 10%, fewer: the demo's 25 to 27), "about as often as"
+    (within 10%, as many or more), "less often than"."""
+    how = _compare(you, rival)
+    if how == 'about':
+        return 'almost as often as' if you < rival else 'about as often as'
+    return f"{how} often than"
+
+
+def first_words(you: int, rival: int) -> str:
+    """"more", "about as", "less", "far less" (half the rival's or fewer, the demo's own)."""
+    how = _compare(you, rival)
+    if how == 'about':
+        return 'about as'
+    if how == 'less' and you * 2 <= rival:
+        return 'far less'
+    return how
+
+
 def visibility_gap(vis: dict, brand: Optional[str], lost: Optional[dict] = None) -> Optional[dict]:
-    """V2: {behind_or_ahead, n, rival, sentence, claim, dollars}, by the demo's rule (Leads.tsx
-    VisibilityLead): "named almost as often" when the brand is named within 75% to 200% of the rival.
-    `lost` is the revenue model's Lost pool ({dollars, reason}), its dollars beside."""
+    """V2: {behind_or_ahead, n, rival, sentence, claim, dollars}. 2T-7 (1): the claim is built from the counts,
+    named more / almost or about as often / less often than the rival, and picked first more / about as /
+    less / far less often (the demo's "Named almost as often as Huggies, picked first less often" is its 25
+    to 27, 5 to 9). Level on first picks keeps its own line. `lost` is the revenue model's Lost pool
+    ({dollars, reason}), its dollars beside."""
     rows = _ranking(vis).get('rows') or []
     you = next((r for r in rows if r.get('you')), None)
     rival = rival_of(rows)
     if you is None or rival is None:
         return None
-    name, nm = brand or you['name'], rival['name']
-    gap = (rival.get('first') or 0) - (you.get('first') or 0)
-    close = you['named'] >= rival['named'] * 0.75 and you['named'] <= rival['named'] * 2
+    nm = rival['name']
+    yf, rf = you.get('first') or 0, rival.get('first') or 0
+    yn, rn = you.get('named') or 0, rival.get('named') or 0
+    gap = rf - yf
     side = 'level' if gap == 0 else 'behind' if gap > 0 else 'ahead'
     picks = 'pick' if abs(gap) == 1 else 'picks'
     head = (T['vis.gap.level'].format(rival=nm) if gap == 0 else
             T['vis.gap.behind' if gap > 0 else 'vis.gap.ahead'].format(n=abs(gap), picks=picks, rival=nm))
     if gap == 0:
-        claim = T['vis.gap.level_line'].format(rival=nm, named=you['named'], rival_s=f"{nm}'s",
-                                               rival_named=rival['named'])
-    elif close:
-        how = ('far less' if you['first'] * 2 <= rival['first'] else 'less') if you['first'] < rival['first'] else 'more'
-        claim = T['vis.gap.close'].format(rival=nm, how=how)
+        claim = T['vis.gap.level_line'].format(rival=nm, named=yn, rival_s=f"{nm}'s", rival_named=rn)
     else:
-        claim = T['vis.gap.far'].format(rival=nm, rival_first=rival['first'], brand=name, first=you['first'])
+        claim = T['vis.gap.claim'].format(named=named_words(yn, rn), rival=nm, first=first_words(yf, rf))
     return {'behind_or_ahead': side, 'n': abs(gap), 'rival': nm, 'claim': claim, 'sentence': f"{head} · {claim}",
+            'named_vs': _compare(yn, rn), 'first_vs': _compare(yf, rf),
             'dollars': (lost or {}).get('dollars'),
             'dollars_reason': None if (lost or {}).get('dollars') is not None else
             (lost or {}).get('reason') or 'no revenue model was read for this cycle'}
