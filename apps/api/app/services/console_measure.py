@@ -559,3 +559,32 @@ def true_value_brand(body: dict, *, reads: Optional[List[dict]], deals: Optional
         body['programs_reason'] = 'the brand runs no programs of its own (its owned incentives are empty)'
     body['mode'] = 'manufacturer'
     return body
+
+
+# ─── Accessibility ───────────────────────────────────────────────────────
+
+#: AC2: the identities the demo's request log shows (pg.ts accessibility.requests), the vendor each speaks for
+DEMO_IDENTITIES = (('GPTBot', 'chatgpt'), ('OAI-SearchBot', 'chatgpt'), ('ChatGPT-User', 'chatgpt'),
+                   ('Googlebot', 'aimode'), ('Google-Extended', 'gemini'), ('PerplexityBot', 'perplexity'),
+                   ('Bingbot', 'copilot'), ('ClaudeBot', 'claude'))
+IDENTITY_GAP_NOTE = ("supply's access run requests these identities by its own config; soa serves what it ran and "
+                     "adds none")
+RIVALS_REASON = 'no access reads of rival domains'
+
+
+def identities(requests: Iterable[dict]) -> dict:
+    """AC2: {served, missing, note}: the identities supply's access run requested, and the demo's it did not
+    (case and the "(control)" suffix aside). soa serves only what supply ran."""
+    served = [r.get('identity') for r in requests or [] if r.get('identity')]
+    have = {str(s).split(' (')[0].strip().lower() for s in served}
+    missing = [name for name, _v in DEMO_IDENTITIES if name.lower() not in have]
+    return {'served': served, 'missing': missing, 'note': IDENTITY_GAP_NOTE if missing else None}
+
+
+def accessibility_brand(body: dict) -> dict:
+    """AC2 and AC6 beside 2T-4's brand-mode body: `identities`, and `rivals` null with its reason until rival
+    domains are read."""
+    body['identities'] = identities(body.get('requests') or [])
+    body['rivals'] = None
+    body['rivals_reason'] = RIVALS_REASON
+    return body

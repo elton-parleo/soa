@@ -924,7 +924,8 @@ async def _brand_accessibility(client, merchant: str, payload: dict, reference: 
     errors = dict(body.get('read_errors') or {})
     errors.update({k: e for k, e in (('retailer_prices', p_err), ('feed', f_err)) if e})
     body['read_errors'] = errors
-    return body
+    # 2T-5 (AC2, AC6): the identities supply ran against the demo's, and no rivals table yet
+    return measure.accessibility_brand(body)
 
 
 def _latest_domain_checks(merchant: str, scope: CustomerScope) -> tuple:
