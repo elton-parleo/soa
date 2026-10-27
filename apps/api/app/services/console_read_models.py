@@ -225,6 +225,72 @@ def catalog_verdict(intent: str, source_ref: dict, extraction: Optional[dict], a
             'severity': 'ok' if covered else 'low', 'tone': 'ok' if covered else 'neu'}
 
 
+# ─── 2T-5: the Answers tabs and the rule-built summary ──────────────────────
+
+#: The demo's four tabs (Answer.queryType there). Tier stays its own field.
+ACCURACY, VALUE, CATEGORY, BRAND_DIRECT = 'Accuracy', 'Value', 'Category', 'Brand-direct'
+ANSWER_KINDS = (ACCURACY, VALUE, CATEGORY, BRAND_DIRECT)
+#: catalog-built brand-direct intents that ask where to buy or what it costs
+VALUE_INTENTS = ('where_to_buy', 'cheapest_place')
+ORDINALS = {2: 'second', 3: 'third', 4: 'fourth', 5: 'fifth', 6: 'sixth', 7: 'seventh', 8: 'eighth', 9: 'ninth'}
+#: A flagged answer whose verdict carried no line of its own reads its rule's (never "Not scored").
+RULE_LINES = {
+    severity.WRONG_PRICE: 'quoted a price the page did not show',
+    severity.WRONG_FACT: '{brand_s} facts stated wrong',
+    severity.FABRICATED: 'cited a source or a store that does not hold up',
+    severity.RETIRED_CURRENT: 'called a retired line current',
+    severity.NO_SUCCESSOR: 'did not name the successor of a retired line',
+    severity.CLUB_ELSEWHERE: 'sent a club-only line to a store that is not a club',
+    severity.MISSED_DEAL: 'named none of the deals live that day',
+    severity.FEWER_RETAILERS: "named fewer than two of the brand's retailers",
+    severity.NO_WEIGHT: 'gave no weight range',
+    severity.PARTIAL_PRICE: 'quoted a price near the page, not on it',
+    severity.COULD_NOT_FIND: 'said it could not find the product',
+}
+
+
+def answer_kind(tier: Optional[str], intent: Optional[str]) -> str:
+    """2T-5 (A4): Accuracy (weight, count and size questions), Value (where to buy, the cheapest place, the
+    price at a retailer), Category (category control and comparison), Brand-direct (the rest asked by name)."""
+    if tier in ('category_control', 'comparison'):
+        return CATEGORY
+    if tier in severity.VALUE_TIERS or intent in VALUE_INTENTS:
+        return VALUE
+    if intent == claim_kinds.ATTRIBUTE_INTENT:
+        return ACCURACY
+    return BRAND_DIRECT
+
+
+def _brand_first(mentions: List[dict], ours: Optional[str], answer_status: Optional[str]) -> Optional[bool]:
+    """Whether the brand came first, for the comparison rule; None when it cannot be said. 2T-5 (A5): an
+    answer that never came back (AI Mode returned nothing) or whose coding ranked no brand has no rival
+    first, so it is not "left out where it should be first". A coding whose lowest position is 2 or more
+    had another brand first (build_visibility's rule)."""
+    if not ours or answer_status not in (None, surfaces.ANSWERED):
+        return None
+    if not any(m.get('position') is not None for m in mentions):
+        return None
+    return any(m.get('position') == 1 and m.get('role') == 'primary' for m in mentions)
+
+
+def ranking_line(mentions: List[dict], ours: Optional[str]) -> str:
+    """2T-5 (A5): a comparison answer that left the brand out of first place, from the coded ranking:
+    "Huggies first, Pampers second", "Huggies first, Pampers not named"."""
+    brand = ours or 'the brand'
+    top = next((m['name'] for m in mentions if m.get('position') == 1 and m.get('role') != 'primary'), None)
+    mine = next((m for m in mentions if m.get('role') == 'primary'), None)
+    lead = f"{top} first" if top else 'Another brand first'
+    if mine is None:
+        return f"{lead}, {brand} not named"
+    pos = mine.get('position')
+    return f"{lead}, {brand} {ORDINALS.get(pos, f'{pos}th') if pos and pos > 1 else 'named'}"
+
+
+def rule_summary(rule: Optional[str], ours: Optional[str]) -> Optional[str]:
+    line = RULE_LINES.get(rule)
+    return line.format(brand_s=f"{ours}'s" if ours else "the brand's") if line else None
+
+
 #: 2C: the classifier's reason codes (scoring/expectation_comparator.py
 #: REASON_*), carried in Check.reason and Answer.reason. A code soa adds
 #: later passes through verbatim; the console renders an unknown one neutral.
@@ -515,9 +581,18 @@ def build_answer(run: dict, query: dict, outcome: Optional[dict], mentions: List
         club_only=stores is not None, first_store_club=(stores[0].get('domain') in severity.CLUB_DOMAINS)
         if stores else None,
         brand_in_question=bool(ours) and ea_names_brand(query.get('query_text') or '', ours),
-        brand_first=None if not ours else any(m.get('position') == 1 and m.get('role') == 'primary' for m in mentions))
+        brand_first=_brand_first(mentions, ours, run.get('answer_status')))
     if own is not None:
         own = {**own, 'severity': graded['severity']}
+    summary = (own or {}).get('line') or (outcome or {}).get('outcome_reason') or (
+        f"No answer ({run.get('answer_status')})" if run.get('answer_status') not in (None, 'answered')
+        else 'Not scored')
+    # 2T-5 (A5): a flagged answer's summary is never "Not scored". A comparison answer that put a rival
+    # first reads the coded ranking; any other with no line of its own reads its rule's
+    if graded['rule'] == severity.BRAND_NOT_FIRST:
+        summary = ranking_line(mentions, ours)
+    elif severity.is_flagged(graded['severity']) and summary == 'Not scored':
+        summary = rule_summary(graded['rule'], ours) or summary
     return compact({
         'id': f"run-{run['id']}",
         'agent': agent,
@@ -526,9 +601,7 @@ def build_answer(run: dict, query: dict, outcome: Optional[dict], mentions: List
         'runAt': _iso(run.get('run_at')),
         'runs': f"run {run.get('run_number')} of {runs_per_query}" if runs_per_query else None,
         'severity': graded['severity'],
-        'summary': (own or {}).get('line') or (outcome or {}).get('outcome_reason') or (
-            f"No answer ({run.get('answer_status')})" if run.get('answer_status') not in (None, 'answered')
-            else 'Not scored'),
+        'summary': summary,
         'paragraphs': segments(run.get('raw_response'), extraction.get('spans'), claims),
         'named': named,
         'first': first,
@@ -540,6 +613,8 @@ def build_answer(run: dict, query: dict, outcome: Optional[dict], mentions: List
         'collector': run.get('collector') or surfaces.collector_of(platform),
         'answer_status': run.get('answer_status'),
         'tier': tier,
+        # 2T-5 (A4): the demo's tab, Accuracy, Value, Category or Brand-direct
+        'kind': answer_kind(tier, source_ref.get('intent') or intent),
         # 2K-3: the study's question code (the drawer's "Q13") and its stage
         'query_code': query.get('query_code'),
         'stage': query.get('stage'),
@@ -2357,6 +2432,54 @@ def _visibility_run(layer1: List[dict], extraction: dict, brands: _Brands) -> tu
     return list(named.values()), {'name': display, 'you': you}, 'coded_order', sources
 
 
+#: 2T-5 (V3): words that put a named product outside a diaper category (wipes, training and swim pants,
+#: overnight pants), as written in the answers: such a product is never "named but not tracked"
+OUTSIDE_CATEGORY_WORDS = ('wipe', 'wipes', 'training pants', 'training pant', 'pull ups', 'pullups', 'easy ups',
+                          'goodnites', 'ninjamas', 'underjams', 'little swimmers', 'splashers', 'swim pants')
+
+
+def is_outside_category(name: Optional[str]) -> bool:
+    """A one-word term matches inside a word ("WaterWipes"), a longer one as whole words."""
+    key = f" {_brand_key((name or '').replace('-', ' '))} "
+    for w in OUTSIDE_CATEGORY_WORDS:
+        w = _brand_key(w)
+        if (' ' in w and f" {w} " in key) or (' ' not in w and any(w in tok for tok in key.split())):
+            return True
+    return False
+
+
+def _brand_entries(extraction: Optional[dict]):
+    from soa_shared import retailers as af
+    for entry in (extraction or {}).get('other_brands_named') or []:
+        if not isinstance(entry, dict) or not entry.get('name') or af.is_store_name(entry['name']):
+            continue
+        if entry.get('presented_as') in VIS_SOURCE_PRESENTED or entry.get('relation') in VIS_SOURCE_RELATIONS:
+            continue
+        yield entry
+
+
+def named_products(extraction: Optional[dict], brands: '_Brands') -> List[dict]:
+    """2T-5 (V1): the products an answer named, in its coding's order: each Layer 2 name longer than the
+    brand it resolves to ("Huggies Little Movers" is Huggies'), with that brand."""
+    out = []
+    for entry in _brand_entries(extraction):
+        hit = brands.resolve(entry['name'])
+        if hit and len(_brand_key(entry['name']).split()) > len(_brand_key(hit[0]).split()) and \
+                not is_outside_category(entry['name']):
+            out.append({'name': entry['name'], 'brand': hit[0], 'you': bool(hit[1])})
+    return out
+
+
+def outside_category(extraction: Optional[dict], brands: '_Brands') -> List[dict]:
+    """2T-5 (V3): the names an answer coded outside the category, each once, with whether it is ours."""
+    seen = {}
+    for entry in _brand_entries(extraction):
+        if is_outside_category(entry['name']):
+            hit = brands.resolve(entry['name'])
+            seen.setdefault(entry['name'], {'name': entry['name'], 'you': bool(hit and hit[1])})
+    return list(seen.values())
+
+
 def _agent_counts(rows: List[dict], surface: str) -> dict:
     """{agent: rows}; on `all`, agents in the demo's column order (AGENT_NAMES)."""
     counts = dict(Counter(r['agent'] for r in rows))
@@ -2406,11 +2529,22 @@ def build_visibility(cycle_code: str, *, runs: List[dict], entities: List[dict],
     ours = next((e['name'] for e in entities if e.get('role') == 'primary'), None)
 
     rows, sources_left_out = [], 0
+    outside: Dict[str, Counter] = {'others': Counter(), 'own': Counter()}
     for run in sorted(runs, key=lambda r: (r.get('query_code') or '', r.get('platform') or '', r.get('run_number') or 0, r['id'])):
         platform = run.get('platform')
-        named, first, basis, sources = _visibility_run(by_run.get(run['id'], []), _json(extractions.get(run['id'])) or {}, brands)
+        extraction = _json(extractions.get(run['id']))
+        named, first, basis, sources = _visibility_run(by_run.get(run['id'], []), extraction or {}, brands)
         sources_left_out += sources
         tier = run.get('tier') or VIS_UNPROMPTED
+        answered = run.get('answer_status') == surfaces.ANSWERED
+        products = named_products(extraction, brands)
+        if answered and unprompted.is_brand_choice(run, terms):
+            for p in outside_category(extraction, brands):
+                outside['own' if p['you'] else 'others'][p['name']] += 1
+        # 2T-5 (V4): what the first pick is, coded: a brand; no single pick (the coding names brands, none
+        # first); no brand named; no pick coded only when the answer has no coding at all
+        pick = None if not answered else 'first' if first else 'no_single_pick' if named else \
+            'no_brand_named' if (by_run.get(run['id']) or extraction) else 'no_pick_coded'
         rows.append(compact({
             'q': run.get('query_text') or '', 'type': VIS_TIER_LABELS.get(run.get('tier')) or run.get('stage') or '',
             'tier': tier, 'surface': run.get('surface') or surfaces.surface_of(platform) or 'unlabelled',
@@ -2421,7 +2555,10 @@ def build_visibility(cycle_code: str, *, runs: List[dict], entities: List[dict],
             'unprompted': unprompted.is_unprompted(run, terms),
             'brand_choice': unprompted.is_brand_choice(run, terms),
             'first_basis': basis,
-        }, ('first_basis',)))
+            'pick': pick,
+            # 2T-5 (V1): the products the answer named, each with its brand, as written
+            'named_products': products or None,
+        }, ('first_basis', 'pick', 'named_products')))
 
     counted = [r for r in rows if r['answered']]
     # 2I-8: `all` first, every agent together, as the console demo counts
@@ -2439,9 +2576,11 @@ def build_visibility(cycle_code: str, *, runs: List[dict], entities: List[dict],
     # each surface named them (over every answered run there), most named
     # first: the demo's "Also named but not tracked" line
     tracked = {e['name'] for e in entities if e.get('name')}
+    # 2T-5 (V3): a product outside the category (wipes, training pants) is not a brand left untracked
     untracked = {s: [{'name': r['name'], 'named': r['surfaces'][s]['named']}
                      for r in sorted(ranking_rows, key=lambda r: (-r['surfaces'][s]['named'], r['name'].lower()))
-                     if r['name'] not in tracked and not r['you'] and r['surfaces'][s]['named'] > 0][:VIS_UNTRACKED_KEEP]
+                     if r['name'] not in tracked and not r['you'] and r['surfaces'][s]['named'] > 0
+                     and not is_outside_category(r['name'])][:VIS_UNTRACKED_KEEP]
                  for s in surface_list}
     tiers = [t for t in VIS_TIER_ORDER if any(r['tier'] == t for r in rows)]
     tiers += sorted({r['tier'] for r in rows} - set(tiers))
@@ -2474,6 +2613,11 @@ def build_visibility(cycle_code: str, *, runs: List[dict], entities: List[dict],
                     'first_uncoded': {s: sum(v.values()) for s, v in uncoded.items()},
                     'agent_first_uncoded': uncoded,
                     'untracked': untracked,
+                    # 2T-5 (V3): named in brand-choice answers, outside the category: other brands' products
+                    # apart from the brand's own lines
+                    'outside_category': {k: [{'name': n, 'named': c} for n, c in
+                                             sorted(v.items(), key=lambda kv: (-kv[1], kv[0].lower()))]
+                                         for k, v in outside.items()},
                     **({'brand_choice': brand_choice, 'default_tier': VIS_BRAND_CHOICE} if brand_choice else {})},
         'note': VIS_FIRST_PICK_RULE,
         # beside the typed fields
@@ -2653,6 +2797,10 @@ ROUTING_NOT_SENT = ('unavailable',)
 #: A reference read with this status never reached the page.
 WALLED_STATUSES = ('blocked', 'challenged')
 ROUTING_OTHER = 'Other stores'
+#: 2T-5 (V5): the routing table per intent
+ROUTING_INTENT_TITLES = {'where_to_buy': 'Where agents send {brand} shoppers first',
+                         'cheapest_place': 'Where agents say {brand} is cheapest'}
+ROUTING_INTENT_SUBS = {'where_to_buy': '{n} where-to-buy answers', 'cheapest_place': '{n} cheapest-place answers'}
 ROUTING_WALLED_NOTE = 'Walled every read'
 ROUTING_THIRD_PARTY_NOTE = 'Third-party seller only'
 #: The demo's footnote, as written.
@@ -2794,24 +2942,50 @@ def build_routing(rows: List[dict], runs: List[dict], extractions: Dict[int, dic
 
     from soa_shared import retailers as af
     notes = _walled(reads)
-    counts = {s: Counter(bucket(st) for r, st in sent if on(r['surface'], s)) for s in surface_list}
     default = surface_list[0] if surface_list else surfaces.ALL
-    top = counts.get(default) or Counter()
-    keys = list(mine) + sorted({k for c in counts.values() for k in c if k.startswith('own:')})
-    table = []
-    for k in keys:
-        domain = k[len('own:'):] if k.startswith('own:') else k
-        table.append({'name': domain if k.startswith('own:') else af.retailer_name(domain), 'domain': domain,
-                      'first': top.get(k, 0), 'you': k.startswith('own:'),
-                      **({'note': notes[domain]} if domain in notes else {}),
-                      'surfaces': {s: counts[s].get(k, 0) for s in surface_list}})
-    table.sort(key=lambda x: -x['first'])   # stable: the merchant's list order on a tie
-    others = Counter(st['name'] for r, st in sent if bucket(st) == ROUTING_OTHER and on(r['surface'], default))
-    if any(counts[s].get(ROUTING_OTHER) for s in surface_list):
-        table.append({'name': ROUTING_OTHER, 'domain': None, 'first': top.get(ROUTING_OTHER, 0), 'you': False,
-                      'note': _names_list([n for n, _c in sorted(others.items(), key=lambda kv: (-kv[1], kv[0].lower()))]),
-                      'surfaces': {s: counts[s].get(ROUTING_OTHER, 0) for s in surface_list}})
+
+    def table_for(items) -> List[dict]:
+        # `items` (row, intent, stores) coded. 2T-5 (V5): beside who is sent first, `named`: the answers
+        # that name the store anywhere (named_stores), each store once per answer
+        sent_here = [(r, stores[0]) for r, _i, stores in items if stores]
+        counts = {s: Counter(bucket(st) for r, st in sent_here if on(r['surface'], s)) for s in surface_list}
+        named = {s: Counter(k for r, _i, stores in items if on(r['surface'], s)
+                            for k in {bucket(st) for st in stores}) for s in surface_list}
+        top, top_named = counts.get(default) or Counter(), named.get(default) or Counter()
+        keys = list(mine) + sorted({k for c in counts.values() for k in c if k.startswith('own:')})
+        table = []
+        for k in keys:
+            domain = k[len('own:'):] if k.startswith('own:') else k
+            table.append({'name': domain if k.startswith('own:') else af.retailer_name(domain), 'domain': domain,
+                          'first': top.get(k, 0), 'named': top_named.get(k, 0), 'you': k.startswith('own:'),
+                          **({'note': notes[domain]} if domain in notes else {}),
+                          'surfaces': {s: counts[s].get(k, 0) for s in surface_list},
+                          'named_surfaces': {s: named[s].get(k, 0) for s in surface_list}})
+        table.sort(key=lambda x: -x['first'])   # stable: the merchant's list order on a tie
+        others = Counter(st['name'] for r, st in sent_here if bucket(st) == ROUTING_OTHER and on(r['surface'], default))
+        if any(counts[s].get(ROUTING_OTHER) for s in surface_list):
+            table.append({'name': ROUTING_OTHER, 'domain': None, 'first': top.get(ROUTING_OTHER, 0),
+                          'named': top_named.get(ROUTING_OTHER, 0), 'you': False,
+                          'note': _names_list([n for n, _c in sorted(others.items(),
+                                                                      key=lambda kv: (-kv[1], kv[0].lower()))]),
+                          'surfaces': {s: counts[s].get(ROUTING_OTHER, 0) for s in surface_list},
+                          'named_surfaces': {s: named[s].get(ROUTING_OTHER, 0) for s in surface_list}})
+        return table
+
+    table = table_for(coded)
     total = sum(1 for r, _st in sent if on(r['surface'], default))
+    who_ = brand or 'the brand'
+    # 2T-5 (V5): where to buy alone (the demo's table), the cheapest place beside it, each its own table
+    intents = {}
+    for intent in ROUTING_INTENTS:
+        mine_items = [(r, i, st) for r, i, st in coded if i == intent]
+        if not any(i == intent for _r, i, _st in asked):
+            continue
+        n_sent = sum(1 for r, _i, st in mine_items if st and on(r['surface'], default))
+        intents[intent] = {'title': ROUTING_INTENT_TITLES[intent].format(brand=who_),
+                           'sub': ROUTING_INTENT_SUBS[intent].format(n=n_sent),
+                           'rows': table_for(mine_items), 'total': n_sent,
+                           'answers': sum(1 for r, i, _st in asked if i == intent and on(r['surface'], default))}
     names = [af.retailer_name(d) for d in mine]
     coverage = {}
     for s in surface_list:
@@ -2835,6 +3009,8 @@ def build_routing(rows: List[dict], runs: List[dict], extractions: Dict[int, dic
         'coverage': coverage,
         'coverage_rule': COVERAGE_RULE,
         'coverage_line': coverage_line(coverage.get(default) or {'answers': 0, 'named_two_plus': 0}, names),
+        'intents': intents,
+        'default_intent': WHERE_TO_BUY if WHERE_TO_BUY in intents else next(iter(intents), None),
     }
 
 
@@ -3249,6 +3425,14 @@ STUDIO_MIRROR = [
 
 # ─── loaders ───────────────────────────────────────────────────────────────
 
+def load_primary(conn, cycle: dict) -> Optional[str]:
+    """The cycle's primary entity's name (the brand), None without one."""
+    return conn.execute(text("""
+        SELECT e.name FROM soa_cycle_entities ce JOIN soa_entities e ON e.id = ce.entity_id
+        WHERE ce.cycle_id = :c AND ce.role = 'primary' ORDER BY e.id LIMIT 1
+    """), {'c': cycle['id']}).scalar()
+
+
 def load_answers(conn, cycle: dict, features: Optional[List[str]] = None,
                  club_keys: Optional[set] = None) -> List[dict]:
     """Every answer of the cycle (build_answer). 2T-4 (2): `club_keys` the
@@ -3271,10 +3455,7 @@ def load_answers(conn, cycle: dict, features: Optional[List[str]] = None,
     """), {'c': cycle['id'], 'yes': True}).mappings():
         mentions.setdefault(m['run_id'], []).append(dict(m))
     # 2T-4 (2): the brand, for a comparison answer that put a rival first
-    ours = conn.execute(text("""
-        SELECT e.name FROM soa_cycle_entities ce JOIN soa_entities e ON e.id = ce.entity_id
-        WHERE ce.cycle_id = :c AND ce.role = 'primary' ORDER BY e.id LIMIT 1
-    """), {'c': cycle['id']}).scalar()
+    ours = load_primary(conn, cycle)
     names = load_variant_names(conn, cycle)
     reference = cycle.get('reference_prices') if 'reference_prices' in cycle else conn.execute(text(
         "SELECT reference_prices FROM soa_cycles WHERE id = :c"), {'c': cycle['id']}).scalar()

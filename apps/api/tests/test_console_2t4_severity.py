@@ -76,7 +76,13 @@ V, B = 'catalog_accuracy', 'brand_direct'
       'listed': 1}, (sev.LOW, sev.NOT_FLAGGED)),
     ({'tier': 'comparison', 'outcome': None, 'brand_in_question': False, 'brand_first': False},
      (sev.LOW, sev.NOT_FLAGGED)),
-    ({'tier': B, 'outcome': 'acknowledged_unknown'}, (sev.LOW, sev.NOT_FLAGGED)),
+    # 2T-5 (A5b): the agent said it could not find the product
+    ({'tier': B, 'outcome': 'acknowledged_unknown'}, (sev.MEDIUM, sev.COULD_NOT_FIND)),
+    ({'tier': B, 'outcome': 'acknowledged_unknown', 'intent': 'where_to_buy', 'intent_verdict': 'partial', 'listed': 1},
+     (sev.MEDIUM, sev.COULD_NOT_FIND)),
+    # an answer right on its own verdict stays right
+    ({'tier': B, 'outcome': 'acknowledged_unknown', 'intent': 'where_to_buy', 'intent_verdict': 'covered'},
+     (sev.OK, sev.RIGHT)),
 ])
 def test_one_case_per_bullet(kw, want):
     out = sev.classify(**{'outcome': None, **kw})
@@ -163,6 +169,8 @@ def _coder7_flags(db, cycle_id) -> int:
 #: {'high': 140, 'medium': 14, 'ok': 126, 'low': 572}: the 66 all High, 20 of them where-to-buy answers that
 #: named two or more of the brand's retailers, 24 that named one, 22 cheapest-place with no deal live.
 NOW = {'high': 75, 'medium': 29, 'ok': 146, 'low': 602}
+#: 2T-5 (A5b): the 12 brand-direct answers saying they could not find the product are Medium (2T-4: low)
+NOW = {**NOW, 'medium': NOW['medium'] + 12, 'low': NOW['low'] - 12}
 #: what each of the 66 reads now
 FLAGGED_NOW = {('ok', 'covered'): 20, ('medium', 'partial'): 24, ('low', 'no_deal_live'): 22}
 
@@ -173,7 +181,7 @@ def test_fl15_shape_the_flags_no_longer_decide(http, db, upstream):
     answers = _get(http, 'answers')
     assert len(answers) == 852 and dict(Counter(a['severity'] for a in answers)) == NOW
     tally = sev.tally(answers)
-    assert (tally['high'], tally['medium'], tally['right'], tally['flagged']) == (75, 29, 146, 104)
+    assert (tally['high'], tally['medium'], tally['right'], tally['flagged']) == (75, 41, 146, 116)
     assert dict(Counter((a['severity'], a['intent_verdict']) for a in answers
                         if 'fabricated_availability' in a['flags'])) == FLAGGED_NOW
     # the summary's counts are the list's

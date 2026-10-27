@@ -8457,3 +8457,85 @@ lead signal, the size-chart groups) read it. Answers' attribute truth already re
 
 Tests: `apps/pipeline/tests/test_retailer_identity_2t4.py`, `apps/api/tests/test_console_2t4_severity.py`,
 `test_console_2t4_true_value.py`, `test_console_2t4_accessibility.py`, `test_console_2t4_line_chart.py`.
+
+## 2T-5: the Measure read models (Answers, Visibility, True Value, Accessibility) in the demo's shape, brand at retail
+
+No migration, no model call, no new production read. The spec is the demo (parleohq/truesync `console-demo`,
+`apps/console/src/data/pg.ts`, `v2_pg.ts`, `screens/Leads.tsx`). The blocks are pure functions in
+`app/services/console_measure.py` over the bodies the endpoints already build. A demo field with no source in soa is
+served `null` beside a `*_reason`.
+
+### Answers
+
+- `/answers`: every answer carries `kind` (`Accuracy` weight, count and size; `Value` where to buy, cheapest place,
+  price at a retailer; `Category` category control and comparison; `Brand-direct` the rest). `tier` stays.
+- A comparison answer with a rival first reads the coded ranking: "Huggies first, Pampers second", "… not named",
+  "Another brand first, …" (the first brand outside the comparison set). Any other flagged answer with no line of its
+  own reads its rule's (`RULE_LINES`). No flagged answer reads "Not scored".
+- The comparison rule needs a rival first: an unanswered run, or one whose coding ranked no brand, is not
+  `brand_not_first` (`_brand_first`).
+- Severity: `could_not_find` (Medium), a brand-direct answer whose verdict is `acknowledged_unknown` where no other
+  rule flagged it.
+- `/answers/summary` adds `flagged` {total, high, medium, right, of}; `hero` {n, sub, claim, text, high}: "<high> of
+  <flagged> flagged · <high> answers give a wrong price, the wrong product, a wrong fact, the wrong store, or leave
+  <brand> out where it should be first" (only the clauses whose rules are present; with no High, the Medium clauses);
+  `worst_answer_id`; `chips[]` {id, agent, kind, severity, rule, query, summary}, one per flagged answer, by agent in
+  the demo's order then severity; `kinds` {kind: {answers, flagged}}.
+- The evidence drawer's fields are served already: `paragraphs` (segments marked `ok` / `wrong` / `miss`, with `ann`)
+  and `checks` (claim, agent, live, live_basis, verdict).
+
+### Visibility (a brand whose ranking opens on brand-choice answers)
+
+- `headline`: "<Brand> is named in N of M category answers and put first in F. <Rival> goes first in R, and A of B
+  agents lead the “<question>” question with <product>." The rival has the most first picks. The question is where it
+  leads most, and the product its first-named product there. `headline_detail` holds the parts. soa stores no short
+  form of a question, so `question_short` is null and the question is served whole. The every-agent line stays in
+  `headlines`.
+- byQuestion rows gain `named_products` [{name, brand, you}] (Layer 2 names longer than the brand they resolve to,
+  inside the category) and `pick`: `first`, `no_single_pick` (the coding names brands, none first),
+  `no_brand_named`, `no_pick_coded` (no coding at all). Unanswered rows carry none.
+- `gap` {behind_or_ahead, n, rival, claim, sentence, dollars, dollars_reason}. Leads.tsx's rule: "named almost as
+  often" within 75% to 200%. Dollars are the revenue model's Lost pool today, built as the brand Overview builds it;
+  null with the model's reason (no sales in scope) or a failed read of the inputs.
+- `footnote` {footnote, singles, no_single_pick, of, denom, outside_category}: the Overview's
+  `first_pick_footnote` (now counting `no_single_pick`), then "<own line> was named too, outside the category."
+- `ranking.untracked` leaves out products outside the category (`OUTSIDE_CATEGORY_WORDS`: wipes, training and swim
+  pants). `ranking.outside_category` {others, own} lists them apart.
+- `routing.rows[]` gain `named` and `named_surfaces` (answers naming the store anywhere). `routing.intents`
+  {where_to_buy, cheapest_place} are each a table {title, sub, rows, total, answers}, and `default_intent` is
+  where_to_buy. The combined table and its deltas are unchanged.
+
+### True Value (a merchant in manufacturer mode)
+
+- `hero` {n, read, wrong, left_out, sub, claim, text}: "<wrong + left out> of <read> prices read are wrong or missing
+  · <wrong> quoted prices are off the live page, and <left out> retailer prices were left out". Read counts exact,
+  wrong, partial and missed cells. A brand with no programs gets `programs` null and `programs_reason`.
+- Columns: the brand's own domain first, then the retailers alphabetical by name.
+- Retailer cells: `live_deal` / `live_deals` (`ppt.label` of the deals live on the SKU there), `not_sold` (true when
+  the feed lists no page for it at that retailer; null when the feed was not read), `clash` ("$44.99 for Size 3, 116
+  ct" when most wrong quotes named a variant the record lacks). The brand cell's `note` comes from the brand page's
+  read (/reference own rows, `json_ld`): "No 84 ct listed. Markup prices the 140 ct at $44.94", "No price in markup.
+  GTIN has 11 digits", "Retired. Redirects to AMORE" (the read landed elsewhere), else "Retired. AMORE is its
+  successor". With no read there is no note.
+- Rows: `line`, the deals live on the SKU, then "k of n cheapest-place answers named it / either / any", then "Weight
+  right in k of n."
+- `anatomy` {title, sub, sku, variant_id, retailer, runs, rows[{k, v, kind?, tag?}], observed_at}: the most-asked SKU
+  on its most-asked retailer, with list price, price cut, one-time price, each live deal with its named count, and what
+  agents quoted and who. No modeled dollars.
+- `captions` per status (Wrong: "A price the retailer's page did not show"); `mode` manufacturer.
+
+### Accessibility (manufacturer mode)
+
+2T-4's six checks, `retailer_checks` and `hero` are unchanged. The body also gains `identities` {served, missing,
+note}: the identities supply's access run requested, and the demo's eight it did not (the list is supply config, so
+soa adds none). It also gains `rivals` null with `rivals_reason` "no access reads of rival domains".
+
+### Served `null`, and why
+
+`headline_detail.question_short` (no short form stored), `gap.dollars` (no sales in scope, or the inputs unreadable),
+`programs` (a brand with none), a cell's `note` (no read of the brand page), `not_sold` (the feed not read), `rivals`.
+
+Tests: `test_console_2t5_answers.py`, `test_console_2t5_visibility.py`, `test_console_2t5_true_value.py`,
+`test_console_2t5_accessibility.py` on the 2T-1 harness plus `console_fixture_2t5` (FL15's shape, DERIVED: two
+comparison questions in FL15's wording with the harness's brand, rival products and names outside the category, and
+FL15's live Answers counts as rows), and brand-page reads built in supply's shape.

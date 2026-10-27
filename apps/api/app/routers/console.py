@@ -49,6 +49,7 @@ from app import worker_surfaces
 from app.routers import full_loop
 from app.routers.customers import _tenant_view
 from app.services import console_claims
+from app.services import console_measure as measure
 from app.services import console_narratives as narratives_svc
 from app.services import console_parity as parity
 from app.services import console_prompts
@@ -151,12 +152,16 @@ async def get_answers_summary(cycle: str = Query(...), scope: CustomerScope = De
     its own, and answered_with_other_brand. 2I-8: every agent together
     (`all`) first, counts summed; each surface beside it. 2T-4 (2):
     `severity`, the Answers list's flagged counts (soa_shared/severity.tally
-    over the answers /answers serves)."""
+    over the answers /answers serves). 2T-5 (A1 to A3): the lead over the
+    same answers, `flagged`, `hero`, `worst_answer_id`, `chips` and `kinds`
+    (console_measure.answers_lead)."""
     row = dict(cycle_in_scope(cycle, scope))
     clubs = await _club_keys(row, scope)
     with engine.connect() as conn:
         body = rm.load_answers_summary(conn, row)
-        body['severity'] = severity.tally(rm.load_answers(conn, row, club_keys=clubs))
+        answers = rm.load_answers(conn, row, club_keys=clubs)
+        body['severity'] = severity.tally(answers)
+        body.update(measure.answers_lead(answers, rm.load_primary(conn, row)))
         return body
 
 
@@ -196,7 +201,35 @@ async def get_visibility(cycle: str = Query(...), merchant: Optional[str] = Quer
     body['previous'] = _previous_block(compared)
     if compared and compared['status'] == 'compared':
         body['moved'] = rm.visibility_movement(body, compared['visibility'], compared['code'])
+    # 2T-5 (V1 to V3): a brand at retail's lead, the gap's dollars the revenue model's Lost pool
+    # (a brand's ranking opens on its brand-choice answers: build_visibility's `brand_choice`)
+    if (body.get('ranking') or {}).get('brand_choice'):
+        with engine.connect() as conn:
+            slug = merchant or score_svc.cycle_merchant(conn, row)
+            brand = rm.load_primary(conn, row)
+        lost = await _lost_pool(scope, row, slug, body.get('byQuestion') or [])
+        body.update(measure.visibility_lead(body, brand, lost))
     return body
+
+
+async def _lost_pool(scope: CustomerScope, row: dict, slug: Optional[str], vis_rows: list) -> dict:
+    """2T-5 (V2): {dollars, reason}, the revenue model's Lost pool today as the brand Overview builds it
+    (no access line), or why there are no dollars: no merchant, or the model's own dollars_reason."""
+    if not slug:
+        return {'dollars': None, 'reason': 'no merchant record for this cycle'}
+    from sqlalchemy.exc import SQLAlchemyError
+    ms = await check_merchant(scope, slug)
+    answers, _reference, _r_err = await _attribute_inputs(scope, row, slug)
+    try:
+        with engine.connect() as conn:
+            inputs = revenue_svc.inputs_view(revenue_svc.load_inputs(conn, scope.org.id, slug), slug)
+            site = next((a['site'] for a in answers if a.get('site')), None)
+            model = _revenue_model(conn, row, inputs, _merchant_meta(ms), None, vis_rows,
+                                   attribute_answers=answers or None, site=site)
+    except SQLAlchemyError as e:   # the dollars are beside the read: Visibility never fails for want of them
+        return {'dollars': None, 'reason': f"the revenue inputs could not be read ({type(e).__name__})"}
+    today = model.get('today') if model.get('dollars') else None
+    return {'dollars': round(today['lost']) if today else None, 'reason': None if today else model.get('dollars_reason')}
 
 
 def _visibility(conn, row: dict, merchant: Optional[dict] = None, errors: Optional[dict] = None) -> dict:
@@ -775,7 +808,32 @@ async def get_true_value(cycle: str = Query(...), merchant: Optional[str] = Quer
         catalog if k_err is None else None, incentives if i_err is None else None, value_outcomes,
         reads=history if history is not None else ((reference or {}).get('rows') if r_err is None else None))
     body['read_errors'] = errors
+    # 2T-5 (TV1 to TV9): a brand at retail's True Value in the demo's shape
+    ms = await check_merchant(scope, merchant)
+    record_row = next((m for m in getattr(ms, 'merchants', None) or [] if m.get('slug') == merchant), None) or {}
+    if record_row.get('mode') == 'manufacturer':
+        await _true_value_brand(scope, dict(row), merchant, body, record_row,
+                                reference=reference if r_err is None else None,
+                                feed_rows=(feed or {}).get('rows') if f_err is None else None)
     return with_drift(narratives_svc.with_true_value(body, lines))
+
+
+async def _true_value_brand(scope: CustomerScope, row: dict, merchant: str, body: dict, record_row: dict, *,
+                            reference: Optional[dict], feed_rows: Optional[list]) -> None:
+    """2T-5: the deals live that day and the cheapest-place answers judged against them (_promo_inputs), the
+    weight answers (_attribute_inputs) and the brand's own domains (/retailers) beside the reads /true-value
+    made, then console_measure.true_value_brand. A failed read is named in read_errors, never raised."""
+    (promo, deals, _as_of, p_err), (answers, _ref, a_err), (_, retailers, o_err) = await asyncio.gather(
+        _promo_inputs(scope, row, merchant), _attribute_inputs(scope, row, merchant),
+        _reads(scope).get_retailers(merchant))
+    own = (retailers or {}).get('own_domains') or [(retailers or {}).get('own_domain')] if o_err is None else []
+    own = [str(d).lower().removeprefix('www.') for d in own or record_row.get('own_domains') or [] if d]
+    with engine.connect() as conn:
+        brand = record_row.get('brand') or rm.load_primary(conn, row)
+    measure.true_value_brand(body, reads=(reference or {}).get('rows'), deals=deals, promo=promo,
+                             attribute_answers=answers or [], feed_rows=feed_rows, own_domains=own, brand=brand)
+    body['read_errors'].update({k: e for k, e in (('deals', p_err), ('attribute_reference', a_err),
+                                                  ('retailers', o_err)) if e})
 
 
 #: 2C-2c: reads per variant x retailer a member price is looked for in.
@@ -866,7 +924,8 @@ async def _brand_accessibility(client, merchant: str, payload: dict, reference: 
     errors = dict(body.get('read_errors') or {})
     errors.update({k: e for k, e in (('retailer_prices', p_err), ('feed', f_err)) if e})
     body['read_errors'] = errors
-    return body
+    # 2T-5 (AC2, AC6): the identities supply ran against the demo's, and no rivals table yet
+    return measure.accessibility_brand(body)
 
 
 def _latest_domain_checks(merchant: str, scope: CustomerScope) -> tuple:
