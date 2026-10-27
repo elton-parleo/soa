@@ -1035,9 +1035,11 @@ def build_overview(cycle: dict, *, rows: List[dict], visibility: dict, true_valu
         metrics.update(study or {})
         if prev_metrics is not None:
             prev_metrics.update(previous.get('study') or {})
-        status, note, condition = changes_check(metrics, prev_metrics, (previous or {}).get('code'), s)
+        # 2T-7 (2): the copy names the previous cycle by its day (rm.cycle_label's name)
+        prev_name = (previous or {}).get('name') or (previous or {}).get('code')
+        status, note, condition = changes_check(metrics, prev_metrics, prev_name, s)
         if prev_metrics is not None:
-            prev_metrics['code'] = previous.get('code')
+            prev_metrics['code'] = prev_name
         head = visibility_headline(vis_rows, s, next((r['name'] for r in (visibility.get('ranking') or {}).get('rows') or [] if r.get('you')), None))
         products = build_products(true_value, vis_rows, s, variant_of_run=variant_of_run, reason_of_run=reason_of_run)
         signals = build_signals(metrics, products, surface=s, brand=brand, cycle_start=cycle.get('start_date'),
@@ -1047,7 +1049,7 @@ def build_overview(cycle: dict, *, rows: List[dict], visibility: dict, true_valu
             'products': products,
             'signals': signals,
             'summary': build_summary(metrics, head, signals, s),
-            'changes': build_changes(metrics, prev_metrics, (previous or {}).get('code'), s),
+            'changes': build_changes(metrics, prev_metrics, prev_name, s),
             'changes_status': status,
             'changes_note': note,
             # 2P-1: the condition cycle_compare named, when not comparable
@@ -1067,6 +1069,8 @@ def build_overview(cycle: dict, *, rows: List[dict], visibility: dict, true_valu
         'by_surface': by_surface,
         'scored_cycles': scored_cycles,
         'previous_cycle': (previous or {}).get('code'),
+        # 2T-7 (2): the previous cycle's label for the console's headers ("Against Oct 14"), rm.cycle_label
+        'previous_label': (previous or {}).get('label'),
         'changes_note': None if previous else TEMPLATES['changes.first_cycle'],
         'ranking': visibility.get('ranking'),
         # 2C-2c: questions is the study's count, the one Studies shows; asked

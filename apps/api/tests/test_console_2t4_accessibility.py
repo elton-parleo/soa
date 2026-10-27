@@ -48,8 +48,9 @@ def test_the_six_checks_on_the_recorded_brand_pages():
     assert (checks['html']['value'], checks['html']['status']) == ('2 of 6', 'partial')
     # the ProductGroup is there: what fails is the Offer per retailer
     assert checks['product_group']['value'] == '0 of 6'
-    assert checks['product_group']['basis'] == ('pages whose markup is a ProductGroup: 2 of 6. Every variant with a '
-                                                'gtin13: 2. An Offer for each retailer the feed lists: 0')
+    # 2T-7 (7): the note says what the markup carries, and the 0 is absence
+    assert checks['product_group']['basis'] == 'ProductGroup with gtin13 on 2 of 6. No Offer per retailer in the markup'
+    assert checks['product_group']['offers_absent'] is True
     assert (checks['prices']['value'], checks['prices']['basis']) == \
         ('0 of 14', 'no variant in the markup carries a retailer price')
     assert (checks['gtin']['value'], checks['gtin']['status']) == ('14 of 14', 'ok')
@@ -68,8 +69,9 @@ def test_a_gtin_that_drops_its_leading_zero():
     amore['json_ld'] = {**amore['json_ld'], 'name': 'Pampers® AMORE Diapers',
                         'hasVariant': [{**amore['json_ld']['hasVariant'][0], 'gtin13': '30772244425', 'size': '1'}]}
     checks = _by_key(_build(prices=prices + [amore]))
-    assert (checks['gtin']['value'], checks['gtin']['status']) == ('14 of 15', 'partial')
-    assert checks['gtin']['basis'] == 'AMORE drop the leading zero'
+    # 2T-7 (3): the value names the line that drops a digit, the note counts them
+    assert (checks['gtin']['value'], checks['gtin']['status']) == ('AMORE drops the leading zero', 'partial')
+    assert checks['gtin']['basis'] == '1 of 15 GTINs in the markup drop the leading zero: AMORE'
 
 
 def test_a_markup_weight_the_chart_contradicts():

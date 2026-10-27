@@ -156,7 +156,6 @@ BRAND_OVERVIEW_TEMPLATES = {
     'activity.complete': 'Study complete: {answers} answers from {agents} agents, {usable} usable',
     'activity.compiled': 'Compiled and held: {records} records, {surfaces}',
     # labels and the header
-    'vs_label': 'vs {day}',
 }
 
 T = BRAND_OVERVIEW_TEMPLATES
@@ -850,10 +849,6 @@ def build_activity(*, cycle: dict, first_at, last_at, answers: int, usable: int,
     for e in out:
         e['day'] = manu.short_day(e['at'])
     return out
-
-
-def vs_label(prev_day: Optional[str]) -> Optional[str]:
-    return T['vs_label'].format(day=manu.short_day(prev_day)) if prev_day else None
 
 
 def size_things(drift: List[dict], retired_named: Optional[dict], gtin_flags: List[dict]) -> List[str]:

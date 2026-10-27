@@ -106,7 +106,8 @@ def _row(sku, product, **kw):
     (_row('s4', 'Size 4, 150 ct'), [], None),   # no read of the brand's page: no note
 ])
 def test_the_brand_columns_note(row, reads, note):
-    assert measure.brand_note(row, reads, OWN, 'Pampers') == note
+    # 2T-7 (4): the demo's markup lists counts and prices on other lines (pg.ts "Markup prices the 140 ct")
+    assert measure.brand_note(row, reads, OWN, 'Pampers', {'counts': True, 'prices': True}) == note
 
 
 def _cell(**kw):
@@ -126,7 +127,8 @@ def test_not_sold_reads_the_feed_and_the_clash_is_shown():
               {'agent': 'gemini', 'stated': '44.99', 'outcome': 'wrong', 'clash': 'Pampers Swaddlers Size 3, 116-count'},
               {'agent': 'copilot', 'stated': '49.99', 'outcome': 'wrong'}]
     row = _row('s4', 'Size 4, 104 ct', cells={'pampers.com': _cell(status='none'),
-                                              'amazon.com': _cell(status='wrong', runs=3, quotes=quotes),
+                                              'amazon.com': _cell(status='wrong', outcome='wrong', quoted='$44.99',
+                                                                  runs=3, quotes=quotes),
                                               'cvs.com': _cell(status='none', live='—')})
     feed = [{'sku': 's4', 'retailers': [{'domain': 'pampers.com'}, {'domain': 'amazon.com'}]}]
     body = measure.true_value_brand(_body([row]), reads=[], deals=None, promo=None, attribute_answers=[],

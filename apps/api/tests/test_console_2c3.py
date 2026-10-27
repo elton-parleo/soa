@@ -387,8 +387,10 @@ def test_a_previous_cycle_scored_under_another_version_is_not_comparable(http, u
     as_('alice')
     body = _score(http)
     # 2K-4: `condition` names the first failing condition (soa_shared/cycle_compare)
+    # 2T-7 (2): the cycle's label beside its code (rm.cycle_label)
     assert body['previous'] == {'cycle': 'WS-EARLIER', 'scorer_version': '5', 'score': 41, 'comparable': False,
-                                'reason': 'Scored under v5, re-score to compare.', 'condition': 'version'}
+                                'reason': 'Scored under v5, re-score to compare.', 'condition': 'version',
+                                'day': 'Oct 1', 'name': 'the Oct 1 cycle', 'since': 'Since Oct 1', 'vs': 'vs Oct 1'}
     assert all(m['delta'] is None and m['delta_reason'] == 'Scored under v5, re-score to compare.'
                for m in retailer_rows(body))
 
@@ -399,7 +401,7 @@ def test_a_previous_cycle_with_no_stored_score_is_not_comparable(http, upstream,
     _supply(upstream)
     as_('alice')
     prev = _score(http)['previous']
-    assert prev['comparable'] is False and prev['reason'] == 'Not comparable: WS-EARLIER has no stored score yet. Open it to score it.'
+    assert prev['comparable'] is False and prev['reason'] == 'Not comparable: the Oct 1 cycle has no stored score yet. Open it to score it.'
 
 
 def test_a_comparable_previous_cycle_gives_deltas(http, upstream, db):
@@ -433,7 +435,7 @@ def test_a_previous_score_stored_before_the_rows_counted_every_agent_has_no_row_
     assert body['previous']['comparable'] is True and body['previous']['delta'] == 5
     for m in retailer_rows(body):
         assert m['delta'] is None
-        assert m['delta_reason'] == 'Not comparable: WS-EARLIER was scored before metric rows counted every agent'
+        assert m['delta_reason'] == 'Not comparable: the Oct 1 cycle was scored before metric rows counted every agent'
 
 
 def test_a_previous_cycle_on_other_agents_is_not_comparable(http, upstream, db):
@@ -447,7 +449,7 @@ def test_a_previous_cycle_on_other_agents_is_not_comparable(http, upstream, db):
     prev = _score(http)['previous']
     assert prev['comparable'] is False
     # 2K-4: the shared rule's wording, as the Changes block says it, the surface named
-    assert prev['reason'] == 'Not comparable: WS-EARLIER ran ChatGPT only on the grounded API.'
+    assert prev['reason'] == 'Not comparable: the Oct 1 cycle ran ChatGPT only on the grounded API.'
 
 
 # ═══ tenancy ═════════════════════════════════════════════════════════════

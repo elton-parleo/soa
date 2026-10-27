@@ -19,15 +19,24 @@ links, served as each feed row's retailers[].url):
                  (read_status ok or empty) by an own fetch, not a hosted render
   product_group  a ProductGroup with an Offer per retailer and a gtin13: the
                  page's markup is a ProductGroup, every variant carries a
-                 gtin13, and an Offer for each retailer the feed lists
+                 gtin13, and an Offer for each retailer the feed lists.
+                 2T-7 (7): the note says what the markup carries, "ProductGroup
+                 with gtin13 on 7 of 7. No Offer per retailer in the markup",
+                 so a 0 that is absence (no Offer node on any page, what
+                 pampers.com serves and the compile-and-hold fixes) reads as
+                 absence (`offers_absent`), not as a markup that disagrees
   prices         retailer prices filled in the markup: the variants with an
                  Offer that carries a price ("3 Swaddlers sizes only")
   gtin           GTINs in the markup well formed: none that is a GTIN only
-                 zero-padded (2S-1's read, "AMORE and Ultra drop the leading
-                 zero")
-  weight         weight in the markup against the size chart (2M-1's markup
-                 rows, rm.build_weight_drift): the pages whose markup states a
-                 range the chart does not, of the pages whose markup states one
+                 zero-padded (2S-1's read). 2T-7 (3): the value names the lines
+                 that drop a digit, as the demo words it ("AMORE and Ultra drop
+                 the leading zero"), the count of them in the note
+  weight         weight in the markup contradicts the size selector (2M-1's
+                 markup rows, rm.build_weight_drift). 2T-7 (3): the count is the
+                 pages whose markup states a range the brand's chart does not,
+                 of the pages whose markup states one, and the value and the
+                 note name them ("3 of 4 pages: Baby-Dry, Cruisers 360 and
+                 Zzz")
 
 The retailer pages keep their own checks (console_parity.build_access_checks
 over the retailer rows only), `retailer_checks`. The hero comes from the data:
@@ -54,19 +63,22 @@ T = {
     'product_group': 'ProductGroup with an Offer per retailer and gtin13',
     'prices': 'Retailer prices filled in markup',
     'gtin': 'GTINs in markup well formed',
-    'weight': 'Weight in markup matches the size chart',
+    'weight': 'Weight in markup contradicts the size selector',
     'value': '{n} of {d}',
     'value.weight': '{n} of {d} pages: {lines}',
+    'value.weight.none': '0 of {d} pages',
+    'value.gtin': '{lines} {verb} the leading zero',
     'basis.robots': "the access run's robots verdicts per answer-time token on {domain}'s product pages",
     'basis.html': "the feed's {d} pages on {domain}, read by our own fetch (read_status ok or empty), no hosted render",
-    'basis.product_group': ('pages whose markup is a ProductGroup: {group} of {d}. Every variant with a gtin13: {gtin}. '
-                            'An Offer for each retailer the feed lists: {offers}'),
+    'basis.product_group': 'ProductGroup with gtin13 on {both} of {d}. An Offer for each retailer the feed lists on {offers}',
+    'basis.product_group.no_offer': 'ProductGroup with gtin13 on {both} of {d}. No Offer per retailer in the markup',
     'basis.prices': 'variants in the markup with an Offer that carries a price',
     'basis.prices.some': '{lines} only',
     'basis.prices.none': 'no variant in the markup carries a retailer price',
-    'basis.gtin': '{lines} drop the leading zero',
+    'basis.gtin': '{n} of {d} GTINs in the markup drop the leading zero: {lines}',
     'basis.gtin.ok': 'every GTIN in the markup is one as written',
-    'basis.weight': "the markup's weight range against {domain}'s own chart, per page",
+    'basis.weight': "pages whose markup states a weight range {domain}'s size selector does not: {lines}",
+    'basis.weight.ok': "every weight range in the markup matches {domain}'s size selector",
     'hero.served': '{domain} served every product page on {day}. What agents find there is the problem.',
     'hero.partly': '{domain} served {n} of {d} product pages on {day}.',
     'hero.none': '{domain} served none of its {d} product pages to our reader.',
@@ -184,7 +196,7 @@ def build(*, prices: Optional[List[dict]], feed_rows: Optional[List[dict]], refe
         if page:
             sold_at.setdefault(page, set()).update(_domain(x.get('domain')) for x in links
                                                    if x.get('domain') and _domain(x.get('domain')) not in owned)
-    group = gtin13 = offered = full = 0
+    group = gtin13 = offered = full = both = any_offer = 0
     priced_by_line: Dict[str, int] = {}
     variants = priced = 0
     for key, r in read.items():
@@ -197,6 +209,8 @@ def build(*, prices: Optional[List[dict]], feed_rows: Optional[List[dict]], refe
                                          for node in nodes)
         group += is_group
         gtin13 += has_gtin13
+        both += is_group and has_gtin13
+        any_offer += any(_offers(node) for node in nodes)
         offered += has_offers
         full += is_group and has_gtin13 and has_offers
         line = manu._line_display(rel.page_line(ld.get('name') if isinstance(ld, dict) else None) or '', brand)
@@ -206,7 +220,9 @@ def build(*, prices: Optional[List[dict]], feed_rows: Optional[List[dict]], refe
                 priced += 1
                 priced_by_line[line] = priced_by_line.get(line, 0) + 1
     group_row = _check('product_group', T['product_group'], full, n,
-                       basis=T['basis.product_group'].format(group=group, d=n, gtin=gtin13, offers=offered))
+                       basis=T['basis.product_group' if any_offer else 'basis.product_group.no_offer'].format(
+                           both=both, d=n, offers=offered))
+    group_row.update(group=group, gtin13=gtin13, offered=offered, offers_absent=bool(read) and not any_offer)
     if priced_by_line and priced < variants:
         some = ', '.join(f"{k} {line} size{'s' if k != 1 else ''}" for line, k in priced_by_line.items())
         prices_basis = T['basis.prices.some'].format(lines=some)
@@ -223,7 +239,10 @@ def build(*, prices: Optional[List[dict]], feed_rows: Optional[List[dict]], refe
     flags = [f for f in manu.gtin_flags(page_list, None, brand=brand) if f.get('where') == 'markup']
     bad_lines = list(dict.fromkeys(f['line'] for f in flags))
     gtin_row = _check('gtin', T['gtin'], len(gtins) - len(flags), len(gtins), unit='GTINs in markup',
-                      basis=T['basis.gtin'].format(lines=manu._and(bad_lines)) if bad_lines else T['basis.gtin.ok'])
+                      value=T['value.gtin'].format(lines=manu._and(bad_lines), verb='drops' if len(bad_lines) == 1
+                                                   else 'drop') if bad_lines else None,
+                      basis=T['basis.gtin'].format(n=len(flags), d=len(gtins), lines=manu._and(bad_lines))
+                      if bad_lines else T['basis.gtin.ok'])
 
     # weight in markup against the chart (2M-1's markup rows)
     attrs = [a for a in (reference or {}).get('attributes') or [] if isinstance(a, dict)]
@@ -235,10 +254,12 @@ def build(*, prices: Optional[List[dict]], feed_rows: Optional[List[dict]], refe
                                                   or (by_ref.get(row.get('variant_ref')) or {}).get('variant_label'),
                                                   brand)
                                for row in drift if row.get('kind') == 'markup'))
-    weight_row = _check('weight', T['weight'], len(with_markup) - len(wrong), len(with_markup), unit='weights in markup',
+    weight_row = _check('weight', T['weight'], len(wrong), len(with_markup), good_when_zero=True,
+                        unit='weights in markup',
                         value=T['value.weight'].format(n=len(wrong), d=len(with_markup), lines=manu._and(wrong))
-                        if wrong else None,
-                        basis=T['basis.weight'].format(domain=domain))
+                        if wrong else T['value.weight.none'].format(d=len(with_markup)),
+                        basis=T['basis.weight'].format(domain=domain, lines=manu._and(wrong)) if wrong
+                        else T['basis.weight.ok'].format(domain=domain))
 
     checks = [robots_row,
               _check('html', T['html'], len(plain), n, basis=T['basis.html'].format(d=n, domain=domain)),

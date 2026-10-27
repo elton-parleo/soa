@@ -200,7 +200,7 @@ async def get_visibility(cycle: str = Query(...), merchant: Optional[str] = Quer
         compared = _compared(conn, row, _rows(conn, row), body, facts)
     body['previous'] = _previous_block(compared)
     if compared and compared['status'] == 'compared':
-        body['moved'] = rm.visibility_movement(body, compared['visibility'], compared['code'])
+        body['moved'] = rm.visibility_movement(body, compared['visibility'], compared['name'])
     # 2T-5 (V1 to V3): a brand at retail's lead, the gap's dollars the revenue model's Lost pool
     # (a brand's ranking opens on its brand-choice answers: build_visibility's `brand_choice`)
     if (body.get('ranking') or {}).get('brand_choice'):
@@ -276,16 +276,22 @@ def _compared(conn, row: dict, rows: list, vis: dict, facts: Optional[dict] = No
              'scorer_version': score_svc.outcomes_version(rows)}
     prev_m = {**parity.surface_metrics(prev_rows, prev_vis.get('byQuestion') or [], surfaces.ALL, tier=now_m['tier']),
               **rm.study_identity(conn, prev), 'scorer_version': score_svc.outcomes_version(prev_rows)}
-    status, note, condition = parity.changes_check(now_m, prev_m, prev['cycle_code'], surfaces.ALL)
-    return {'code': prev['cycle_code'], 'row': prev, 'rows': prev_rows, 'visibility': prev_vis,
-            'status': status, 'note': note, 'condition': condition}
+    # 2T-7 (2): copy names the cycle by its day (rm.cycle_label), `code` stays its identifier
+    label = rm.cycle_label_of(conn, prev)
+    status, note, condition = parity.changes_check(now_m, prev_m, label['name'], surfaces.ALL)
+    return {'code': prev['cycle_code'], 'label': label, 'name': label['name'], 'row': prev, 'rows': prev_rows,
+            'visibility': prev_vis, 'status': status, 'note': note, 'condition': condition}
 
 
 def _previous_block(compared: Optional[dict]) -> Optional[dict]:
-    """What a read model serves of _compared: {cycle, status, note}."""
+    """What a read model serves of _compared: {cycle, status, note}, 2T-7 (2): and the cycle's label for copy
+    {day, name, since, vs} ("Oct 23", "the Oct 23 cycle", "Since Oct 23", "vs Oct 23")."""
     if compared is None:
         return None
-    return {'cycle': compared['code'], 'status': compared['status'], 'note': compared['note']}
+    label = compared.get('label') or {}
+    return {'cycle': compared['code'], 'status': compared['status'], 'note': compared['note'],
+            'day': label.get('day'), 'name': label.get('name') or compared['code'],
+            'since': label.get('since'), 'vs': label.get('vs')}
 
 
 async def _promo_inputs(scope: CustomerScope, row: dict, slug: Optional[str]) -> tuple:
@@ -409,7 +415,9 @@ async def get_overview(cycle: str = Query(...), merchant: Optional[str] = Query(
             # 2N-1: with the merchant's facts, so its routing (Retailer coverage) compares
             prev_rows = _rows(conn, prev, features)
             # 2P-1 (B2): with the version its outcomes compare under, as the score's previous is
-            previous = {'code': prev['cycle_code'], 'rows': prev_rows, 'visibility': _visibility(conn, prev, facts),
+            label = rm.cycle_label_of(conn, prev)
+            previous = {'code': prev['cycle_code'], 'name': label['name'], 'label': label, 'rows': prev_rows,
+                        'visibility': _visibility(conn, prev, facts),
                         'study': {**rm.study_identity(conn, prev), 'scorer_version': score_svc.outcomes_version(prev_rows)}}
         # 2K-4 (B1): the study and its questions, compared first; 2P-1: and the outcomes' version
         study = {**rm.study_identity(conn, row), 'scorer_version': score_svc.outcomes_version(rows)}
@@ -479,14 +487,14 @@ async def get_overview(cycle: str = Query(...), merchant: Optional[str] = Query(
     for s, block in lined.items():
         if answers:
             block['changes'] = list(block.get('changes') or []) + rm.attribute_changes(
-                answers, prev_answers, (previous or {}).get('code'), s,
+                answers, prev_answers, (previous or {}).get('name'), s,
                 compared=block.get('changes_status') == 'compared', site=site)
     # 2N-1: a brand's first-cycle Changes, after the weight range and before the deals:
     # Retired product named, First pick (category questions), Retailer coverage
     if (vis.get('ranking') or {}).get('default_tier') == rm.VIS_BRAND_CHOICE:
         for s, block in lined.items():
             block['changes'] = list(block.get('changes') or []) + rm.brand_changes(
-                vis, (previous or {}).get('visibility'), (previous or {}).get('code'), s,
+                vis, (previous or {}).get('visibility'), (previous or {}).get('name'), s,
                 compared=block.get('changes_status') == 'compared', brand=brand)
     # 2M-2: the Promo pass-through tile's input (the fifth brand tile) and its
     # Changes line, "Deals named, cheapest-place answers"; absent when the
@@ -499,7 +507,7 @@ async def get_overview(cycle: str = Query(...), merchant: Optional[str] = Query(
         prev_promo = promo_prev[0] if prev is not None else None
         for s, block in lined.items():
             block['changes'] = list(block.get('changes') or []) + rm.promo_changes(
-                promo, prev_promo, (previous or {}).get('code'), s,
+                promo, prev_promo, (previous or {}).get('name'), s,
                 compared=block.get('changes_status') == 'compared')
     # 2L-3: the products' and the signals' example answers' narratives
     with engine.connect() as conn:
@@ -556,8 +564,9 @@ async def _score(row: dict, org: int, merchant: Optional[str], rescore: bool, sc
         prev, _ = parity.previous_scored_cycle(conn, row, cycle_customer_org_sql())
         # 2K-4 (B1): each cycle's study and questions, compared first (soa_shared/cycle_compare)
         studies = (rm.study_identity(conn, row), rm.study_identity(conn, prev)) if prev else None
+        label = rm.cycle_label_of(conn, prev)
     return score_svc.with_previous(body, prev['cycle_code'] if prev else None,
-                                   await _previous_score(prev, row, org, merchant, scope), studies=studies)
+                                   await _previous_score(prev, row, org, merchant, scope), studies=studies, label=label)
 
 
 async def _previous_score(prev: Optional[dict], row: dict, org: int, merchant: Optional[str],
@@ -772,7 +781,7 @@ async def get_true_value(cycle: str = Query(...), merchant: Optional[str] = Quer
     def with_drift(body):
         body['previous'] = _previous_block(compared)
         if prev_tv is not None:
-            body['drift'] = rm.true_value_drift(body, prev_tv, compared['code'])
+            body['drift'] = rm.true_value_drift(body, prev_tv, compared['name'])
         return body
 
     if not merchant:
@@ -1421,7 +1430,8 @@ def _revenue_model(conn, row: dict, inputs: dict, meta: dict, access_requests, v
     catalog = revenue_svc.load_catalog_rows(conn, row)
     shares = revenue_svc.revenue_shares(vis_rows, catalog, inputs['lost_gainable']['value'], kind=meta['kind'],
                                         attribute_answers=attribute_answers, site=site)
-    return revenue_svc.build_model(shares, inputs, cycle=row['cycle_code'], kind=meta['kind'], name=meta['name'],
+    return revenue_svc.build_model(shares, inputs, cycle=row['cycle_code'], cycle_name=rm.cycle_name(conn, row),
+                                   kind=meta['kind'], name=meta['name'],
                                    domain=meta['domain'], access_requests=access_requests)
 
 
@@ -1457,7 +1467,7 @@ async def get_prove(cycle: str = Query(...), merchant: Optional[str] = Query(Non
     if compared and compared['status'] == 'compared' and deals is not None:
         prev_promo, prev_deals, _pa, prev_err = await _promo_inputs(scope, compared['row'], merchant)
         if prev_err is None and prev_deals is not None:
-            rm.prove_changes(body, deals, prev_deals, promo, prev_promo, compared['code'])
+            rm.prove_changes(body, deals, prev_deals, promo, prev_promo, compared['name'])
         elif prev_err is not None:
             body['read_errors']['previous_deals'] = prev_err
     return body
@@ -1513,7 +1523,8 @@ async def get_revenue(cycle: str = Query(...), merchant: Optional[str] = Query(N
         base_rows, _vis = await _baseline_rows(scope, base, ms, meta, {})
         body['baseline_cycle'] = base['cycle_code']
         body['baseline_started'] = rm._iso(base.get('start_date'))
-        body['since_baseline'] = rm.since_baseline(rows, base_rows, base['cycle_code'])
+        with engine.connect() as conn:
+            body['since_baseline'] = rm.since_baseline(rows, base_rows, rm.cycle_name(conn, base))
     # 2R-2 (B3): a brand at retail: locked until it states it sent the record, then what moved since
     from app.routers.console_manufacturer import impact_block
     locked = await impact_block(scope, ms, errors)
@@ -1580,10 +1591,11 @@ async def get_revenue_history(merchant: Optional[str] = Query(None), scope: Cust
             vs = None
             if before is not None:
                 ok, condition, reason = cycle_compare.cycles_comparable(
-                    parity.comparison_facts('this cycle', here), parity.comparison_facts(before[0], before[1], measured=True),
+                    parity.comparison_facts('this cycle', here), parity.comparison_facts(before[2], before[1], measured=True),
                     agent_name=parity._agent)
                 vs = {'cycle': before[0], 'comparable': ok, 'condition': condition, 'reason': reason}
-            before = (c['cycle_code'], here)
+            # 2T-7 (2): the reason names the cycle by its day (rm.cycle_label)
+            before = (c['cycle_code'], here, rm.cycle_label(c, zones.get(c['study_type']))['name'])
             out.append({'cycle': c['cycle_code'], 'started': rm._iso(c.get('start_date')), 'vs_previous': vs,
                         'start_date_local': rm.cycle_dates(c, zones.get(c['study_type']))['start_date_local'],
                         'measured': m['measured'],

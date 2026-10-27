@@ -837,7 +837,7 @@ def build_brand_metrics(counts: Dict[str, dict], surface: str, previous: Optiona
             if prev is not None:
                 delta = now['value'] - prev['value']
             elif comparable:
-                reason = BRAND_TILE_TEMPLATES['previous.no_tile'].format(code=previous.get('cycle'))
+                reason = BRAND_TILE_TEMPLATES['previous.no_tile'].format(code=previous.get('name') or previous.get('cycle'))
             else:
                 reason = (previous or {}).get('reason') or TEMPLATES['previous.first_cycle']
         out.append({'key': key, 'name': name, 'state': 'measured' if now is not None else 'not_measured',
@@ -866,7 +866,7 @@ def build_metrics(counts: Dict[str, dict], surface: str, previous: Optional[dict
         if comparable and surface in prev_counts:
             delta = now['value'] - prev_counts[surface][key]['value']
         elif comparable:
-            reason = TEMPLATES['previous.no_all'].format(code=previous.get('cycle'))
+            reason = TEMPLATES['previous.no_all'].format(code=previous.get('name') or previous.get('cycle'))
         else:
             reason = (previous or {}).get('reason') or TEMPLATES['previous.first_cycle']
         out.append({'key': key, 'name': name, 'value': now['value'], 'denominator': now['of'], 'surface': surface,
@@ -877,7 +877,7 @@ def build_metrics(counts: Dict[str, dict], surface: str, previous: Optional[dict
 
 
 def compare(now: dict, prev_code: Optional[str], prev_stored: Optional[dict],
-            studies: Optional[tuple] = None) -> Optional[dict]:
+            studies: Optional[tuple] = None, name: Optional[str] = None) -> Optional[dict]:
     """2C-2a's rule, plus the scorer: comparable only with the same pooled
     surfaces, the same agents on each, and the same scorer version. 2K-4
     (B1): soa_shared/cycle_compare.cycles_comparable decides, as it does for
@@ -888,10 +888,10 @@ def compare(now: dict, prev_code: Optional[str], prev_stored: Optional[dict],
         return None
     base = {'cycle': prev_code, 'scorer_version': None, 'score': None, 'comparable': False}
     if not prev_stored:
-        return {**base, 'reason': TEMPLATES['previous.not_stored'].format(code=prev_code)}
+        return {**base, 'reason': TEMPLATES['previous.not_stored'].format(code=name or prev_code)}
     base.update(scorer_version=prev_stored.get('scorer_version'), score=prev_stored.get('score'))
     ok, condition, reason = cycle_compare.cycles_comparable(
-        *score_facts(now, prev_code, prev_stored, studies), on=None, agent_name=parity._agent, surface_name=_surface_words)
+        *score_facts(now, name or prev_code, prev_stored, studies), on=None, agent_name=parity._agent, surface_name=_surface_words)
     if not ok:
         return {**base, 'reason': reason, 'condition': condition}
     now_max, prev_max = now.get('applicable_max'), prev_stored.get('applicable_max')
@@ -1152,10 +1152,15 @@ def verdict(score: Optional[int], true_value: Optional[dict], unmeasured: float)
 
 
 def with_previous(body: dict, prev_code: Optional[str], prev_stored: Optional[dict],
-                  studies: Optional[tuple] = None) -> dict:
-    """Adds `previous` and the five rows (whose deltas need it)."""
+                  studies: Optional[tuple] = None, label: Optional[dict] = None) -> dict:
+    """Adds `previous` and the five rows (whose deltas need it). 2T-7 (2): `label` is the previous cycle's
+    (rm.cycle_label): the reasons name it by its day, and `previous` carries {day, name, since, vs} beside
+    `cycle`, its code."""
     at('comparing with the previous cycle')
-    previous = compare(body, prev_code, prev_stored, studies)
+    previous = compare(body, prev_code, prev_stored, studies, name=(label or {}).get('name'))
+    if previous is not None:
+        previous.update({k: (label or {}).get(k) for k in ('day', 'since', 'vs')},
+                        name=(label or {}).get('name') or prev_code)
     out = dict(body)
     out['previous'] = None if previous is None else {k: v for k, v in previous.items() if k != 'metric_counts'}
     ms = body['metric_surface']

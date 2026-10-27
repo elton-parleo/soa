@@ -17,6 +17,7 @@ import pytest
 from sqlalchemy import text
 
 from app.services import console_score as score_svc
+from tests.cycle_label_2t7 import before_2t7, cycle_names
 from tests.score_2l4 import before_2l4, retailer_rows
 from tests import console_fixture_2i8 as f2i8
 from tests.test_console_2c3a import _cycle_229, _get, _supply, db  # noqa: F401
@@ -56,7 +57,7 @@ def _score(http, db, upstream, name):
 @pytest.mark.parametrize('name', list(FIXTURES))
 def test_the_score_is_what_main_served_but_for_the_rows_and_the_version(name, http, db, upstream):
     body = _score(http, db, upstream, name)
-    view = score_view(before_2l4(body))
+    view = score_view(before_2l4(before_2t7(body, cycle_names(db))))
     got = hashlib.sha256(json.dumps(view, sort_keys=True).encode()).hexdigest()
     if DUMP:
         os.makedirs(DUMP, exist_ok=True)

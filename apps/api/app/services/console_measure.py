@@ -35,8 +35,7 @@ MEASURE_TEMPLATES = {
     'vis.gap.behind': '{n} first {picks} behind {rival}',
     'vis.gap.ahead': '{n} first {picks} ahead of {rival}',
     'vis.gap.level': 'Level with {rival} on first picks',
-    'vis.gap.close': 'Named almost as often as {rival}, picked first {how} often',
-    'vis.gap.far': '{rival} is picked first in {rival_first}, {brand} in {first}',
+    'vis.gap.claim': 'Named {named} {rival}, picked first {first} often',
     'vis.gap.level_line': "Level with {rival} on first picks, named {named} to {rival_s} {rival_named}",
     'vis.outside': '{names} {verb} named too, outside the category.',
     # True Value (TV1, TV5, TV6, TV9)
@@ -230,31 +229,61 @@ def visibility_headline(vis: dict, brand: Optional[str]) -> Optional[dict]:
             'question_short_reason': 'soa stores no short form of a question, so it is served whole'}
 
 
+#: 2T-7 (1): "about as often" is within this share of the rival's count
+ABOUT = Decimal('0.10')
+
+
+def _compare(you: int, rival: int) -> str:
+    """'more', 'about' (within 10% of the rival's count) or 'less'."""
+    if abs(you - rival) <= ABOUT * rival:
+        return 'about'
+    return 'more' if you > rival else 'less'
+
+
+def named_words(you: int, rival: int) -> str:
+    """"more often than", "almost as often as" (within 10%, fewer: the demo's 25 to 27), "about as often as"
+    (within 10%, as many or more), "less often than"."""
+    how = _compare(you, rival)
+    if how == 'about':
+        return 'almost as often as' if you < rival else 'about as often as'
+    return f"{how} often than"
+
+
+def first_words(you: int, rival: int) -> str:
+    """"more", "about as", "less", "far less" (half the rival's or fewer, the demo's own)."""
+    how = _compare(you, rival)
+    if how == 'about':
+        return 'about as'
+    if how == 'less' and you * 2 <= rival:
+        return 'far less'
+    return how
+
+
 def visibility_gap(vis: dict, brand: Optional[str], lost: Optional[dict] = None) -> Optional[dict]:
-    """V2: {behind_or_ahead, n, rival, sentence, claim, dollars}, by the demo's rule (Leads.tsx
-    VisibilityLead): "named almost as often" when the brand is named within 75% to 200% of the rival.
-    `lost` is the revenue model's Lost pool ({dollars, reason}), its dollars beside."""
+    """V2: {behind_or_ahead, n, rival, sentence, claim, dollars}. 2T-7 (1): the claim is built from the counts,
+    named more / almost or about as often / less often than the rival, and picked first more / about as /
+    less / far less often (the demo's "Named almost as often as Huggies, picked first less often" is its 25
+    to 27, 5 to 9). Level on first picks keeps its own line. `lost` is the revenue model's Lost pool
+    ({dollars, reason}), its dollars beside."""
     rows = _ranking(vis).get('rows') or []
     you = next((r for r in rows if r.get('you')), None)
     rival = rival_of(rows)
     if you is None or rival is None:
         return None
-    name, nm = brand or you['name'], rival['name']
-    gap = (rival.get('first') or 0) - (you.get('first') or 0)
-    close = you['named'] >= rival['named'] * 0.75 and you['named'] <= rival['named'] * 2
+    nm = rival['name']
+    yf, rf = you.get('first') or 0, rival.get('first') or 0
+    yn, rn = you.get('named') or 0, rival.get('named') or 0
+    gap = rf - yf
     side = 'level' if gap == 0 else 'behind' if gap > 0 else 'ahead'
     picks = 'pick' if abs(gap) == 1 else 'picks'
     head = (T['vis.gap.level'].format(rival=nm) if gap == 0 else
             T['vis.gap.behind' if gap > 0 else 'vis.gap.ahead'].format(n=abs(gap), picks=picks, rival=nm))
     if gap == 0:
-        claim = T['vis.gap.level_line'].format(rival=nm, named=you['named'], rival_s=f"{nm}'s",
-                                               rival_named=rival['named'])
-    elif close:
-        how = ('far less' if you['first'] * 2 <= rival['first'] else 'less') if you['first'] < rival['first'] else 'more'
-        claim = T['vis.gap.close'].format(rival=nm, how=how)
+        claim = T['vis.gap.level_line'].format(rival=nm, named=yn, rival_s=f"{nm}'s", rival_named=rn)
     else:
-        claim = T['vis.gap.far'].format(rival=nm, rival_first=rival['first'], brand=name, first=you['first'])
+        claim = T['vis.gap.claim'].format(named=named_words(yn, rn), rival=nm, first=first_words(yf, rf))
     return {'behind_or_ahead': side, 'n': abs(gap), 'rival': nm, 'claim': claim, 'sentence': f"{head} · {claim}",
+            'named_vs': _compare(yn, rn), 'first_vs': _compare(yf, rf),
             'dollars': (lost or {}).get('dollars'),
             'dollars_reason': None if (lost or {}).get('dollars') is not None else
             (lost or {}).get('reason') or 'no revenue model was read for this cycle'}
@@ -353,9 +382,40 @@ def cell_deals(row: dict, domain: str, deals: Optional[dict]) -> List[str]:
     return out
 
 
-def brand_note(row: dict, reads: Optional[List[dict]], own_domains: Iterable[str], brand: Optional[str]) -> Optional[str]:
+def _words(node: dict) -> str:
+    return ' '.join(str(node.get(k) or '') for k in ('name', 'size', 'sku'))
+
+
+def _own_nodes(reads: Optional[List[dict]], own_domains: Iterable[str]) -> List[dict]:
+    """Every Product node in the markup of the brand's own pages read."""
+    from app.services import console_manufacturer as manu
+    own = {_domain(d) for d in own_domains or () if d}
+    return [n for r in reads or [] if _domain(r.get('retailer_domain')) in own or r.get('role') == 'own'
+            for n in manu._products((manu.row_brand_page(r) or {}).get('json_ld'))]
+
+
+def markup_lists(reads: Optional[List[dict]], own_domains: Iterable[str]) -> Optional[dict]:
+    """2T-7 (4): whether the brand's markup lists a pack count, and a price, on any variant ({counts, prices}),
+    None with no markup read."""
+    nodes = _own_nodes(reads, own_domains)
+    if not nodes:
+        return None
+    return {'counts': any(_COUNT.search(_words(n)) for n in nodes),
+            'prices': any(_money(o.get('price')) for n in nodes for o in _offers(n))}
+
+
+#: 2T-7 (4): said once, on the brand's column, when no variant in its markup lists a pack count
+NO_COUNT_ANYWHERE = 'Markup lists no pack count'
+
+
+def brand_note(row: dict, reads: Optional[List[dict]], own_domains: Iterable[str], brand: Optional[str],
+               lists: Optional[dict] = None) -> Optional[str]:
     """TV4: the brand column's note from the brand page's read: "Retired. Redirects to AMORE", "No 84 ct listed.
-    Markup prices the 140 ct at $44.94", "No price in markup. GTIN has 11 digits". None with no read of it."""
+    Markup prices the 140 ct at $44.94", "No price in markup. GTIN has 11 digits". None with no read of it.
+    2T-7 (4): "No <N> ct listed" only when the line's markup lists other counts, "Markup lists no pack count"
+    when it lists none and other lines do; when no variant anywhere lists one (`lists`, markup_lists), the
+    column says it once (NO_COUNT_ANYWHERE) and the cell says nothing of counts. "No price in markup" likewise
+    only when some variant in the brand's markup carries a price."""
     retired = row.get('retired')
     own = [_domain(d) for d in own_domains or () if d]
     page = next((r for d in own for r in _reads_for(reads, row, d)), None)
@@ -377,8 +437,8 @@ def brand_note(row: dict, reads: Optional[List[dict]], own_domains: Iterable[str
     label = row.get('product') or ''
     size, count = attribute_accuracy.size_of(label), (_COUNT.search(label) or [None, None])[1]
 
-    def words(node):
-        return ' '.join(str(node.get(k) or '') for k in ('name', 'size', 'sku'))
+    words = _words
+    lists = lists if lists is not None else markup_lists(reads, own) or {'counts': True, 'prices': True}
 
     def node_size(node):   # the markup's size is "1" as often as "Size 1" (manu.markup_gtins)
         raw = str(node.get('size') or '')
@@ -386,7 +446,12 @@ def brand_note(row: dict, reads: Optional[List[dict]], own_domains: Iterable[str
 
     same_size = [n for n in nodes if not size or node_size(n) == size]
     match = next((n for n in same_size if count and (_COUNT.search(words(n)) or [None, None])[1] == count), None)
+    line_counts = any(_COUNT.search(words(n)) for n in nodes)
     parts = []
+    if count and not line_counts:
+        if lists.get('counts'):   # other lines list counts, this one none
+            parts.append(NO_COUNT_ANYWHERE)
+        match = same_size[0] if same_size else None
     if match is None and count and same_size:
         parts.append(f"No {count} ct listed")
         priced = next(((n, o) for n in same_size for o in _offers(n) if _money(o.get('price'))), None)
@@ -396,7 +461,7 @@ def brand_note(row: dict, reads: Optional[List[dict]], own_domains: Iterable[str
                          f"{_money(priced[1].get('price'))}")
     else:
         node = match or (same_size[0] if same_size else None)
-        if node is not None and not any(_money(o.get('price')) for o in _offers(node)):
+        if node is not None and lists.get('prices') and not any(_money(o.get('price')) for o in _offers(node)):
             parts.append('No price in markup')
         if node is not None:
             gtin = next((node.get(k) for k in ('gtin13', 'gtin12', 'gtin14', 'gtin') if node.get(k)), None)
@@ -417,13 +482,20 @@ def rel_key(url) -> str:
     return rel._url_key(url)
 
 
+def shown_runs(cell: dict) -> List[dict]:
+    """The runs whose quote the cell shows (rm.TV_CELL_RULE: the deciding outcome, its most common quote)."""
+    return [q for q in cell.get('quotes') or [] if q.get('stated') and q.get('outcome') == cell.get('outcome')
+            and (_money(q['stated']) or q['stated']) == cell.get('quoted')]
+
+
 def clash_text(cell: dict) -> Optional[str]:
-    """TV8: a cell whose wrong quotes mostly named a variant the record does not have shows it, as the
-    Overview's signal does (console_parity.variant_clash): "$44.99 for Size 3, 116 ct"."""
+    """TV8: a cell whose shown run named a variant the record does not have shows it, as the Overview's signal
+    does (console_parity.variant_clash): "$44.99 for Size 3, 116 ct". 2T-7 (5): whenever the shown run has a
+    clash reason, whether or not its amount differs from the live price (FL15's Zzz on Amazon quoted $44.99
+    against a live $44.99, for a Size 3, 116-count)."""
     from app.services import console_parity as parity
-    wrong = [q for q in cell.get('quotes') or [] if q.get('outcome') in ('wrong', 'stale') and q.get('stated')]
-    clashed = [q for q in wrong if q.get('clash')]
-    if not clashed or len(clashed) * 2 <= len(wrong):
+    clashed = [q for q in shown_runs(cell) if q.get('clash')]
+    if not clashed:
         return None
     (stated, named), _n = Counter((q['stated'], q['clash']) for q in clashed).most_common(1)[0]
     return f"{_money(stated) or stated} for {parity.variant_words(named) or named}"
@@ -459,19 +531,62 @@ def product_line(row: dict, *, deals: Optional[dict], promo: Optional[dict], att
     return ' '.join(parts) or None
 
 
-def anatomy(rows: List[dict], *, reads: Optional[List[dict]], deals: Optional[dict], promo: Optional[dict],
-            brand: Optional[str], day: Optional[str]) -> Optional[dict]:
-    """TV6: the most-asked SKU on its most-asked retailer, line by line, from the reference row and the
-    quotes: list price, the price cut (sale against list), the one-time price, each deal live there with how
-    many answers named it, what agents quoted and who. No modeled dollars."""
-    best = None
+#: 2T-7 (6): why the receipt shows its SKU, in the order anatomy_pick tries them
+PICKED_BY = ('live_deal', 'list_vs_sale', 'most_asked')
+
+
+def _cells(row: dict) -> dict:
+    return row.get('retailer_cells') or row.get('cells') or {}
+
+
+def anatomy_pick(rows: List[dict], *, reads: Optional[List[dict]], deals: Optional[dict]) -> Optional[tuple]:
+    """2T-7 (6): (row, domain, cell, picked_by) for the receipt. Each SKU on its most-asked retailer, the SKUs
+    most asked first (their runs over every retailer): the first with a deal live there (FL15: Swaddlers Size 4
+    on Walmart, its Rollback), else the first whose read there lists a price above the one it sells at, else
+    the most-asked (2T-5's pick). A SKU asked as often on two retailers tries each, by domain. None when no cell
+    was asked."""
+    cands = []
+    for i, row in enumerate(rows):
+        asked = [(d, c) for d, c in _cells(row).items() if c.get('runs')]
+        if not asked:
+            continue
+        top = max(c['runs'] for _d, c in asked)
+        for domain, cell in sorted((dc for dc in asked if dc[1]['runs'] == top), key=lambda dc: _domain(dc[0])):
+            cands.append((-sum(c['runs'] for _d, c in asked), i, row, domain, cell))
+    cands.sort(key=lambda c: c[:2])
+
+    def has_deal(row, domain):
+        return any(_domain(d.get('retailer_domain')) == _domain(domain) for d in ppt.live_for(deals, _ref_of(row)))
+
+    def has_cut(row, domain):
+        read = next(iter(_reads_for(reads, row, _domain(domain))), None) or {}
+        try:
+            return bool(_money(read.get('list_price')) and _money(read.get('price'))) and \
+                Decimal(str(read['list_price'])) > Decimal(str(read['price']))
+        except (InvalidOperation, ValueError):
+            return False
+
+    for why, test in (('live_deal', has_deal), ('list_vs_sale', has_cut)):
+        hit = next((c for c in cands if test(c[2], c[3])), None)
+        if hit:
+            return hit[2], hit[3], hit[4], why
+    best = None   # 2T-5's pick: the most-asked cell
     for row in rows:
-        for domain, cell in (row.get('retailer_cells') or row.get('cells') or {}).items():
+        for domain, cell in _cells(row).items():
             if cell.get('runs') and (best is None or cell['runs'] > best[2]['runs']):
                 best = (row, domain, cell)
-    if best is None:
+    return (*best, 'most_asked') if best else None
+
+
+def anatomy(rows: List[dict], *, reads: Optional[List[dict]], deals: Optional[dict], promo: Optional[dict],
+            brand: Optional[str], day: Optional[str]) -> Optional[dict]:
+    """TV6: a SKU on its most-asked retailer, line by line, from the reference row and the quotes: list price,
+    the price cut (sale against list), the one-time price, each deal live there with how many answers named
+    it, what agents quoted and who. No modeled dollars. 2T-7 (6): the SKU is anatomy_pick's."""
+    pick = anatomy_pick(rows, reads=reads, deals=deals)
+    if pick is None:
         return None
-    row, domain, cell = best
+    row, domain, cell, why = pick
     read = next(iter(_reads_for(reads, row, _domain(domain))), None) or {}
     price, listed = read.get('price'), read.get('list_price')
     lines = []
@@ -502,7 +617,7 @@ def anatomy(rows: List[dict], *, reads: Optional[List[dict]], deals: Optional[di
             'sub': T['tv.anatomy.sub'].format(product=row.get('product'), retailer=rm._retailer_name(domain),
                                               day=day or 'the read day'),
             'sku': row.get('sku'), 'variant_id': row.get('variant_id'), 'retailer': domain, 'runs': cell['runs'],
-            'rows': lines, 'observed_at': read.get('observed_at')}
+            'rows': lines, 'observed_at': read.get('observed_at'), 'picked_by': why}
 
 
 def true_value_hero(rows: List[dict]) -> dict:
@@ -535,12 +650,19 @@ def true_value_brand(body: dict, *, reads: Optional[List[dict]], deals: Optional
                                                if isinstance(x, dict) and x.get('domain'))
     day = rm._short_day((deals or {}).get('read_date') or body.get('as_of')) if \
         ((deals or {}).get('read_date') or body.get('as_of')) else None
+    # 2T-7 (4): what the brand's markup lists on no variant is said once, on its column
+    lists = markup_lists(reads, own)
+    body['brand_column_note'] = NO_COUNT_ANYWHERE if lists is not None and not lists['counts'] else None
+    for col in [c for cols in [body.get('columns') or [], body.get('retailer_columns') or [],
+                               *(body.get('columns_by_surface') or {}).values()] for c in cols]:
+        if _domain(col.get('id')) in own:
+            col['note'] = body['brand_column_note']
     for row in body.get('rows') or []:
         listed = sold_at.get(str(row.get('feed_sku') or '')) if feed_rows is not None else None
         for domain, cell in (row.get('retailer_cells') or row.get('cells') or {}).items():
             d = _domain(domain)
             if d in own:
-                cell['note'] = brand_note(row, reads, own, brand)
+                cell['note'] = brand_note(row, reads, own, brand, lists or {'counts': True, 'prices': True})
                 continue
             found = cell_deals(row, d, deals)
             cell['live_deal'] = '. '.join(found) if found else None

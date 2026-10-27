@@ -382,10 +382,8 @@ async def brand_overview(scope: CustomerScope, ms: MerchantScope, merchant: str,
                if not c.get('you') and c.get('id') not in own_domains]
     body['header'] = {'skus': len(feed_rows) if feed_rows is not None else None, 'records': (workspace or {}).get('records'),
                       'retailers_checked': len(checked), 'retailers': checked, 'brand_domain': domain}
-    prev_day = None
-    if prev is not None:
-        prev_day = rm.cycle_dates(prev, body.get('timezone')).get('start_date_local') or rm._iso(prev.get('start_date'))
-    body['vs_label'] = bo.vs_label(prev_day)
+    # 2T-7 (2): the one cycle label (rm.cycle_label) in the merchant's zone
+    body['vs_label'] = (rm.cycle_label(prev, body.get('timezone')) or {}).get('vs')
     body['vs_cycle'] = (prev or {}).get('cycle_code')
     body['mode'] = manu.MANUFACTURER
 
@@ -693,5 +691,6 @@ async def impact_block(scope: CustomerScope, ms: MerchantScope, errors: dict) ->
     if compared['status'] == 'compared':
         now_rows, _vis = await _baseline_rows(scope, after, ms, meta, errors)
         then_rows, _vis = await _baseline_rows(scope, before, ms, meta, {})
-        block['rows'] = rm.since_baseline(now_rows, then_rows, before['cycle_code'])
+        with engine.connect() as conn:
+            block['rows'] = rm.since_baseline(now_rows, then_rows, rm.cycle_name(conn, before))
     return block

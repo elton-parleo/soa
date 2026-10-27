@@ -178,7 +178,7 @@ def test_the_previous_cycle_is_not_comparable(http, upstream, db, stored):
     prev = _get(http).json()['previous']
     assert prev['cycle'] == f229.PREVIOUS and prev['comparable'] is False
     assert prev['reason'] == ('Scored under v5, re-score to compare.' if stored else
-                              f'Not comparable: {f229.PREVIOUS} has no stored score yet. Open it to score it.')
+                              'Not comparable: the Sep 15 cycle has no stored score yet. Open it to score it.')
 
 
 def test_an_exception_in_the_score_is_a_422_with_a_short_reason_and_a_log_line(http, upstream, db, monkeypatch, caplog):

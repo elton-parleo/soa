@@ -2210,6 +2210,42 @@ def cycle_dates(cycle: dict, tz: Optional[str] = None) -> dict:
             'created_at_local': local_time.local_iso(cycle.get('created_at'), zone), 'timezone': zone}
 
 
+#: 2T-7 (2): a cycle in copy, by its start day in the merchant's zone
+CYCLE_LABEL = {'name': 'the {day} cycle', 'since': 'Since {day}', 'vs': 'vs {day}'}
+
+
+def cycle_label(cycle: Optional[dict], tz: Optional[str] = None) -> Optional[dict]:
+    """2T-7 (2): the one label every "since / vs / against" string reads for a cycle: {code, day, name, since,
+    vs}. `day` is the cycle's start day in the merchant's zone (cycle_dates), else its UTC start date: "Oct 23",
+    "the Oct 23 cycle", "Since Oct 23", "vs Oct 23". With no date at all, the code stands in (name is the code).
+    The code stays the cycle's identifier wherever one is served."""
+    if not cycle:
+        return None
+    code = cycle.get('cycle_code')
+    iso = cycle_dates(cycle, tz).get('start_date_local') or _iso(cycle.get('start_date'))
+    try:
+        from datetime import date as _date
+        d = _date.fromisoformat((iso or '')[:10])
+        day = f"{d.strftime('%b')} {d.day}"
+    except ValueError:
+        return {'code': code, 'day': None, 'name': code, 'since': f'Since {code}', 'vs': f'vs {code}'}
+    return {'code': code, 'day': day, **{k: v.format(day=day) for k, v in CYCLE_LABEL.items()}}
+
+
+def cycle_label_of(conn, cycle: Optional[dict]) -> Optional[dict]:
+    """cycle_label in the zone of the cycle's study (study_timezones)."""
+    if not cycle:
+        return None
+    zone = study_timezones(conn, [cycle.get('study_type')]).get(cycle.get('study_type')) if cycle.get('study_type') \
+        else None
+    return cycle_label(cycle, zone)
+
+
+def cycle_name(conn, cycle: Optional[dict]) -> Optional[str]:
+    """"the Oct 23 cycle" (cycle_label's name), None for no cycle."""
+    return (cycle_label_of(conn, cycle) or {}).get('name')
+
+
 def build_run(cycle: dict, collected: int, usable: int, tz: Optional[str] = None) -> dict:
     """tz (2K-1): the study's merchant's zone, for `created_at_local`."""
     platforms = _json(cycle.get('platforms')) or []
@@ -2491,7 +2527,7 @@ def _agent_counts(rows: List[dict], surface: str) -> dict:
 
 def build_visibility(cycle_code: str, *, runs: List[dict], entities: List[dict], mentions: List[dict],
                      extractions: Dict[int, dict], terms: Iterable[str] = (), retired: Iterable[dict] = (),
-                     retired_by: Optional[str] = None, answer_texts: Optional[Dict[int, str]] = None,
+                     retired_by: Optional[str] = None, cycle_name: Optional[str] = None, answer_texts: Optional[Dict[int, str]] = None,
                      merchant: Optional[dict] = None, lines: Iterable[str] = (), kind: Optional[str] = None) -> dict:
     """
     GET /api/console/visibility. `runs` carry their question (query_text,
@@ -2604,7 +2640,7 @@ def build_visibility(cycle_code: str, *, runs: List[dict], entities: List[dict],
                         'agent_first_uncoded': c_uncoded}
     return {
         'cycle': cycle_code,
-        'lede': (f"Who the answers name, and who they name first, in cycle {cycle_code}. Every agent "
+        'lede': (f"Who the answers name, and who they name first, in {cycle_name or 'cycle ' + cycle_code}. Every agent "
                  "together, as the demo counts them. Pick a surface to count one alone."),
         'byQuestion': rows,
         'ranking': {'surface': default, 'rows': ranking_rows, 'denom': denoms.get(default, 0),
@@ -3533,7 +3569,8 @@ def load_visibility(conn, cycle: dict, merchant: Optional[dict] = None) -> dict:
     brand = stored.get('study_brand') or stored.get('brand') or next(
         (e['name'] for e in entities if e.get('role') == 'primary'), None)
     names = list(stored.get('product_names') or []) + [r.get('product_name') for r in retired if r.get('product_name')]
-    return build_visibility(cycle['cycle_code'], runs=runs, entities=entities, mentions=mentions,
+    label = cycle_label_of(conn, cycle) or {}
+    return build_visibility(cycle['cycle_code'], cycle_name=label['name'] if label.get('day') else None, runs=runs, entities=entities, mentions=mentions,
                             extractions=extractions, terms=load_brand_terms(conn, cycle),
                             retired=retired, retired_by=retired_by, answer_texts=texts, merchant=merchant,
                             lines=line_aliases(names, brand), kind=(merchant or {}).get('kind') or stored.get('kind'))

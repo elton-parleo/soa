@@ -123,7 +123,7 @@ def test_live_for_and_the_rule_by_hand():
 
 
 def test_an_ended_deal_and_an_out_of_stock_one_against_the_previous_cycle(http, db, upstream):
-    from tests.test_console_2p1_two_cycles import PREV
+    from tests.test_console_2p1_two_cycles import PREV_NAME
     _pair(db, http, upstream)
     # cycle 2's Amazon multi-buy, kept since cycle 1, is now beside "Out of stock"
     deals_2 = f2p1.deals_2(__import__('tests.test_console_2m2_promo', fromlist=['DEALS']).DEALS)
@@ -132,6 +132,6 @@ def test_an_ended_deal_and_an_out_of_stock_one_against_the_previous_cycle(http, 
     prove = _get(http, 'prove', merchant=WS)
     row = next(r for r in prove['rows'] if r.get('not_live'))
     assert row['change'] == 'out_of_stock'
-    assert row['change_note'] == f'Out of stock on Oct 21: Amazon showed it beside "Out of stock". Live in {PREV}.'
+    assert row['change_note'] == f'Out of stock on Oct 21: Amazon showed it beside "Out of stock". Live in {PREV_NAME}.'
     # the Rollback that ended still reads as ended
     assert [e['change'] for e in prove['ended'] if e['title'].startswith('Walmart')] == ['ended']

@@ -190,7 +190,7 @@ TEMPLATES = {
     'missed.measured.attribute.no_price': ("{n} of the {of} size answers gave a weight range that doesn't match {site}, "
                                            "{pct}. Counted once: only for shoppers the brand choice did not already "
                                            "send elsewhere, {once}."),
-    'basis.attribute': ("Each share is measured on the questions where it can happen, over every agent, in cycle "
+    'basis.attribute': ("Each share is measured on the questions where it can happen, over every agent, in "
                         "{cycle}. Brand choice: {lost_n} of {lost_of} {set} answers put another {rival} first "
                         "({lost_pct}). Facts: {miss_n} of {miss_of} size answers gave a weight range that doesn't match "
                         "{site} ({miss_raw}). Prices, beside it and not added: {price_n} of {price_of} price answers "
@@ -209,7 +209,7 @@ TEMPLATES = {
     'access.measured': "{n} agent {identities} could not read the pages in the last access run: {who}.",
     'access.fix': "Feeds put the offer where agents look, with no crawl needed",
     'access.none': "Every measured agent identity read the pages in the last access run.",
-    'basis': ("Each share is measured on the questions where it can happen, over every agent, in cycle {cycle}. Brand "
+    'basis': ("Each share is measured on the questions where it can happen, over every agent, in {cycle}. Brand "
               "choice: {lost_n} of {lost_of} {set} answers put another {rival} first ({lost_pct}). Price: "
               "{miss_n} of {miss_of} price answers got the price wrong or quoted another brand's ({miss_raw}). The model assumes "
               "an AI-assisted purchase passes through both, a {choice} and then a price, and counts a price miss only "
@@ -343,7 +343,7 @@ def compute(model: dict, influence: Optional[float] = None) -> Optional[dict]:
 
 
 def build_model(shares: dict, inputs: dict, *, cycle: str, kind: str, name: str, domain: Optional[str],
-                access_requests: Optional[list] = None) -> dict:
+                access_requests: Optional[list] = None, cycle_name: Optional[str] = None) -> dict:
     """The RevenueModel the console's computeRevenue takes, with the counts
     behind it. `dollars` is false (and `dollars_reason` says why) when Lost
     is not measured or sales in scope is not entered: never a $0."""
@@ -422,7 +422,7 @@ def build_model(shares: dict, inputs: dict, *, cycle: str, kind: str, name: str,
                                  if attribute else {})},
                    'against': shares['against']},
         'basis': ((TEMPLATES['basis.attribute' if attribute else 'basis'].format(
-            cycle=cycle, lost_n=L['n'], lost_of=L['of'], lost_pct=_pct(L['share']),
+            cycle=cycle_name or f"cycle {cycle}", lost_n=L['n'], lost_of=L['of'], lost_pct=_pct(L['share']),
             rival=rival, miss_n=M['n'], miss_of=M['of'],
             miss_raw=_pct(M['raw']) if M['raw'] is not None else 'not measured',
             choice='brand choice' if k == 'brand' else 'store choice',

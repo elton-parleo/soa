@@ -83,15 +83,26 @@ def test_named_products_are_coded_per_row(http, db, upstream):
 # ── V2: the gap ───────────────────────────────────────────────────────────
 
 @pytest.mark.parametrize('you,rival,side,sentence', [
+    # the demo's own outcome: 25 to 27 named, 5 to 9 first
     ((25, 5), (27, 9), 'behind', '4 first picks behind Huggies · Named almost as often as Huggies, picked first less '
                                   'often'),
     ((25, 3), (27, 9), 'behind', '6 first picks behind Huggies · Named almost as often as Huggies, picked first far '
                                   'less often'),
-    ((10, 2), (27, 9), 'behind', '7 first picks behind Huggies · Huggies is picked first in 9, Pampers in 2'),
+    ((10, 2), (27, 9), 'behind', '7 first picks behind Huggies · Named less often than Huggies, picked first far less '
+                                  'often'),
     ((25, 12), (27, 9), 'ahead', '3 first picks ahead of Huggies · Named almost as often as Huggies, picked first '
                                  'more often'),
     ((25, 9), (27, 9), 'level', 'Level with Huggies on first picks · Level with Huggies on first picks, named 25 to '
                                 "Huggies's 27"),
+    # 2T-7 (1): FL15 on Oct 26, Pampers named 103 and Huggies 64, 54 first picks ahead
+    ((103, 80), (64, 26), 'ahead', '54 first picks ahead of Huggies · Named more often than Huggies, picked first more '
+                                   'often'),
+    ((66, 50), (64, 49), 'ahead', '1 first pick ahead of Huggies · Named about as often as Huggies, picked first about '
+                                  'as often'),
+    ((40, 30), (64, 20), 'ahead', '10 first picks ahead of Huggies · Named less often than Huggies, picked first more '
+                                  'often'),
+    ((100, 10), (64, 30), 'behind', '20 first picks behind Huggies · Named more often than Huggies, picked first far '
+                                    'less often'),
 ])
 def test_the_gap_by_the_demos_rule(you, rival, side, sentence):
     vis = {'ranking': {'rows': [{'name': 'Pampers', 'you': True, 'named': you[0], 'first': you[1]},
