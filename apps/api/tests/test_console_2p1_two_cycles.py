@@ -173,7 +173,7 @@ def test_trade_promotions_moved(http, db, upstream):
          f'Ended since {PREV_NAME}. Walmart was read on Oct 21 and no longer ran it.')]
     assert prove['aside']['value'] == '3 of 100'
     assert prove['aside']['delta'] == {'delta': '-2', 'dir': 'down', 'prev': 5, 'of_prev': 100,
-                                       'detail': _detail(3, 100, 5, 100)}
+                                       'detail': _detail(3, 100, 5, 100), 'vs': PREV_LABEL['vs']}   # 2T-11 (B2)
     assert prove['walled'] == ["Sam's Club", 'Target']
 
 

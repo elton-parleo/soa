@@ -1498,6 +1498,9 @@ async def get_prove(cycle: str = Query(...), merchant: Optional[str] = Query(Non
         prev_promo, prev_deals, _pa, prev_err = await _promo_inputs(scope, compared['row'], merchant)
         if prev_err is None and prev_deals is not None:
             rm.prove_changes(body, deals, prev_deals, promo, prev_promo, compared['name'])
+            # 2T-11 (B2): the chip's pair by its label ("+3 vs Oct 23"), never the cycle's code
+            if (body.get('aside') or {}).get('delta'):
+                body['aside']['delta']['vs'] = (compared.get('label') or {}).get('vs')
         elif prev_err is not None:
             body['read_errors']['previous_deals'] = prev_err
     return body

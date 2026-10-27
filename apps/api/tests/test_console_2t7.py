@@ -59,7 +59,9 @@ def _strings(body, path=''):
 #: the four Measure screens, the Overview (and its score card) and TrueSync; 2T-8 (B7): Impact (/revenue) and Trade
 #: promotions (/prove)
 SCREENS = ('overview', 'score', 'answers', 'answers/summary', 'visibility', 'true-value', 'accessibility', 'truesync',
-           'revenue', 'prove')
+           'revenue', 'prove', 'revenue/history', 'fixes', 'approvals')
+#: 2T-11 (B2): the reads served with no cycle (the chips and deltas the console builds read their labels)
+NO_CYCLE = ('accessibility', 'truesync', 'revenue/history', 'fixes', 'approvals')
 
 
 @pytest.mark.parametrize('shape', ['compared', 'fl15'])
@@ -74,7 +76,7 @@ def test_no_served_string_carries_a_cycle_code(shape, http, db, upstream):
     codes = (f2p1.CYCLE_1, f2p1.CYCLE_2)
     hits = []
     for endpoint in SCREENS:
-        params = {} if endpoint in ('accessibility', 'truesync') else {'cycle': f2p1.CYCLE_2}
+        params = {} if endpoint in NO_CYCLE else {'cycle': f2p1.CYCLE_2}
         body = _read(http, endpoint, **params)
         hits += [(endpoint, p, s) for p, s in _strings(body) if s not in codes and any(c in s for c in codes)]
     assert hits == []

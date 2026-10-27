@@ -108,3 +108,12 @@ def test_the_series_reads_the_cached_points(http, db, upstream, cache_on, cycle_
     again, _s, reads, _c = _timed(http, upstream, 'revenue/history', cycle_reads)
     assert reads == {} and again == _first
     assert [len(s['points']) for s in again['series']] == [4, 4, 4, 4]
+
+
+# ── B2: the nits from the Oct 27 walk ─────────────────────────────────────
+
+def test_the_trade_promotions_chip_carries_the_label(http, db, upstream):
+    """Live: "+3 vs FL14-pampers-20261023". The delta now carries its pair's label, as every chip does."""
+    _shape(db, http, upstream)
+    delta = _read(http, 'prove', cycle=f2p1.CYCLE_2)['aside']['delta']
+    assert delta['vs'] == 'vs Oct 14'
