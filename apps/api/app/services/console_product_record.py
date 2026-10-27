@@ -216,6 +216,7 @@ PRODUCT_RECORD_TEMPLATES.update({
     'issue.borrows.text': 'The {line} page markup lists {sizes} with {other} weights, against its own size chart.',
     'surface.held': 'Held in preview',
     'surface.published': 'Published',
+    'surface.live': 'Live',
     'surface.blocked': 'Blocked',
     'surface.na': 'Not applicable',
     'surface.drift': '{n} {agents} disagree',
@@ -727,8 +728,8 @@ def record_rows(v: dict, *, page: Optional[dict], shelf_rows: List[dict], retail
     return out
 
 
-SURFACE_WORD = {'held': 'surface.held', 'published': 'surface.published', 'blocked': 'surface.blocked',
-                'na': 'surface.na'}
+SURFACE_WORD = {'held': 'surface.held', 'published': 'surface.published', 'live': 'surface.live',
+                'blocked': 'surface.blocked', 'na': 'surface.na'}
 
 
 def record_surfaces(record: dict, st: dict, channels: Dict[str, dict]) -> List[dict]:
@@ -738,6 +739,9 @@ def record_surfaces(record: dict, st: dict, channels: Dict[str, dict]) -> List[d
     out = []
     for slug, cell in (record.get('cells') or {}).items():
         s = cell.get('s')
+        # 2U-2: the matrix carries every channel; the record lists the pass's (a row for it, or a held/live cell)
+        if s in ('next', 'not_for_brand') or (s == 'na' and cell.get('publication_id') is None):
+            continue
         na = s in ('na', 'blocked')
         drift = None if na else 'drift' if st['state'] == 'agents_disagree' else 'none' if st['state'] == 'match' \
             else 'unquoted'

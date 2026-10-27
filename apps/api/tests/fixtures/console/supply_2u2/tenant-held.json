@@ -1,0 +1,111 @@
+{
+ "body": {
+  "display_name": "Wiggle & Snug",
+  "merchants": [
+   {
+    "channels": [
+     {
+      "channel": "schema_org",
+      "compiled": true,
+      "note": "compiled; the brand's own team sends it",
+      "reason": "held_for_merchant",
+      "rule": null
+     },
+     {
+      "channel": "merchant_center",
+      "compiled": false,
+      "note": "rule r3: a brand publishes product identity to Manufacturer Center, never to Merchant Center (a seller's channel)",
+      "reason": "not_for_brand",
+      "rule": "r3"
+     },
+     {
+      "channel": "manufacturer_center",
+      "compiled": true,
+      "note": "compiled; the brand's own team sends it",
+      "reason": "held_for_merchant",
+      "rule": null
+     },
+     {
+      "channel": "acp",
+      "compiled": true,
+      "note": "compiled; the brand's own team sends it",
+      "reason": "held_for_merchant",
+      "rule": null
+     },
+     {
+      "channel": "ucp_uip",
+      "compiled": false,
+      "note": "not compiled in manufacturer mode (first pass)",
+      "reason": "not_compiled",
+      "rule": null
+     },
+     {
+      "channel": "deals_api",
+      "compiled": false,
+      "note": "after rule r4: the Deals API serves deals, and a brand's own (brand-funded, rule r4) are stored with the rules, not compiled, in this release",
+      "reason": "after_rule",
+      "rule": "r4"
+     },
+     {
+      "channel": "mcp",
+      "compiled": true,
+      "note": "served by get_product_facts on the Parleo MCP server; Parleo publishes it, nothing is sent",
+      "reason": "published_by_parleo",
+      "rule": null
+     },
+     {
+      "channel": "deal_directory",
+      "compiled": false,
+      "note": "rule r3: the Deal Directory lists a seller's own deals; a brand's product identity goes to Manufacturer Center (a seller's channel)",
+      "reason": "not_for_brand",
+      "rule": "r3"
+     }
+    ],
+    "domain": "www.pampers.com",
+    "has_record": true,
+    "held": {
+     "blocked": 4,
+     "by_channel": {
+      "acp": 4,
+      "manufacturer_center": 4,
+      "schema_org": 4
+     },
+     "compiled_at": "2026-10-27T20:48:00",
+     "published": {
+      "mcp": {
+       "acceptance": "approved",
+       "external_ref": "https://mcp.parleo.example#get_product_facts",
+       "failed": 0,
+       "published_at": "2026-10-27T20:48:00.418385+00:00",
+       "records": 4,
+       "skus": 6,
+       "verified_at": "2026-10-27T20:48:00+00:00",
+       "verified_skus": "6/6"
+      }
+     },
+     "published_total": 4,
+     "sent": {
+      "acp": null,
+      "manufacturer_center": null,
+      "schema_org": null
+     },
+     "total": 12
+    },
+    "hosting": "external",
+    "kind": "brand",
+    "mode": "manufacturer",
+    "name": "Pampers 2R-1",
+    "own_domains": [
+     "pampers.com"
+    ],
+    "slug": "pampers-2r1"
+   }
+  ],
+  "slug": "wiggle-and-snug",
+  "soa_org_id": null
+ },
+ "headers": {
+  "content-type": "application/json"
+ },
+ "status": 200
+}

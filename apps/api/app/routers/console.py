@@ -1045,9 +1045,11 @@ async def get_truesync(merchant: str = Query(...), scope: CustomerScope = Depend
         release = await release_view(scope, ms, merchant, channels=active, publications=pubs or [], catalog=catalog,
                                      reference=reference if r_err is None else None, reads=reads)
         errors.update(release.pop('read_errors'))
-        # the matrix is one row per held record, on the channels this pass compiled for only
+        # the matrix is one row per held record; 2U-2: on every channel supply has, each with its state and line
+        # (console_release.channel_list, the list the workspace, the release card and Publishing read)
         body['products'] = release.pop('records')
-        body['channels'] = [c for c in body.get('channels') or [] if c.get('id') in release['pass_channels']]
+        seller_cols = {c.get('id'): c for c in body.get('channels') or []}
+        body['channels'] = [{**seller_cols.get(c['id'], {}), **c} for c in release.pop('channel_states')]
         body.update(release)
         if errors:
             body.setdefault('read_errors', {}).update(errors)

@@ -78,6 +78,12 @@ MANUFACTURER_TEMPLATES = {
     'coupons.note.declined': 'Legal returned rule 4. It publishes once approved',
     'coupons.note.unread': "Publishes after Legal approves rule 4. Rule 4's approval could not be read",
     'not_compiled': 'Not compiled yet',
+    'mcp.name': 'Parleo MCP server',
+    'mcp.fields': 'size, pack count, GTIN, weight range, claims, lifecycle, retailers',
+    'mcp.note': "Served by get_product_facts on Parleo's own server. Nothing is sent to anyone's account",
+    'gmc.name': 'Google Merchant Center',
+    'directory.name': 'Deal directory',
+    'seller.note': "A seller's channel (rule {rule}): a brand's record goes to Manufacturer Center instead",
     'diff.lifecycle.was': 'sold, per {named} of {of} agents',
     'diff.lifecycle.now': 'retired, successor {successor}',
     'diff.lifecycle.now_none': 'retired',
@@ -451,16 +457,24 @@ def _fields_of(rows: List[dict]) -> List[str]:
     return fields
 
 
+#: 2U-2: each channel's Publishing surface id (the five the demo named, and the three 2U-2 adds).
+SURFACE_IDS = {'manufacturer_center': 'mfc', 'acp': 'oai', 'schema_org': 'markup', 'ucp_uip': 'ucp',
+               'deals_api': 'coupons', 'mcp': 'mcp', 'merchant_center': 'gmc', 'deal_directory': 'directory'}
+
+
 def build_surfaces(*, pubs: List[dict], channels: List[dict], drift: List[dict], reference: Optional[dict],
                    pages: List[dict], flags: List[dict], own_domain: Optional[str], rules: Optional[List[dict]],
-                   held: Optional[dict], read_at: Optional[str] = None) -> List[dict]:
+                   held: Optional[dict], read_at: Optional[str] = None,
+                   channel_states: Optional[List[dict]] = None) -> List[dict]:
     """The Publishing screen's five surfaces, in the demo's order, each {id,
     name, status, last, fields, note} with the facts it was derived from
     beside. `pubs` are the merchant's rows; `held` supply's /tenant `held`
     (its counts and the newest stated send per channel); `rules` supply's
     rules (None when unread); `pages` the brand pages supply read;
     `read_at` the newest brand-page read (brand_page_read_at), else the
-    newest of `pages`."""
+    newest of `pages`. 2U-2: with `channel_states` (console_release.
+    channel_list), every channel in supply's order, each carrying the
+    list's state, label, line, reason and rule (with_channel_states)."""
     by_slug = {c.get('slug'): c for c in channels or []}
     domain = own_domain or 'the brand site'
     held = held or {}
@@ -530,7 +544,8 @@ def build_surfaces(*, pubs: List[dict], channels: List[dict], drift: List[dict],
 
     reason = markup_reason(drift, reference, flags)
     read_at = read_at or max((str(p['observed_at']) for p in pages if p.get('observed_at')), default=None)
-    out.append({'id': 'markup', 'name': T['markup.name'].format(domain=domain), 'status': 'drift' if reason else 'none',
+    out.append({'id': 'markup', 'channel': 'schema_org', 'name': T['markup.name'].format(domain=domain),
+                'status': 'drift' if reason else 'none',
                 'last': T['markup.last'].format(day=short_day(read_at)) if read_at else T['markup.unread'],
                 'fields': ', '.join(['weight range'] + (['gtin'] if markup_gtins(pages) else [])),
                 'note': reason or T['markup.none'],
@@ -558,9 +573,47 @@ def build_surfaces(*, pubs: List[dict], channels: List[dict], drift: List[dict],
         note = T['coupons.note.declined']
     else:
         note = T['coupons.note.pending']
-    out.append({'id': 'coupons', 'name': T['coupons.name'], 'status': 'next', 'last': T['coupons.last'],
+    out.append({'id': 'coupons', 'channel': 'deals_api', 'name': T['coupons.name'], 'status': 'next',
+                'last': T['coupons.last'],
                 'fields': T['coupons.fields'], 'note': note, 'rule': DEALS_RULE, 'approval': approval,
                 'approval_look': APPROVAL_LOOK.get(approval) if approval else None})
+    return out if channel_states is None else with_channel_states(out, channel_states)
+
+
+def with_channel_states(surfaces: List[dict], channel_states: List[dict]) -> List[dict]:
+    """
+    The surfaces in the list's order, one per channel. The demo's five keep
+    their own reading (the markup's is the live site's, not the compile's)
+    and gain the list's state; Manufacturer Center, the ACP feed and UCP take
+    their status from it, so the two cannot disagree. The MCP server, Merchant
+    Center and the deal directory are the list's entry with their words.
+    """
+    by_channel = {s.get('channel'): s for s in surfaces}
+    out = []
+    for c in channel_states:
+        slug, state = c['channel'], c['state']
+        s = by_channel.get(slug)
+        if s is None and slug == 'mcp':
+            s = {'name': T['mcp.name'], 'fields': T['mcp.fields'] if state == 'live' else '',
+                 'note': T['mcp.note'] if state != 'blocked' else (c.get('note') or c['line']),
+                 'external_ref': c.get('note') if state == 'live' else None}
+        elif s is None and state == 'not_for_brand':
+            s = {'name': T['gmc.name'] if slug == 'merchant_center' else T['directory.name'] if
+                 slug == 'deal_directory' else c['name'], 'fields': '',
+                 'note': T['seller.note'].format(rule=c.get('rule') or 'r3')}
+        elif s is None:
+            s = {'name': c['name'], 'fields': '', 'note': c.get('note') or c['line']}
+        s = dict(s)
+        if slug in ('manufacturer_center', 'acp'):
+            s['status'] = state
+        elif slug == 'ucp_uip':
+            s['status'] = 'live' if state == 'live' else 'none'
+        elif 'status' not in s:
+            s['status'] = state
+        s.setdefault('last', c['line'] if state in ('live', 'blocked') else c['label'])
+        s.update({'id': SURFACE_IDS.get(slug, slug), 'channel': slug, 'state': state, 'label': c['label'],
+                  'line': c['line'], 'reason': c.get('reason'), 'rule': c.get('rule')})
+        out.append(s)
     return out
 
 

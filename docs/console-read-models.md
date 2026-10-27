@@ -8753,3 +8753,51 @@ cycle again. The API's function limit (`apps/api/vercel.json` `maxDuration`) was
 * Approvals `summary.gating` (waiting requests that gate a fix) and `summary.why` "3 approvals stand between the
   record and what it can win back."
 * True Value receipt: a quote judged `per_unit` is left out of "What agents quoted".
+
+## 2U-2: every channel supply has, on one list, honest states
+
+supply 2U-2 (parleo-supply-app#35) publishes a brand's records on Parleo's own MCP server (`get_product_facts`,
+`mcp` published by Parleo, no gate, an `mcp_readback` verification) and serves, per brand merchant on `/tenant`,
+`channels[]` (every channel with its reason: `held_for_merchant`, `published_by_parleo`, `not_for_brand` r3,
+`after_rule` r4, `not_compiled`) and `held.published.mcp` (records served, SKUs, `external_ref`, `verified_at`,
+`acceptance`, `verified_skus`). soa's `/tenant` projection now keeps `channels`.
+
+### The list
+
+`console_release.channel_list(pubs, channels, plan, held)`: one entry per channel supply has, in supply's order
+(its plan's, else `GET /channels`'): `{id, channel, name, short, spec, state, label, line, reason, rule, note,
+in_pass, compiled, of, blocked}`.
+
+| channel | state | label · line | from |
+|---|---|---|---|
+| schema_org, manufacturer_center | `held` | Held · "4 of 4 compiled · Oct 27" | the hold's newest rows |
+| acp (and ucp_uip once supply compiles it) | `held`, else `blocked` | Blocked · "rule r1" (the rule supply's plan or the row's own lines name), else "its spec refuses the record"; `note` the spec clause | the rows |
+| mcp | `live` | Live · "4 records served · verified Oct 27" ("5 of 6 resolve" when the readback disagrees; "not verified yet") | published rows + `held.published.mcp`; a `failed` publish is `blocked` · "Not published: <error>" |
+| deals_api | `next` | Next release · "after rule r4" | supply reason `after_rule` |
+| merchant_center, deal_directory | `not_for_brand` | Not for a brand · "a seller's channel (rule r3)" | supply reason `not_for_brand` |
+| ucp_uip (supply main) | `not_compiled` | Not in this pass · supply's note | supply reason `not_compiled` |
+
+A supply that serves no plan (before 2U-2) reads `FALLBACK_PLAN`, the same reasons. WebMCP is absent: supply has no
+such channel.
+
+### Who reads it (no second table)
+
+* `/truesync` (manufacturer): `channels` is the list (each entry over the seller column's fields), in supply's
+  order: eight columns. `cell_states` gains `live`, `next`, `not_for_brand`. Each record's cell on a channel with
+  no row for it takes the channel's state (`next`, `not_for_brand`; `na` when not compiled) and its line as the
+  note; an mcp row `published` is `live`. The record's timeline says "Live on MCP server, which Parleo serves";
+  the MCP row has no compiler panel (a serve check, not a compile). `pass_channels` stays (the channels with rows).
+* `workspace.surfaces` is the list; `workspace.channels` counts it by state; `workspace.live` the live cells.
+* `release.surfaces[]` is the list, `status` in the card's words (`release_status`: "Live · 4 records served ·
+  verified Oct 27", "Next release · after rule r4", "Not for a brand · a seller's channel (rule r3)", "Blocked ·
+  rule r1 · Oct 27") and `state`.
+* The Overview's `truesync_card.surfaces` is the workspace's.
+* `/publishing` `surfaces[]` is one per channel in the list's order (`with_channel_states`): the demo's five keep
+  their reading (the markup's is the live site's) and gain `state`, `label`, `line`, `reason`, `rule`;
+  Manufacturer Center, the ACP feed and UCP take their `status` from the list. New: `mcp` ("Parleo MCP server",
+  `external_ref`), `gmc` ("Google Merchant Center") and `directory` ("Deal directory"), each "A seller's channel
+  (rule r3): a brand's record goes to Manufacturer Center instead".
+* `/record` `surfaces[]`: the pass's channels only (a row, or a held/live cell), `live` worded "Live".
+* `POST /publishing/compile` passes supply's `readback`; `by_channel.mcp` counts `published`.
+
+Fixture: `tests/fixtures/console/supply_2u2/` (PROVENANCE.md). Tests: `tests/test_console_2u2_channels.py`.

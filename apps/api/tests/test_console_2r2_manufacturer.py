@@ -77,7 +77,13 @@ def test_truesync_and_publishing_carry_the_same_objects(http, db, upstream):
 def test_the_surfaces_from_33(http, db, upstream):
     _shape(db, http, upstream)
     surfaces = {s['id']: s for s in _read(http, 'publishing')['surfaces']}
-    assert list(surfaces) == ['mfc', 'oai', 'markup', 'ucp', 'coupons']
+    # 2U-2: one per channel supply has, in its order (console_release.channel_list), the demo's five among them
+    assert list(surfaces) == ['markup', 'gmc', 'mfc', 'oai', 'ucp', 'coupons', 'mcp', 'directory']
+    assert {k: s['state'] for k, s in surfaces.items()} == {
+        'markup': 'held', 'gmc': 'not_for_brand', 'mfc': 'held', 'oai': 'blocked', 'ucp': 'not_compiled',
+        'coupons': 'next', 'mcp': 'not_compiled', 'directory': 'not_for_brand'}
+    assert (surfaces['gmc']['name'], surfaces['gmc']['note']) == (
+        'Google Merchant Center', "A seller's channel (rule r3): a brand's record goes to Manufacturer Center instead")
     mfc = surfaces['mfc']
     assert (mfc['status'], mfc['last'], mfc['records'], mfc['connected']) == \
         ('held', 'File compiled Oct 25', '2 of 4 valid', False)
@@ -297,7 +303,7 @@ def test_once_sent_impact_and_the_backtest_read_the_next_cycle(http, db, upstrea
     assert (rows['promo']['before'], rows['promo']['after']) == ('5 of 100', '3 of 100')
     assert rows['promo']['note'].endswith(f'After is {f2p1.CYCLE_2} (Oct 21), the first cycle scored after the send on Oct 17.')
     pub = _read(http, 'publishing')
-    mfc = pub['surfaces'][0]
+    mfc = {s['id']: s for s in pub['surfaces']}['mfc']
     # the sent line is /tenant's `held.sent`, never a recount
     assert (mfc['last'], mfc['sent']) == ('File compiled Oct 25, sent Oct 17', '2026-10-17T15:30:00+00:00')
     assert pub['preview']['note'] == ("Compiled Oct 25 from Pampers 2R-1's feed and pampers.com. 2 of 4 valid. "
@@ -330,7 +336,7 @@ def test_compiling_is_operator_only_forwarded_and_says_what_was_not_compiled(htt
     assert compiled['by_channel'] == {'schema_org': {'held_for_merchant': 4}, 'manufacturer_center': {'held_for_merchant': 4},
                                       'acp': {'blocked': 4}}
     assert compiled['not_compiled'] == f2r2.body('publish')['skipped']
-    assert r.json()['surfaces'][0]['records'] == '2 of 4 valid'   # the re-read Publishing
+    assert {s['id']: s for s in r.json()['surfaces']}['mfc']['records'] == '2 of 4 valid'   # the re-read Publishing
     upstream.answer('POST', f'{BASE}/publish', body=f2r2.body('publish-dry-run'), token=TOKEN_A)
     r = http.post('/api/console/publishing/compile', params={'merchant': SLUG, 'org': 10, 'dry_run': 'true'})
     assert r.status_code == 200 and r.json()['compile']['dry_run'] is True
