@@ -58,7 +58,7 @@ from app.services import console_cache
 from app.services import console_score as score_svc
 from clients import truesync_client as supply_fields
 from clients.truesync_client import TrueSyncClient
-from soa_shared import customers, cycle_compare, surface_accuracy, surfaces
+from soa_shared import customers, cycle_compare, severity, surface_accuracy, surfaces
 from soa_shared.database import engine
 
 router = APIRouter(prefix="/console", tags=["console"])
@@ -83,10 +83,44 @@ async def get_answers(cycle: str = Query(...), scope: CustomerScope = Depends(co
     (_claim_features); a failed catalog read leaves 2K-1's lexicon with the
     endorsement words."""
     row = dict(cycle_in_scope(cycle, scope))
-    features, _error = await _claim_features(row, scope)
+    (features, _error), clubs = await asyncio.gather(_claim_features(row, scope), _club_keys(row, scope))
     with engine.connect() as conn:
         # 2L-3: each answer's narrative, null when it has none
-        return narratives_svc.with_answers(rm.load_answers(conn, row, features), narratives_svc.lines_for(conn, row['id']))
+        return narratives_svc.with_answers(rm.load_answers(conn, row, features, club_keys=clubs),
+                                           narratives_svc.lines_for(conn, row['id']))
+
+
+def _study_slug(row: dict) -> Optional[str]:
+    """The cycle's study's merchant: tier_config.merchant.slug, else its syndicated merchant."""
+    with engine.connect() as conn:
+        job = conn.execute(text(
+            "SELECT tier_config, syndicated_merchant FROM soa_query_generation_jobs WHERE study_type = :st "
+            "ORDER BY id DESC LIMIT 1"), {"st": row.get('study_type')}).mappings().first()
+    if not job:
+        return None
+    return ((_json(job['tier_config']) or {}).get('merchant') or {}).get('slug') or job['syndicated_merchant']
+
+
+async def _club_keys(row: dict, scope: CustomerScope, merchant: Optional[str] = None) -> Optional[set]:
+    """2T-4 (2): the keys of the feed's club-only variants (console_brand_overview.club_lines: every
+    retailer the feed lists for it, the brand's own sites aside, a warehouse club), for the severity's
+    club rule. None with no merchant, or when the feed or /retailers could not be read: the rule then
+    reads nothing, and a read never fails for want of it."""
+    from app.services import console_brand_overview as bo
+    slug = merchant or _study_slug(row)
+    if not slug:
+        return None
+    reads = _reads(scope)
+    try:
+        (_fs, feed, f_err), (_rs, retailers, r_err) = await asyncio.gather(
+            full_loop._client(scope).get_feed(slug), reads.get_retailers(slug))
+    except Exception:  # noqa: BLE001
+        return None
+    if f_err is not None or r_err is not None or not isinstance(feed, dict) or not isinstance(retailers, dict):
+        return None
+    own = retailers.get('own_domains') or [retailers.get('own_domain')]
+    lines = bo.club_lines(feed.get('rows'), [d for d in own if d])
+    return set().union(*(line['keys'] for line in lines)) if lines else set()
 
 
 async def _claim_features(row: dict, scope: CustomerScope, merchant: Optional[str] = None) -> tuple:
@@ -112,13 +146,18 @@ async def _claim_features(row: dict, scope: CustomerScope, merchant: Optional[st
 
 
 @router.get("/answers/summary")
-def get_answers_summary(cycle: str = Query(...), scope: CustomerScope = Depends(console_scope)):
+async def get_answers_summary(cycle: str = Query(...), scope: CustomerScope = Depends(console_scope)):
     """2C: per tier and per surface, every outcome counted, unverifiable on
     its own, and answered_with_other_brand. 2I-8: every agent together
-    (`all`) first, counts summed; each surface beside it."""
-    row = cycle_in_scope(cycle, scope)
+    (`all`) first, counts summed; each surface beside it. 2T-4 (2):
+    `severity`, the Answers list's flagged counts (soa_shared/severity.tally
+    over the answers /answers serves)."""
+    row = dict(cycle_in_scope(cycle, scope))
+    clubs = await _club_keys(row, scope)
     with engine.connect() as conn:
-        return rm.load_answers_summary(conn, dict(row))
+        body = rm.load_answers_summary(conn, row)
+        body['severity'] = severity.tally(rm.load_answers(conn, row, club_keys=clubs))
+        return body
 
 
 def _label_from_question(query_text: str) -> str:
@@ -610,7 +649,7 @@ def _true_value_inputs(conn, row) -> tuple:
         WHERE q.study_type = :st AND q.tier = 'catalog_accuracy'
     """), {"st": row['study_type']}).mappings().all()
     outcomes = conn.execute(text("""
-        SELECT o.run_id, o.query_id, o.outcome, o.reason_code, o.claim_results, o.expected_answer,
+        SELECT o.run_id, o.query_id, o.outcome, o.reason_code, o.outcome_reason, o.claim_results, o.expected_answer,
                r.platform, r.surface
         FROM soa_expectation_outcomes o JOIN soa_runs r ON r.id = o.run_id
         WHERE o.cycle_id = :c AND o.tier = 'catalog_accuracy'
@@ -667,6 +706,8 @@ def _true_value_inputs(conn, row) -> tuple:
                        'pack': rm.pack_conflict(deciding),
                        # 2R-2 (B5): the variant it named, when the check found it is not one of the record's
                        'clash': rm.clash_named(deciding, o['reason_code']),
+                       # 2T-4 (3): the read the run was judged against, so the cell shows that one
+                       'judged': rm.judged_read(deciding, o['outcome'], o.get('outcome_reason')),
                        'run': f"run-{o['run_id']}", 'platform': o['platform'],
                        'agent': surfaces.agent_of(o['platform']) or o['platform'],
                        'surface': o['surface'] or surfaces.surface_of(o['platform']) or 'unlabelled'})
@@ -771,7 +812,7 @@ def _value_outcomes(conn, row) -> list:
 
 @router.get("/accessibility")
 async def get_accessibility(merchant: str = Query(...), scope: CustomerScope = Depends(console_scope)):
-    await check_merchant(scope, merchant)   # 2H: a slug that is not the org's is a 404
+    ms = await check_merchant(scope, merchant)   # 2H: a slug that is not the org's is a 404
     client = full_loop._client(scope)
     (status, payload, error), (_, reference, r_err), (_, retailers, o_err) = await asyncio.gather(
         client.get_access(merchant), client.get_reference(merchant), client.get_retailers(merchant))
@@ -787,9 +828,45 @@ async def get_accessibility(merchant: str = Query(...), scope: CustomerScope = D
     if not own and o_err is None:
         listed = (retailers or {}).get('own_domains') or [(retailers or {}).get('own_domain')]
         own = [str(d).lower().removeprefix('www.') for d in listed if d]
+    record_row = next((m for m in getattr(ms, 'merchants', None) or [] if m.get('slug') == merchant), None) or {}
+    if record_row.get('mode') == 'manufacturer':
+        return await _brand_accessibility(client, merchant, payload, reference if r_err is None else None, r_err,
+                                          retailers if o_err is None else None, own, record, cycle_code, record_row)
     return parity.extend_accessibility(rm.accessibility_from_supply(payload), reference if r_err is None else None,
                                        reference_error=r_err, robots=supply_fields.robots_by_domain(payload),
                                        own_domains=own, domain_checks=record, domain_cycle=cycle_code)
+
+
+async def _brand_accessibility(client, merchant: str, payload: dict, reference: Optional[dict], r_err,
+                               retailers: Optional[dict], own: list, record: Optional[dict], cycle_code,
+                               merchant_row: dict) -> dict:
+    """2T-4 (4): a brand at retail. `checks` are the demo's six over the brand's own pages
+    (console_accessibility_brand), `retailer_checks` the merchant-level checks over the retailer
+    pages only, `hero` the lead from the data. The feed and the retailer-prices rows are read beside
+    the three reads above; a failed one is named in read_errors and its checks say not checked."""
+    from app.services import console_accessibility_brand as acc
+    from app.services.console_manufacturer import _brand_word as manu_brand
+    (_ps, prices, p_err), (_fs, feed, f_err) = await asyncio.gather(
+        client.get_retailer_prices(merchant), client.get_feed(merchant))
+    own = own or [str(d).lower().removeprefix('www.') for d in merchant_row.get('own_domains') or [] if d]
+    robots = supply_fields.robots_by_domain(payload)
+    body = parity.extend_accessibility(rm.accessibility_from_supply(payload), acc.retailer_rows(reference, own),
+                                       reference_error=r_err, robots=robots, own_domains=own, domain_checks=record,
+                                       domain_cycle=cycle_code)
+    brand = merchant_row.get('brand') or manu_brand((feed or {}).get('rows') if f_err is None else None)
+    built = acc.build(prices=(prices or {}).get('prices') if p_err is None else None,
+                      feed_rows=(feed or {}).get('rows') if f_err is None else None, reference=reference,
+                      access=payload, robots=robots, own_domains=own,
+                      retailers=(retailers or {}).get('domains') or [], brand=brand)
+    body['retailer_checks'] = body['checks']
+    body['checks'] = built['checks']
+    body['brand_pages'] = built['brand_pages']
+    body['hero'] = built['hero']
+    body['mode'] = 'manufacturer'
+    errors = dict(body.get('read_errors') or {})
+    errors.update({k: e for k, e in (('retailer_prices', p_err), ('feed', f_err)) if e})
+    body['read_errors'] = errors
+    return body
 
 
 def _latest_domain_checks(merchant: str, scope: CustomerScope) -> tuple:

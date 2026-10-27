@@ -98,9 +98,9 @@ def test_fl14_s_sequence_leaves_the_score_on_the_current_versions(http, db, upst
         body = _get(http, 'score', cycle=f2p1.CYCLE_1, merchant=WS)
         assert body['history'][-1]['replaced_because'] == 'outcomes re-scored'
     stored = _stored(db, f2p1.ID_1)
-    assert stored['scorer_version'] == score_svc.SCORER_VERSION == '17'
-    assert stored['brand_coder'] == {'version': 7, 'of': n, 'coded': n, 'oldest': 7, 'unanswered': 0}
-    assert score_svc.comparable_version(stored) == '17'
+    assert stored['scorer_version'] == score_svc.SCORER_VERSION == '18'
+    assert stored['brand_coder'] == {'version': 8, 'of': n, 'coded': n, 'oldest': 8, 'unanswered': 0}
+    assert score_svc.comparable_version(stored) == '18'
     # and it is served as stored from then on
     assert _get(http, 'score', cycle=f2p1.CYCLE_1, merchant=WS)['inputs']['scored_at'] == stored['inputs']['scored_at']
 
@@ -157,8 +157,8 @@ def test_a_previous_cycle_on_an_older_coder_is_never_compared(http, db, upstream
 
 
 def test_the_outcomes_version_is_the_score_s_rule():
-    rows = [{'tier': 'brand_direct', 'outcome': 'grounded', 'coder_version': v} for v in (7, 7, 5)]
+    rows = [{'tier': 'brand_direct', 'outcome': 'grounded', 'coder_version': v} for v in (8, 8, 5)]
     assert score_svc.outcomes_version(rows) == '15'
-    assert score_svc.outcomes_version(rows[:2]) == '17'
-    assert score_svc.outcomes_version([{'tier': 'catalog_accuracy', 'outcome': 'exact'}]) == '17'
+    assert score_svc.outcomes_version(rows[:2]) == '18'
+    assert score_svc.outcomes_version([{'tier': 'catalog_accuracy', 'outcome': 'exact'}]) == '18'
     assert score_svc.outcomes_version([{'tier': 'brand_direct', 'outcome': 'grounded', 'coder_version': None}]) == '11'

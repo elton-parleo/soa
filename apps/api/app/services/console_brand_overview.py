@@ -23,12 +23,12 @@ from typing import Dict, Iterable, List, Optional
 from app.services import console_manufacturer as manu
 from app.services import console_read_models as rm
 from app.services import console_release as rel
-from soa_shared import attribute_accuracy, surfaces
+from soa_shared import attribute_accuracy, severity, surfaces
 from soa_shared import promo_pass_through as ppt
 from soa_shared.possessive import possessive
 
-#: Warehouse clubs: a line sold only there is club only.
-CLUB_DOMAINS = ('costco.com', 'samsclub.com', 'bjs.com')
+#: Warehouse clubs: a line sold only there is club only (2T-4: one list, the severity's)
+CLUB_DOMAINS = severity.CLUB_DOMAINS
 
 #: Each existing signal's kind and pool (the demo's v21.ts POOLS): another
 #: brand's price is a first pick lost; a fact or a price wrong is missed; an

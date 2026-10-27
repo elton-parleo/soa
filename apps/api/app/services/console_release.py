@@ -205,6 +205,9 @@ def record_variants(record_ref: str, catalog: Optional[dict], feed_rows: Optiona
                     'successor': v.get('successor'),
                     'product_name': row.get('product_name') or listing.get('title'),
                     'retailers': [r.get('domain') for r in row.get('retailers') or [] if r.get('domain')],
+                    # 2T-4 (5): the page the feed row links to on each site (its product_url_<domain>)
+                    'retailer_urls': {r['domain']: r['url'] for r in row.get('retailers') or []
+                                      if r.get('domain') and r.get('url')},
                     'url': listing.get('product_url')})
     return out
 
@@ -300,13 +303,98 @@ def line_charts(prices: Optional[List[dict]], own_domains: Iterable[str], brand:
     return out
 
 
+def _url_key(url) -> Optional[str]:
+    """A page's address for matching: host and path, no scheme, www, query, fragment or trailing slash."""
+    text = str(url or '').strip().lower()
+    if not text:
+        return None
+    text = text.split('//', 1)[-1].split('#', 1)[0].split('?', 1)[0].removeprefix('www.').rstrip('/')
+    return text or None
+
+
+def own_urls(urls: Iterable[str], own_domains: Iterable[str]) -> List[str]:
+    """The addresses among `urls` on the brand's own sites."""
+    own = {_domain(d) for d in own_domains or () if d}
+    return [k for k in dict.fromkeys(_url_key(u) for u in urls or () if u) if k and _domain(k.split('/', 1)[0]) in own]
+
+
+def page_chart(prices: Optional[List[dict]], urls: Iterable[str], *, own_domains: Iterable[str] = (),
+               line: Optional[str] = None, brand: Optional[str] = None) -> Optional[List[dict]]:
+    """
+    2T-4 (5): the size chart of the page a feed row links to: the brand's
+    own read whose `url` is one of `urls` (the row's own-site links), newest
+    first. A read that landed on another page (`final_url` not its `url`)
+    is that page's: its chart counts only when the page names the row's own
+    `line` (2T-3's Swaddlers Ultra link that lands on the Swaddlers page gets
+    nothing, never Swaddlers' chart). None when no read of the page has one.
+    """
+    wanted = set(own_urls(urls, own_domains))
+    if not wanted:
+        return None
+    own = {_domain(d) for d in own_domains or () if d}
+    rows = [r for r in prices or [] if (r.get('role') == 'own' or _domain(r.get('retailer_domain')) in own)
+            and r.get('size_chart') and _url_key(r.get('url')) in wanted]
+    rows.sort(key=lambda r: str(r.get('observed_at') or ''), reverse=True)
+    for r in rows:
+        landed = _url_key(r.get('final_url'))
+        if landed and landed != _url_key(r.get('url')):
+            page = line_key((r.get('json_ld') or {}).get('name'), brand)
+            if not page or page != line_key(line, brand):
+                continue
+        return r['size_chart']
+    return None
+
+
+def _feed_urls(variant: dict) -> List[str]:
+    """Every link a record variant (record_variants) or a feed row carries."""
+    urls = list((variant.get('retailer_urls') or {}).values()) + [variant.get('url')]
+    urls += [r.get('url') for r in variant.get('retailers') or [] if isinstance(r, dict)]
+    return [u for u in urls if u]
+
+
+def chart_for(prices: Optional[List[dict]], variant: dict, *, own_domains: Iterable[str] = (),
+              brand: Optional[str] = None, by_name: Optional[Dict[str, list]] = None) -> Optional[List[dict]]:
+    """2T-4 (5): a feed row's (or a record variant's) chart: the page it links
+    to on the brand's site (page_chart); by its line's name (line_charts) only
+    when it links to no page there."""
+    urls = _feed_urls(variant)
+    if own_urls(urls, own_domains):
+        return page_chart(prices, urls, own_domains=own_domains, line=variant.get('product_name'), brand=brand)
+    charts = by_name if by_name is not None else line_charts(prices, own_domains, brand)
+    return charts.get(line_key(variant.get('product_name') or variant.get('variant_label'), brand))
+
+
+def feed_line_charts(prices: Optional[List[dict]], feed_rows: Optional[List[dict]], own_domains: Iterable[str],
+                     brand: Optional[str]) -> Dict[str, list]:
+    """2T-4 (5): {the feed's line key: its chart}, each feed line's chart the
+    page its rows link to (chart_for), the first row with one; the readers of
+    line_charts' keys (the lead signal, the size-chart groups) read it the
+    same. Without the feed, line_charts."""
+    by_name = line_charts(prices, own_domains, brand)
+    if feed_rows is None:
+        return by_name
+    out: Dict[str, list] = {}
+    for row in feed_rows:
+        key = line_key(row.get('product_name'), brand)
+        if not key or key in out:
+            continue
+        chart = chart_for(prices, row, own_domains=own_domains, brand=brand, by_name=by_name)
+        if chart:
+            out[key] = chart
+    return out
+
+
 def record_chart(prices: Optional[List[dict]], variants: List[dict], *, own_domains: Iterable[str] = (),
                  brand: Optional[str] = None) -> Optional[List[dict]]:
-    """The record's size chart: its own line's chart on the brand's page
-    (line_charts), else None. Never a retailer page's, never another line's."""
-    charts = line_charts(prices, own_domains, brand)
-    keys = list(dict.fromkeys(line_key(v.get('product_name'), brand) for v in variants))
-    return next((charts[k] for k in keys if k in charts), None)
+    """The record's size chart. 2T-4 (5): the chart of the page its feed rows
+    link to on the brand's site (chart_for); by its line's name only for a
+    record with no page there. Never a retailer page's, never another line's."""
+    by_name = line_charts(prices, own_domains, brand)
+    for v in variants:
+        chart = chart_for(prices, v, own_domains=own_domains, brand=brand, by_name=by_name)
+        if chart:
+            return chart
+    return None
 
 
 def weight_of(chart: Optional[List[dict]], label: Optional[str]) -> Optional[str]:
@@ -396,9 +484,12 @@ def readback(variants: List[dict], *, attribute_answers: List[dict], true_value_
                 verdict = _PRICE_VERDICT.get(q.get('outcome'))
                 if verdict is None or not q.get('stated'):
                     continue
+                # 2T-4 (3): the truth is the read the quote was judged against (the cell's `live`), and a
+                # later read of the page is its own line, never the truth beside that verdict
                 out.append({'agent': q.get('agent'), 'fact': 'price', 'variant': v.get('label'),
                             'said': f"{name} ${q['stated']}",
                             'truth': f"{name} {cell['live']}" if cell.get('live') else None,
+                            **({'later': cell['later']['text']} if cell.get('later') else {}),
                             'verdict': verdict, 'run': q.get('run'), 'surface': q.get('surface')})
     ids = {v.get('variant_id') for v in variants} | {v.get('sku') for v in variants if v.get('sku')}
     for deal in (deals or {}).get('deals') or []:

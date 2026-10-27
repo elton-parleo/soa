@@ -109,13 +109,18 @@ from clients import truesync_client as supply_fields
 #: the whole answer (named_stores, brand-claim coder version 7): Retailer
 #: coverage, routing and the "sent the shopper to" fact read them. A brand
 #: tile, never a dimension, so it moves no score; comparability as 2O-3 made it.
-SCORER_VERSION = "17"
+#: 2T-4: "18", a store the brand's feed lists is grounded however the answer
+#: wrote it, and a store off it is unverified, never fabricated: no
+#: fabricated_availability flag for a brand (brand-claim coder version 8,
+#: soa_shared/retailers.retailer_key). A brand tile and the Answers severity,
+#: never a dimension, so it moves no score; comparability as 2O-3 made it.
+SCORER_VERSION = "18"
 #: The version a cycle whose brand-direct outcomes predate 2O-1 compares as.
 SINGLE_CALL_CODER_VERSION = "11"
 #: 2O-3: the scorer version each brand-claim coder version's outcomes compare as
 #: (None: one call, before 2O-1).
 CODER_SCORER_VERSIONS = {None: SINGLE_CALL_CODER_VERSION, 1: SINGLE_CALL_CODER_VERSION, 2: "12", 3: "13", 4: "14",
-                         5: "15", 6: "16", BRAND_CODER_VERSION: SCORER_VERSION}
+                         5: "15", 6: "16", 7: "17", BRAND_CODER_VERSION: SCORER_VERSION}
 #: The adapter's own revision, beside the scorer's: a change to how loop
 #: counts become scorer inputs re-scores stored cycles too. Not a scorer
 #: version and never shown as one.
@@ -1344,7 +1349,8 @@ SCORER_CHANGES = {'7': 'ungrounded surfaces excluded from pooling',
                   '14': 'brand-direct claims selected by rule, no model call',
                   '15': 'brand-direct fabricated means contradicted by the brand; absent is unverified',
                   '16': 'brand-direct pack counts an open set; a count off the page is unverified',
-                  '17': "where-to-buy stores coded over the whole answer"}
+                  '17': "where-to-buy stores coded over the whole answer",
+                  '18': "a store off a brand's feed is unverified, never fabricated"}
 
 
 def _no_rivals(body: dict) -> bool:
@@ -1380,7 +1386,7 @@ SCORER_CHANGE_APPLIES = {'7': lambda new: bool((new.get('coverage') or {}).get('
                          # nor 2O-6
                          '16': lambda _new: False,
                          # nor 2Q-1: Retailer coverage is a tile
-                         '17': lambda _new: False}
+                         '17': lambda _new: False, '18': lambda _new: False}
 
 
 _NOT_CARRIED = object()

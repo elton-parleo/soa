@@ -28,7 +28,9 @@ from sqlalchemy import text
 
 from soa_shared import attribute_accuracy, claim_kinds, local_time, per_unit, retired_lines, surfaces, unprompted
 from soa_shared import promo_pass_through as ppt
+from soa_shared import severity
 from soa_shared.expected_answers import UNVERIFIED
+from soa_shared.expected_answers import names_brand as ea_names_brand
 
 from app.services import console_claims
 
@@ -147,16 +149,6 @@ def worst(outcomes: Iterable[str]) -> Optional[str]:
 
 # ─── Answer ────────────────────────────────────────────────────────────────
 
-def _severity(outcome, brand: bool, flags) -> str:
-    if flags and any(f.get('flag') in ('fabricated_citation', 'fabricated_availability') for f in flags):
-        return 'high'
-    if brand:
-        return {'fabricated': 'high', 'misattributed': 'high', 'grounded': 'ok', 'echoed': 'low',
-                'acknowledged_unknown': 'medium', 'absent': 'low'}.get(outcome, 'low')
-    return {'wrong': 'high', 'partial': 'medium', 'stale': 'medium', 'unverifiable': 'low',
-            'absent': 'low', 'exact': 'ok', 'unscoreable': 'low'}.get(outcome, 'low')
-
-
 def _and(names: List[str]) -> str:
     return names[0] if len(names) == 1 else ', '.join(names[:-1]) + ' and ' + names[-1]
 
@@ -176,7 +168,7 @@ def catalog_verdict(intent: str, source_ref: dict, extraction: Optional[dict], a
                       named_deal, missed_deal, no_deal_live.
       attribute       the weight range (attribute_accuracy.answer_attribute).
       retired         2Q-2 (B2): whether it named the successor. grounded
-                      (named it, unflagged), no_successor (Medium, "did not
+                      (named it, unflagged), no_successor (2T-4: High, "did not
                       name AMORE, its successor"); a line with no successor,
                       or an answer with no text, is not judged. Still sold is
                       not coded (RETIRED_STILL_SOLD_NOTE, 2L-2). The successor
@@ -202,8 +194,9 @@ def catalog_verdict(intent: str, source_ref: dict, extraction: Optional[dict], a
                                                               expected.get('brand') or ref.get('brand'))
         if retired_lines.names(answer, terms):
             return {'verdict': 'grounded', 'line': f"named {label}, its successor. {still}", 'severity': 'ok', 'tone': 'ok'}
+        # 2T-4 (2): High, the successor not named on the direct question (soa_shared/severity.py)
         return {'verdict': 'no_successor', 'line': f"did not name {label}, its successor. {still}",
-                'severity': 'medium', 'tone': 'warn'}
+                'severity': 'high', 'tone': 'bad'}
     stores = stores_in_order(extraction)
     if stores is None:
         return {'verdict': None, 'line': None, 'severity': 'low', 'tone': 'neu'}
@@ -422,13 +415,18 @@ def build_answer(run: dict, query: dict, outcome: Optional[dict], mentions: List
                  *, runs_per_query: Optional[int], cycle_code: str,
                  variant_names: Optional[Dict[str, str]] = None, features: Optional[List[str]] = None,
                  references: Optional[Dict[tuple, dict]] = None, truths: Optional[dict] = None,
-                 deals: Optional[dict] = None) -> dict:
+                 deals: Optional[dict] = None, ours: Optional[str] = None,
+                 club_keys: Optional[set] = None) -> dict:
     """features (2K-3): the merchant's catalog feature terms for claim_kind
     (app/services/console_claims.py); None reads 2K-1's rule. references
     (2L-1): the cycle's reference_index, for the reference of a check whose
     answer gave no price. truths (2N-1): the cycle's brand truths
     (attribute_accuracy.truth_index), for an accuracy answer; deals the
-    deals live that day (its cached rows'), for a cheapest-place answer."""
+    deals live that day (its cached rows'), for a cheapest-place answer.
+    2T-4 (2): the severity is soa_shared/severity.classify's, of the
+    answer's verdict; `ours` the primary entity (a comparison answer with a
+    rival first), `club_keys` the feed's club-only variants' keys
+    (console_brand_overview.club_lines), when the reader has the feed."""
     platform = run['platform']
     agent = surfaces.agent_of(platform) or platform
     extraction = _json((outcome or {}).get('extraction')) or {}
@@ -438,6 +436,7 @@ def build_answer(run: dict, query: dict, outcome: Optional[dict], mentions: List
     tier = query.get('tier')
     brand = tier == 'brand_direct'
     raw = read_outcome((outcome or {}).get('outcome'), (outcome or {}).get('reason_code'))
+    answer_outcome = raw   # 2T-4: `raw` is reused below for each claim's outcome; severity reads the answer's
 
     verdict = None if brand or raw is None else VALUE_VERDICT.get(raw, raw)
     # 2N-1: a catalog-built brand-direct question is judged by its own verdict, not the brand-claim rule
@@ -500,10 +499,25 @@ def build_answer(run: dict, query: dict, outcome: Optional[dict], mentions: List
         # 2Q-2 (B2): where a retired line is sold is its "still sold" clause, which is not
         # coded (2L-2): the store check never flags it, nor makes it High
         flags = [f for f in flags if f.get('flag') != 'fabricated_availability']
-    if own is not None and flags and any(f.get('flag') == 'fabricated_availability' for f in flags):
-        own = {**own, 'severity': 'high', 'tone': 'bad'}   # a store off the brand's list is coverage's miss
     named = [m['name'] for m in sorted(mentions, key=lambda m: m.get('position') or 99)]
     first = next((m['name'] for m in mentions if m.get('position') == 1), '')
+    # 2T-4 (2): one severity, of the verdict (soa_shared/severity.py). A flag no longer overrides it:
+    # a store off a brand's feed is unverified, never High (2T-4 (1)), whatever a row stored before says
+    keys = {k for k in (_gtin14(source_ref.get('gtin')), _gtin14(source_ref.get('variant_id')),
+                        source_ref.get('variant_id'), source_ref.get('sku'), source_ref.get('variant_ref')) if k}
+    stores = stores_in_order(extraction) if club_keys and keys & set(club_keys) else None
+    own_domain = _domain_key(source_ref.get('own_domain'))
+    listed = [d for d in source_ref.get('retailer_list') or [] if _domain_key(d) != own_domain]
+    graded = severity.classify(
+        tier=tier, outcome=answer_outcome, reason_code=(outcome or {}).get('reason_code'), flags=flags,
+        merchant_kind=source_ref.get('merchant_kind'), intent=intent, intent_verdict=(own or {}).get('verdict'),
+        listed=len(listed) if source_ref.get('retailer_list') is not None else None,
+        club_only=stores is not None, first_store_club=(stores[0].get('domain') in severity.CLUB_DOMAINS)
+        if stores else None,
+        brand_in_question=bool(ours) and ea_names_brand(query.get('query_text') or '', ours),
+        brand_first=None if not ours else any(m.get('position') == 1 and m.get('role') == 'primary' for m in mentions))
+    if own is not None:
+        own = {**own, 'severity': graded['severity']}
     return compact({
         'id': f"run-{run['id']}",
         'agent': agent,
@@ -511,7 +525,7 @@ def build_answer(run: dict, query: dict, outcome: Optional[dict], mentions: List
         'queryType': TIER_LABELS.get(tier) or query.get('stage') or '',
         'runAt': _iso(run.get('run_at')),
         'runs': f"run {run.get('run_number')} of {runs_per_query}" if runs_per_query else None,
-        'severity': own['severity'] if own else _severity(raw, brand, flags),
+        'severity': graded['severity'],
         'summary': (own or {}).get('line') or (outcome or {}).get('outcome_reason') or (
             f"No answer ({run.get('answer_status')})" if run.get('answer_status') not in (None, 'answered')
             else 'Not scored'),
@@ -544,6 +558,9 @@ def build_answer(run: dict, query: dict, outcome: Optional[dict], mentions: List
         'claim_kind_label': CLAIM_KIND_LABELS.get(kind),
         'flags': [f.get('flag') for f in flags],
         'flag_details': flags,
+        # 2T-4 (2): the rule the severity came from, and a page we could not check (our gap, never flagged)
+        'severity_rule': graded['rule'],
+        'could_not_check': (outcome or {}).get('outcome_reason') if graded['could_not_check'] else None,
         'variant_id': source_ref.get('variant_id'),
         'gtin': source_ref.get('gtin'),
         'retailer': expectation.get('attributed_to') or source_ref.get('own_domain') or source_ref.get('domain'),
@@ -555,7 +572,7 @@ def build_answer(run: dict, query: dict, outcome: Optional[dict], mentions: List
         # 2O-3: the claim that decided a brand-direct verdict, and its facts against the brand's fact index
         'brand_claim': brand_claim_evidence(extraction) if brand_verdict else None,
     }, ('runs', 'reason', 'variant_id', 'gtin', 'retailer', 'expected_type', 'claim_kind', 'claim_kind_label',
-        'intent', 'attribute', 'intent_verdict', 'brand_claim'))
+        'intent', 'attribute', 'intent_verdict', 'brand_claim', 'could_not_check'))
 
 
 def brand_claim_evidence(extraction: Optional[dict]) -> Optional[dict]:
@@ -960,6 +977,60 @@ def feed_sku_rows(feed: Optional[dict], catalog: Optional[dict]) -> List[dict]:
     return rows
 
 
+#: 2T-4 (3): a cell's second line, the page read after the one its runs were judged against
+T_TV_LATER = 'page read later: {live}, {day}'
+#: 2T-4 (3): the fields of a read that make it the same read
+_READ_KEYS = ('price', 'verifiable', 'observed_at', 'method')
+
+
+def judged_read(claim: Optional[dict], outcome: Optional[str], reason: Optional[str] = None) -> Optional[dict]:
+    """
+    2T-4 (3): the read a run was judged against: its deciding claim's
+    `reference` (the scorer's ReferenceRow: price, verifiable, read status,
+    source, method, observed_at), or, for a run stored unverifiable with no
+    claim carrying one ("no reference row for this page"), an unreadable
+    read with the scorer's reason. None when the run carries no read (scored
+    against the record, or before the scorer stored one): the cell's own
+    reference is then the read.
+    """
+    reference = (claim or {}).get('reference') if isinstance(claim, dict) else None
+    if isinstance(reference, dict) and reference:
+        return {k: reference.get(k) for k in ('price', 'currency', 'verifiable', 'unverifiable_reason', 'read_status',
+                                             'reference_source', 'method', 'observed_at', 'url')}
+    if outcome == 'unverifiable':
+        return {'price': None, 'verifiable': False, 'unverifiable_reason': reason, 'observed_at': None}
+    return None
+
+
+def _same_read(a: Optional[dict], b: Optional[dict]) -> bool:
+    if a is None or b is None:
+        return a is b
+    pa, pb = a.get('price'), b.get('price')
+    same_price = pa == pb or (pa not in (None, '') and pb not in (None, '') and _money_eq(pa, pb))
+    return same_price and bool(a.get('verifiable', True)) == bool(b.get('verifiable', True)) and \
+        (a.get('observed_at') is None or b.get('observed_at') is None or
+         str(a.get('observed_at'))[:19] == str(b.get('observed_at'))[:19])
+
+
+def _money_eq(a, b) -> bool:
+    try:
+        return abs(float(a) - float(b)) < 0.005
+    except (TypeError, ValueError):
+        return str(a) == str(b)
+
+
+def _judged_of(runs: List[dict]) -> Optional[dict]:
+    """The read a cell's runs were judged against: the one most of them carry (they share the cycle's
+    cached read), the newest on a tie; None when none carries one."""
+    reads = [r['judged'] for r in runs if isinstance(r.get('judged'), dict)]
+    if not reads:
+        return None
+    counts = Counter(json.dumps({k: rd.get(k) for k in _READ_KEYS}, sort_keys=True, default=str) for rd in reads)
+    top = max(counts.values())
+    tied = [rd for rd in reads if counts[json.dumps({k: rd.get(k) for k in _READ_KEYS}, sort_keys=True, default=str)] == top]
+    return max(tied, key=lambda rd: str(rd.get('observed_at') or ''))
+
+
 def build_true_value(reference: Optional[dict], scored: List[dict], *, own_domain: Optional[str],
                      record_variants: List[dict], reads: Optional[List[dict]] = None,
                      feed_rows: Optional[List[dict]] = None, brands: Optional[Dict[str, str]] = None) -> dict:
@@ -1086,6 +1157,8 @@ def build_true_value(reference: Optional[dict], scored: List[dict], *, own_domai
     default = keys[0] if keys else None
 
     def cell_for(runs, ref):
+        # 2T-4 (3): the verdict is the read the runs were judged against, never a later one
+        ref = _judged_of(runs) or ref
         outcome, stated = aggregate_cell(runs)
         if ref is not None and ref.get('method') == NOT_PRICED_METHOD:
             # 2K-1: the brand's own page sets no price: its quotes are not scored
@@ -1096,15 +1169,28 @@ def build_true_value(reference: Optional[dict], scored: List[dict], *, own_domai
             status = TV_STATUS.get(outcome, 'none') if outcome else 'none'
         return {'quoted': money(stated) if stated else '—', 'status': status, 'outcome': outcome, 'runs': len(runs)}
 
+    def live_of(read):
+        if read is None:
+            return '—'
+        if read.get('method') == NOT_PRICED_METHOD:
+            return NOT_PRICED
+        if not read.get('verifiable', True):
+            return 'unverifiable'
+        return money(read.get('price'), read.get('currency') or 'USD')
+
     def full_cell(runs, ref, surfaces_here):
-        if ref is None:
-            live_text = '—'
-        elif ref.get('method') == NOT_PRICED_METHOD:
-            live_text = NOT_PRICED
-        elif not ref.get('verifiable', True):
-            live_text = 'unverifiable'
-        else:
-            live_text = money(ref.get('price'), ref.get('currency') or 'USD')
+        # 2T-4 (3): one read per cell. The price and the verdict are the read the runs were judged against;
+        # a later read of the same page is a second line (`later`), never the price beside that verdict
+        judged = _judged_of(runs)
+        later = None
+        if judged is not None and ref is not None and not _same_read(judged, ref) and ref.get('observed_at') and \
+                (not judged.get('observed_at') or str(ref['observed_at']) > str(judged['observed_at'])):
+            later = {'live': live_of(ref), 'observed_at': ref.get('observed_at'),
+                     'text': T_TV_LATER.format(live=live_of(ref) if live_of(ref) != 'unverifiable' else
+                                               'could not be read', day=_short_day(ref.get('observed_at')))}
+        if judged is not None:
+            ref = {**(ref or {}), **{k: v for k, v in judged.items() if k != 'currency' or v}}
+        live_text = live_of(ref)
         by_surface = {s: cell_for([r for r in runs if surfaces.on_surface(surface_of_run(r), s)], ref)
                       for s in surfaces.with_all(surfaces_here)
                       if any(surfaces.on_surface(surface_of_run(r), s) for r in runs)}
@@ -1122,6 +1208,7 @@ def build_true_value(reference: Optional[dict], scored: List[dict], *, own_domai
             'live_basis': None if ref is None else ref.get('live_basis'),
             # 2C-2: every surface's cell, and every run's quote
             'surface': default if top['runs'] else None,
+            **({'later': later} if later else {}),
             'by_surface': by_surface,
             'quotes': [{'agent': r.get('agent'), 'surface': surface_of_run(r), 'outcome': r.get('outcome'),
                         'stated': None if r.get('stated') in (None, '') else str(r['stated']),
@@ -3162,7 +3249,10 @@ STUDIO_MIRROR = [
 
 # ─── loaders ───────────────────────────────────────────────────────────────
 
-def load_answers(conn, cycle: dict, features: Optional[List[str]] = None) -> List[dict]:
+def load_answers(conn, cycle: dict, features: Optional[List[str]] = None,
+                 club_keys: Optional[set] = None) -> List[dict]:
+    """Every answer of the cycle (build_answer). 2T-4 (2): `club_keys` the
+    feed's club-only variants' keys, when the reader read the feed."""
     runs = conn.execute(text("""
         SELECT r.*, q.query_code, q.query_text, q.tier, q.stage, q.source_ref, q.expected_answer AS query_expected
         FROM soa_runs r JOIN soa_queries q ON q.id = r.query_id
@@ -3173,12 +3263,18 @@ def load_answers(conn, cycle: dict, features: Optional[List[str]] = None) -> Lis
         "SELECT * FROM soa_expectation_outcomes WHERE cycle_id = :c"), {'c': cycle['id']}).mappings()}
     mentions: Dict[int, List[dict]] = {}
     for m in conn.execute(text("""
-        SELECT cm.run_id, e.name, cm.position FROM soa_coded_mentions cm
+        SELECT cm.run_id, e.name, cm.position, ce.role FROM soa_coded_mentions cm
         JOIN soa_entities e ON e.id = cm.entity_id
         JOIN soa_runs r ON r.id = cm.run_id
+        LEFT JOIN soa_cycle_entities ce ON ce.cycle_id = r.cycle_id AND ce.entity_id = cm.entity_id
         WHERE r.cycle_id = :c AND cm.mentioned = :yes
     """), {'c': cycle['id'], 'yes': True}).mappings():
         mentions.setdefault(m['run_id'], []).append(dict(m))
+    # 2T-4 (2): the brand, for a comparison answer that put a rival first
+    ours = conn.execute(text("""
+        SELECT e.name FROM soa_cycle_entities ce JOIN soa_entities e ON e.id = ce.entity_id
+        WHERE ce.cycle_id = :c AND ce.role = 'primary' ORDER BY e.id LIMIT 1
+    """), {'c': cycle['id']}).scalar()
     names = load_variant_names(conn, cycle)
     reference = cycle.get('reference_prices') if 'reference_prices' in cycle else conn.execute(text(
         "SELECT reference_prices FROM soa_cycles WHERE id = :c"), {'c': cycle['id']}).scalar()
@@ -3187,7 +3283,8 @@ def load_answers(conn, cycle: dict, features: Optional[List[str]] = None) -> Lis
     deals = ppt.deals_from_rows([r for r in (_json(reference) or {}).get('prices') or [] if isinstance(r, dict)])
     return [build_answer(dict(r), dict(r), outcomes.get(r['id']), mentions.get(r['id'], []),
                          runs_per_query=cycle.get('runs_per_query'), cycle_code=cycle['cycle_code'],
-                         variant_names=names, features=features, references=index, truths=truths, deals=deals)
+                         variant_names=names, features=features, references=index, truths=truths, deals=deals,
+                         ours=ours, club_keys=club_keys)
             for r in runs]
 
 

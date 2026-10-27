@@ -108,7 +108,7 @@ from typing import Iterable, List, Optional
 
 from soa_shared import attribute_accuracy as aa
 from soa_shared import expected_answers as ea
-from soa_shared.retailers import retailers_named
+from soa_shared.retailers import retailer_key, retailers_named
 
 #: The index's own version. Bumped when what goes into it, or how a fact is
 #: looked up, changes; stored on every outcome beside the index's digest.
@@ -627,8 +627,9 @@ def build(facts: Optional[dict], reference: Optional[dict] = None) -> FactIndex:
             index.add_text(name, page=False)
     for d in list(facts.get('own_domains') or []) + list(facts.get('tenant_own_domains') or []) \
             + [facts.get('domain')] + list(facts.get('retailer_list') or []):
-        if ea.normalize_domain(d):
-            index.retailers.add(ea.normalize_domain(d))
+        # 2T-4: a store by its one key (soa_shared/retailers.retailer_key), as a claim's is
+        if retailer_key(d):
+            index.retailers.add(retailer_key(d))
     index.by_source['record'] = index.size()
     for title in facts.get('product_titles') or []:
         index.add_title(title)
@@ -672,7 +673,7 @@ def build(facts: Optional[dict], reference: Optional[dict] = None) -> FactIndex:
     for row in rows:
         if row.get('role') == 'comparison':
             continue   # another brand's page, read for context (2A-4), is never this brand's record
-        domain = ea.normalize_domain(row.get('retailer_domain'))
+        domain = retailer_key(row.get('retailer_domain'))
         if domain and row.get('role') in (None, 'retailer', 'own'):
             index.retailers.add(domain)
         for key in ('page_title', 'title', 'name'):
@@ -860,7 +861,7 @@ def _found(fact: dict, index: FactIndex) -> bool:
         want = {stem(t) for t in value or []}
         return any(want <= {stem(t) for t in title.split()} for title in index.titles)
     if kind == 'retailer':
-        return value in index.retailers
+        return retailer_key(value) in index.retailers
     if kind == 'attribute':
         if value.endswith(' hour'):
             rx = re.compile(r"(?<![a-z0-9])" + re.escape(value.split()[0]) + r"\s*hours?(?![a-z0-9])")
@@ -951,7 +952,10 @@ def check(fact: dict, index: FactIndex, *, line: Optional[str] = None, size: Opt
         # a size another line comes in grounds nothing about this one
         return out
     if kind == 'retailer':
-        out.update(slot='retailers', status=FOUND if value in index.retailers else UNVERIFIED)
+        # 2T-4: a store the brand's feed lists is grounded, whatever way the answer wrote it
+        # ("Walmart -", "Walmart.com", walmart.com); one it does not list is unverified, never
+        # contradicted: the feed lists where the brand is sold, not where it isn't
+        out.update(slot='retailers', status=FOUND if retailer_key(value) in index.retailers else UNVERIFIED)
         return out
     if kind == 'name':
         if _found(fact, index) or index.find_line(fact.get('text')) is not None:

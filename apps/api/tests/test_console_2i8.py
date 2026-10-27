@@ -175,6 +175,16 @@ def per_surface_view(endpoint, body):
                 c.pop('live_basis', None)
             # 2L-3 adds the answer's narrative (null with SOA_NARRATIVES_ENABLED off)
             a.pop('narrative', None)
+            # 2T-4 (2) rules the severity by the verdict (soa_shared/severity.py) and names the rule
+            # and a page it could not check (test_console_2t4_severity). On these fixtures one value
+            # moved: an answer saying it could not find the brand is no longer flagged (main: medium)
+            for k in ('severity_rule', 'could_not_check'):
+                a.pop(k, None)
+            if a.get('brand_verdict') == 'acknowledged_unknown' and a.get('severity') == 'low':
+                a['severity'] = 'medium'
+    if endpoint == 'answers/summary':
+        # 2T-4 (2) adds the Answers list's flagged counts (test_console_2t4_severity)
+        body.pop('severity', None)
     if endpoint == 'overview':
         # 2K-1 adds the `recommended` bucket beside `fabricated` (0 on every fixture here)
         body = _without_zero(body, 'recommended')

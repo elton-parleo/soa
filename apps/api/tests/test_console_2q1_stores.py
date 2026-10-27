@@ -21,11 +21,12 @@ def _coded(answer):
 
 
 def test_the_version():
-    assert score_svc.SCORER_VERSION == '17' and ea.BRAND_CODER_VERSION == 7
+    # 2T-4 moved the console to 18 (brand-claim coder 8); 2Q-1's own entry stands
+    assert score_svc.SCORER_VERSION == '18' and ea.BRAND_CODER_VERSION == 8
     assert score_svc.SCORER_CHANGES['17'] == 'where-to-buy stores coded over the whole answer'
     assert score_svc.SCORER_CHANGE_APPLIES['17']({}) is False
     assert score_svc.CODER_SCORER_VERSIONS == {None: '11', 1: '11', 2: '12', 3: '13', 4: '14', 5: '15', 6: '16',
-                                               7: '17'}
+                                               7: '17', 8: '18'}
 
 
 def _body(version, coded, of=60, oldest=None):
@@ -35,11 +36,12 @@ def _body(version, coded, of=60, oldest=None):
 
 
 def test_comparability_as_before():
-    assert score_svc.comparable_version(_body('17', 60, oldest=7)) == '17'
-    # FL15 re-scored, FL14 not yet: its version-6 rows compare as 16
-    assert score_svc.comparable_version(_body('17', 0, oldest=6)) == '16'
-    prev = score_svc.compare(_body('17', 60, oldest=7), 'FL14-pampers-20261023', _body('17', 0, oldest=6))
-    assert prev['comparable'] is False and prev['reason'] == 'Scored under v16, re-score to compare.'
+    # 2T-4: on scorer 18 (coder 8), the same rule a version on
+    assert score_svc.comparable_version(_body('18', 60, oldest=8)) == '18'
+    # FL15 re-scored, FL14 not yet: its version-7 rows compare as 17
+    assert score_svc.comparable_version(_body('18', 0, oldest=7)) == '17'
+    prev = score_svc.compare(_body('18', 60, oldest=8), 'FL14-pampers-20261023', _body('18', 0, oldest=7))
+    assert prev['comparable'] is False and prev['reason'] == 'Scored under v17, re-score to compare.'
 
 
 def test_stores_in_order_reads_named_stores():

@@ -125,7 +125,7 @@ def test_a_score_stored_counting_the_unanswered_row_is_recounted(http, db, upstr
 
 
 def test_brand_coder_leaves_an_unanswered_row_out():
-    rows = [{'tier': 'brand_direct', 'outcome': 'grounded', 'coder_version': 7, 'answered': True},
+    rows = [{'tier': 'brand_direct', 'outcome': 'grounded', 'coder_version': ea.BRAND_CODER_VERSION, 'answered': True},
             {'tier': 'brand_direct', 'outcome': 'absent', 'coder_version': 6, 'answered': False}]
     assert score_svc.outcomes_version(rows) == score_svc.SCORER_VERSION
     assert score_svc.outcomes_version([{**rows[1], 'answered': True}, rows[0]]) == '16'
