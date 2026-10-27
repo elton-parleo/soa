@@ -205,6 +205,20 @@ TEMPLATES = {
                              "get {name} wrong, each shopper counted once"),
     'missed.fix.brand': "One record per SKU, on every surface retailers and agents read",
     'missed.fix.retailer': "One offer record with the price and program terms, published to every surface",
+    'missed.tile': 'Missed on price',
+    'missed.tile.attribute': 'Missed on facts',
+    'missed.tile.unit': 'price answers',
+    'missed.tile.unit.attribute': 'size answers',
+    'record.title': '{domain} disagrees with itself',
+    'record.tag': 'Root cause',
+    'record.sub': 'Feeds the two above',
+    'record.two': 'two {size} charts',
+    'record.gtin': '{n} {gtins} that {verb} the leading zero',
+    'record.retired': '{retired} called current in {n} of {of} category answers',
+    'record.measured': '{domain} states {facts}.',
+    'record.fix': 'One record per SKU with the right size chart per line{gtins}{retired}',
+    'record.fix.gtins': ', clean GTINs',
+    'record.fix.retired': ', and {retired} retired with {successor} as successor',
     'access.title': "Agents can't read {domain}, so they quote other sources",
     'access.measured': "{n} agent {identities} could not read the pages in the last access run: {who}.",
     'access.fix': "Feeds put the offer where agents look, with no crawl needed",
@@ -431,6 +445,9 @@ def build_model(shares: dict, inputs: dict, *, cycle: str, kind: str, name: str,
             price_n=price.get('n'), price_of=price.get('of'),
             price_raw=_pct(price['raw']) if price.get('raw') is not None else 'not measured'))
                   if shares['measured'] else None),
+        # 2T-8 (B7): the Missed tile's words, by what it counts (size answers for a brand at retail)
+        'missed_tile': {'label': TEMPLATES['missed.tile.attribute' if attribute else 'missed.tile'],
+                        'unit': TEMPLATES['missed.tile.unit.attribute' if attribute else 'missed.tile.unit']},
         'heroBasis': (TEMPLATES['hero_basis.attribute' if attribute else 'hero_basis'].format(
             lost_pct=_pct(L['share']), rival=rival, set=set_words,
             miss_raw=_pct(M['raw']) if M['raw'] is not None else '0%', name=name)
@@ -466,3 +483,30 @@ def load_catalog_rows(conn, cycle: dict) -> list:
         row['reference_price'] = (exp or {}).get('amount') if isinstance(exp, dict) else None
         out.append(row)
     return out
+
+
+def record_driver(*, domain: str, size_signal: Optional[dict], gtin_rows: list, retired_signal: Optional[dict]) -> Optional[dict]:
+    """2T-8 (B7): a brand at retail's third driver, the Record: the brand's own sources disagree (two size charts,
+    GTINs that are not GTINs as written, a retired line agents call current). None when none of the three holds."""
+    facts = []
+    two = ((size_signal or {}).get('facts') or {}).get('two') or []
+    if two:
+        facts.append(TEMPLATES['record.two'].format(size=two[0]['size']))
+    zero = [f for f in gtin_rows or [] if f.get('digits') == 11]
+    if zero:
+        facts.append(TEMPLATES['record.gtin'].format(n=len(zero), gtins='GTIN' if len(zero) == 1 else 'GTINs',
+                                                     verb='drops' if len(zero) == 1 else 'drop'))
+    r = (retired_signal or {}).get('facts') or {}
+    if r:
+        facts.append(TEMPLATES['record.retired'].format(retired=r.get('retired'), n=r.get('n', 0), of=r.get('of', 0)))
+    if not facts:
+        return None
+    said = facts[0] if len(facts) == 1 else f"{', '.join(facts[:-1])} and {facts[-1]}"
+    fix = TEMPLATES['record.fix'].format(
+        gtins=TEMPLATES['record.fix.gtins'] if zero else '',
+        retired=TEMPLATES['record.fix.retired'].format(retired=r.get('retired'), successor=r.get('successor'))
+        if r else '')
+    return {'id': 'record', 'kind': 'root', 'title': TEMPLATES['record.title'].format(domain=domain),
+            'tag': TEMPLATES['record.tag'], 'sub': TEMPLATES['record.sub'],
+            'measured': TEMPLATES['record.measured'].format(domain=domain, facts=said), 'fix': fix, 'route': 'record',
+            'facts': {'two_charts': bool(two), 'gtins': len(zero), 'retired': r.get('retired')}}

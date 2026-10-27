@@ -1469,7 +1469,11 @@ async def get_prove(cycle: str = Query(...), merchant: Optional[str] = Query(Non
         job = conn.execute(text("SELECT tier_config FROM soa_query_generation_jobs WHERE study_type = :st"),
                            {"st": row['study_type']}).fetchone()
     brand = (((_json(job[0]) if job else None) or {}).get('merchant') or {}).get('study_brand') or study.get('brand')
-    body = rm.build_prove(promo, deals, brand, as_of)
+    # 2T-8 (B6): who named each deal and who quoted its price without naming it, by agent
+    with engine.connect() as conn:
+        agent_of_run = {r[0]: rm.AGENT_NAMES.get(surfaces.agent_of(r[1]) or r[1], r[1]) for r in conn.execute(
+            text("SELECT id, platform FROM soa_runs WHERE cycle_id = :c"), {'c': row['id']})}
+    body = rm.build_prove(promo, deals, brand, as_of, agent_of_run=agent_of_run)
     body.update(cycle=row['cycle_code'], read_errors={'deals': p_err} if p_err else {})
     if promo is not None:
         body['promo_pass_through'] = {k: v for k, v in promo.items() if k != 'judged'}
@@ -1540,10 +1544,17 @@ async def get_revenue(cycle: str = Query(...), merchant: Optional[str] = Query(N
         with engine.connect() as conn:
             body['since_baseline'] = rm.since_baseline(rows, base_rows, rm.cycle_name(conn, base))
     # 2R-2 (B3): a brand at retail: locked until it states it sent the record, then what moved since
-    from app.routers.console_manufacturer import impact_block
+    from app.routers.console_manufacturer import brand_impact, impact_block
     locked = await impact_block(scope, ms, errors)
     if locked is not None:
         body['locked'] = locked
+    # 2T-8 (B7): the cycle labels of the since-baseline block, never its codes
+    with engine.connect() as conn:
+        zone = rm.study_timezones(conn, [row['study_type']]).get(row['study_type'])
+    body['cycle_label'] = rm.cycle_label(row, zone)
+    body['baseline_label'] = rm.cycle_label(base, zone) if base is not None else body['cycle_label']
+    if _is_brand_at_retail(ms, ms.slug):
+        await brand_impact(scope, ms, row, body, errors, attribute_answers=answers or [], vis=vis, zone=zone)
     body['merchant'] = ms.slug
     body['read_errors'] = errors
     return body
@@ -1589,15 +1600,24 @@ async def get_revenue_history(merchant: Optional[str] = Query(None), scope: Cust
     meta = _merchant_meta(ms)
     out = []
     with engine.connect() as conn:
-        inputs = revenue_svc.inputs_view(revenue_svc.load_inputs(conn, scope.org.id, ms.slug), ms.slug)
         scored = {r[0] for r in conn.execute(text("SELECT DISTINCT cycle_id FROM soa_expectation_outcomes"))}
         cycles = [c for c in merchant_cycles(conn, ms) if c['id'] in scored and c.get('status') == 'complete']
+    # 2T-8 (B7): a brand at retail's series is recomputed under the model its hero reads (Missed is its size
+    # answers wrong, 2T-1 B2), never the price model the stored shares predate
+    brand_answers = {}
+    if _is_brand_at_retail(ms, ms.slug):
+        for c in cycles:
+            answers, _reference, _err = await _attribute_inputs(scope, {**c, 'customer_org_id': scope.org.id}, ms.slug)
+            brand_answers[c['id']] = (answers, next((a['site'] for a in answers if a.get('site')), None))
+    with engine.connect() as conn:
+        inputs = revenue_svc.inputs_view(revenue_svc.load_inputs(conn, scope.org.id, ms.slug), ms.slug)
         zones = rm.study_timezones(conn, [c['study_type'] for c in cycles])   # 2K-3
         before = None
         for c in reversed(cycles):
             c = {**c, 'customer_org_id': scope.org.id}
             vis_rows = rm.load_visibility(conn, c).get('byQuestion') or []
-            m = _revenue_model(conn, c, inputs, meta, None, vis_rows)
+            answers, site = brand_answers.get(c['id'], (None, None))
+            m = _revenue_model(conn, c, inputs, meta, None, vis_rows, attribute_answers=answers, site=site)
             # every agent together, as the revenue model counts them
             here = {**parity.surface_metrics([], vis_rows, surfaces.ALL), **rm.study_identity(conn, c),
                     # 2P-1 (B2): the version its outcomes compare under, as the score's

@@ -163,8 +163,9 @@ def test_trade_promotions_moved(http, db, upstream):
     _pair(db, http, upstream)
     prove = _get(http, 'prove', merchant=WS)
     _dump('prove-2p1.json', prove)
+    # 2T-8 (B6): live in both cycles is `continuing`
     assert [(r['title'], r['change']) for r in prove['rows']] == [
-        ('Amazon: save 40% on 1 when you buy 2', 'kept'), ('Amazon: $3 off coupon on Swaddlers v9', 'new')]
+        ('Amazon: save 40% on 1 when you buy 2', 'continuing'), ('Amazon: $3 off coupon on Swaddlers v9', 'new')]
     assert [(e['title'], e['change'], e['note']) for e in prove['ended']] == [
         ("Sam's Club: $15 Sam's Cash on $100 of P&G", 'not_read',
          f"Not read on Oct 21: Sam's Club walled every read. Live in {PREV_NAME}."),

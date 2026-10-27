@@ -881,8 +881,13 @@ async def impact_block(scope: CustomerScope, ms: MerchantScope, errors: dict) ->
     t = manu.MANUFACTURER_TEMPLATES
     day = manu.short_day(sent['sent_at'])
     before, after = manu.around_send(_scored_cycles(ms), sent)
+    with engine.connect() as conn:
+        zones = rm.study_timezones(conn, [c['study_type'] for c in (before, after) if c])
+    # 2T-8 (B7): the pair by its labels, never its codes
     block = {'state': 'unlocked', 'title': t['unlocked.title'].format(sent=day), 'sent': sent,
              'before': (before or {}).get('cycle_code'), 'after': (after or {}).get('cycle_code'),
+             'baseline_label': rm.cycle_label(before, zones.get((before or {}).get('study_type'))),
+             'cycle_label': rm.cycle_label(after, zones.get((after or {}).get('study_type'))),
              'status': None, 'note': None, 'rows': None}
     if after is None:
         block['note'] = t['unlocked.waiting'].format(sent=day)
@@ -902,3 +907,74 @@ async def impact_block(scope: CustomerScope, ms: MerchantScope, errors: dict) ->
             block['rows'] = rm.since_baseline(now_rows, then_rows, rm.cycle_name(conn, before))
     return block
 
+
+# ─── 2T-8 (B7): Impact for a brand at retail ──────────────────────────────
+
+IMPACT_TEMPLATES = {
+    'baseline_line': 'Baseline, {day}, {skus} SKUs, {agents} agents, {retailers} retailers',
+}
+
+
+async def brand_impact(scope: CustomerScope, ms: MerchantScope, row: dict, body: dict, errors: dict, *,
+                       attribute_answers: List[dict], vis: Optional[dict], zone: Optional[str]) -> None:
+    """2T-8 (B7), on /revenue in place: the charter block (the Overview's own, bo.build_charter, from the score's
+    tiles), its baseline line, a series per charter measure of measured points only (one per scored cycle; no
+    modeled history, no scenario before a send), and the third driver: the Record (the brand's own sources
+    disagree), with Access a driver only when the brand's own pages refuse an answer-time agent."""
+    from app.routers.console import _score
+    from app.services import console_accessibility_brand as cab
+    from app.services import console_brand_overview as bo
+    from app.services import console_revenue as revenue_svc
+    record = _record(ms)
+    client = full_loop._client(scope)
+    (k_status, catalog, k_err), reads, (_, reference, r_err), (_, access, a_err) = await asyncio.gather(
+        _reads(scope).get_merchant_catalog(ms.slug), brand_reads(scope, ms.slug), client.get_reference(ms.slug),
+        client.get_access(ms.slug))
+    errors.update(reads['errors'])
+    reference = reference if r_err is None else None
+    brand = _brand(catalog if k_err is None else None) or (record or {}).get('name') or ms.slug
+    domain = _own_domain(reads['retailers'], record) or 'the brand site'
+    feed_rows = (reads['feed'] or {}).get('rows')
+    # the Record driver, from the size-chart, GTIN and retired signals the Overview ranks
+    drift = rm.build_weight_drift(reference, brand=brand)
+    charts = rel.feed_line_charts(reads['prices'], feed_rows, [domain], brand) if reads['prices'] is not None else None
+    accuracy = rm.build_attribute_accuracy(attribute_answers, reference) if attribute_answers else None
+    size_signal = bo.size_chart_signal(drift, reference, accuracy, domain=domain, brand=brand, charts=charts,
+                                       feed_rows=feed_rows)
+    flags = manu.gtin_flags(manu.brand_pages(reads['prices'], [domain]), feed_rows, brand=brand)
+    driver = revenue_svc.record_driver(domain=domain, size_signal=size_signal, gtin_rows=flags,
+                                       retired_signal=bo.retired_signal((vis or {}).get('retired_named')))
+    own_refused = sorted(t for t, v in cab._tokens_by_domain(access if a_err is None else None).get(domain, {}).items()
+                         if v and v != 'allow')
+    body['access_all'] = body.get('access')
+    if not own_refused:
+        body['access'] = None
+    body['record_driver'] = driver
+    body['third_driver'] = 'access' if own_refused else ('record' if driver else None)
+    # the charter, the Overview's own, for this cycle and each scored one
+    with engine.connect() as conn:
+        store = store_answers(conn, row)
+    clubs = bo.club_counts(bo.club_lines(feed_rows, [domain]), store)
+    promo, _deals, _as_of, _p = await _promo_inputs(scope, row, ms.slug)
+    score = await _score(row, scope.org.id, ms.slug, False, scope)
+    body['charter'] = bo.build_charter(score, domain=domain, club=clubs, promo=promo)
+    with engine.connect() as conn:
+        agents = conn.execute(text("SELECT COUNT(DISTINCT platform) FROM soa_runs WHERE cycle_id = :c"),
+                              {'c': row['id']}).scalar() or 0
+    retailers = [d for d in (reads['retailers'] or {}).get('domains') or [] if rel._domain(d) != domain]
+    label = rm.cycle_label(row, zone) or {}
+    body['baseline_line'] = IMPACT_TEMPLATES['baseline_line'].format(
+        day=label.get('day') or row['cycle_code'], skus=len(feed_rows or []), agents=agents, retailers=len(retailers))
+    series = {t['key']: {'key': t['key'], 'label': t.get('label'), 'points': [], 'scenario': None} for t in body['charter']}
+    for c in reversed(_scored_cycles(ms)):
+        s = await _score(c, scope.org.id, ms.slug, False, scope)
+        tiles = {m['key']: m for m in (s or {}).get('metrics_by_kind', {}).get('brand') or []}
+        lab = rm.cycle_label(c, zone) or {}
+        for key, entry in series.items():
+            tile = tiles.get(key)
+            if tile and tile.get('value') is not None:
+                entry['points'].append({'cycle': c['cycle_code'], 'day': lab.get('day'), 'value': tile['value'],
+                                        'of': tile.get('denominator'), 'measured': True})
+    body['series'] = list(series.values())
+    # 2P-1's scenario rule applies only once a fix ships (a stated send); until then none
+    body['scenario'] = None
