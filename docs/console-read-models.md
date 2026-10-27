@@ -8713,3 +8713,43 @@ sales entered; `scenario` (no fix has shipped); a GTIN row's mapping note when t
 
 `tests/test_console_2t8_record.py`, `test_console_2t8_fixes.py`, `test_console_2t8_prove.py` on the 2T-1 harness, the
 recorded pampers.com pages and FL15-shaped rows (labelled). `SOA_2T8_SAMPLE_DUMP=<dir>` writes the console's samples.
+
+## 2T-11: `/revenue` within the function's limit, and the Oct 27 nits
+
+Live on Oct 27 (org 12, FL15) `GET /api/console/revenue` failed after ~30 s ("Failed to fetch") and Impact showed
+"Couldn't load this screen". 2T-8 (B7) recomputed every scored cycle's score on each read for the charter series,
+walked the since-baseline run of compared cycles reading each one's runs uncached, and read Visibility for each
+cycle again. The API's function limit (`apps/api/vercel.json` `maxDuration`) was 30 s.
+
+### B1: one point per cycle
+
+* A cycle's point is kept in `console_cache` under its stamp (2Q-1 B3's `cycle_read`: runs, outcomes, mentions,
+  the reference's refresh), the scorer version and the revenue inputs' digest: `revenue_point` (the revenue model:
+  lost, missed, at stake, gainable, shares) in `_revenue_model`, `charter_point` (the four charter measures, the
+  score's brand tiles) and `baseline_rows` (Impact's baseline rows; never kept when a read behind them failed). A
+  rescore, a refresh or an inputs change is a new key. `/revenue`, the Overview's hero, Visibility's lead, the
+  Product record's Gainable pool and `/revenue/history` read the same entries.
+* `/revenue` reads this cycle and the prior one. The baseline is the prior cycle when the two compare (this cycle
+  otherwise): the run of compared cycles back to its first is `/revenue/history`'s `vs_previous`, never walked
+  here. On a run of three or more compared cycles `since_baseline` now reads against the prior cycle, not the
+  run's first.
+* `series[]` (per charter measure, as in 2T-8 B7) moved from `/revenue` to `/revenue/history` for a brand at
+  retail; `/revenue` no longer carries it. The console reads history after first paint.
+* `maxDuration` 60 s (from 30): a slow cold read degrades to slow, not to "Failed to fetch".
+* Budget (`tests/test_console_2t11_revenue_budget.py`, four cycles): `/revenue` cold reads at most two cycles' runs
+  whole (`parity.load_overview_rows`), warm none, warm under 2 s and cold under 10 s on the harness.
+
+### B2
+
+* `/prove` `aside.delta.vs` "vs Oct 23" (the compared cycle's label) for the pass-through chip. 2T-7's no-code
+  scan now covers `/revenue/history`, `/fixes` and `/approvals` too.
+* Product record `sub` drops a leading product name from the feed label (`record_sub`), so title and sub name the
+  variant once. A GTIN the markup names against the feed's (the GTIN row's `was`) is an issue `{kind:
+  gtin_mapping, fix_kind: gtin, title "Another GTIN in the markup", text "Markup names another GTIN for Newborn:
+  037000772552 against the feed's 037000749622."}`.
+* Fix queue: the size-chart fix's text names the sizes the study asked about (its attribute answers' sizes);
+  `more[]` the other sizes with two charts (every fix carries `more`, `[]` when none). The release fix and the
+  release request count SKUs ("10 records"), as the Publishing preview.
+* Approvals `summary.gating` (waiting requests that gate a fix) and `summary.why` "3 approvals stand between the
+  record and what it can win back."
+* True Value receipt: a quote judged `per_unit` is left out of "What agents quoted".
