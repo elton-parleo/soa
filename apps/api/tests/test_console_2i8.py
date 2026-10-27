@@ -162,6 +162,16 @@ def per_surface_view(endpoint, body):
         # 2K-1 adds `brand_choice` beside each row (unprompted or comparison); no value it served moved
         for row in body.get('byQuestion') or []:
             row.pop('brand_choice', None)
+            # 2T-5 (V1, V4) adds the coded pick and the products named
+            row.pop('pick', None)
+            row.pop('named_products', None)
+        # 2T-5 (V3) adds the names outside the category, (V5) each store's named count and the intent tables
+        (body.get('ranking') or {}).pop('outside_category', None)
+        for row in (body.get('routing') or {}).get('rows') or []:
+            row.pop('named', None)
+            row.pop('named_surfaces', None)
+        for k in ('intents', 'default_intent'):
+            (body.get('routing') or {}).pop(k, None)
     if endpoint == 'answers':
         # 2K-1 adds `claim_kind` and its chip label beside a brand-direct answer
         for a in body:

@@ -155,3 +155,127 @@ def answers_lead(answers: List[dict], brand: Optional[str]) -> dict:
                   for k in rm.ANSWER_KINDS},
     }
 
+
+# ─── Visibility ──────────────────────────────────────────────────────────
+
+def _choice_rows(vis: dict) -> List[dict]:
+    """The answered brand-choice rows (category and comparison), the ranking's own rows."""
+    return [v for v in vis.get('byQuestion') or [] if v.get('answered')
+            and (v.get('brand_choice') if 'brand_choice' in v else v.get('unprompted'))]
+
+
+def _ranking(vis: dict) -> dict:
+    ranking = vis.get('ranking') or {}
+    return ranking.get('brand_choice') or ranking
+
+
+def rival_of(rows: List[dict]) -> Optional[dict]:
+    """The rival with the most first picks (then the most named, then the ranking's order)."""
+    rivals = [r for r in rows if not r.get('you')]
+    if not rivals:
+        return None
+    return min(enumerate(rivals), key=lambda e: (-(e[1].get('first') or 0), -(e[1].get('named') or 0), e[0]))[1]
+
+
+def rival_question(rows: List[dict], rival: str) -> Optional[dict]:
+    """The question the rival leads most: {q, query_code, k (agents leading with it), n (agents answering),
+    answers, product, product_source}. The product is the rival's first-named product in those answers
+    (`named_products`, coded from Layer 2's names), else the rival's name."""
+    by_q: Dict[str, List[dict]] = {}
+    for v in rows:
+        by_q.setdefault(v.get('q') or '', []).append(v)
+    best = None
+    for q, vs in by_q.items():
+        led = [v for v in vs if (v.get('first') or {}).get('name') == rival]
+        if led and (best is None or len(led) > len(best[1])):
+            best = (q, led, vs)
+    if best is None:
+        return None
+    q, led, vs = best
+    products = Counter(next((p['name'] for p in v.get('named_products') or [] if p.get('brand') == rival), None)
+                       for v in led)
+    products.pop(None, None)
+    product = min(products.items(), key=lambda kv: (-kv[1], kv[0]))[0] if products else None
+    return {'q': q, 'query_code': led[0].get('query_code'), 'k': len({v.get('agent') for v in led}),
+            'n': len({v.get('agent') for v in vs}), 'answers': len(led), 'product': product or rival,
+            'product_source': 'named_products' if product else 'rival_name'}
+
+
+def visibility_headline(vis: dict, brand: Optional[str]) -> Optional[dict]:
+    """V1: "<Brand> is named in N of M category answers and put first in F. <Rival> goes first in R, and A
+    of B agents lead the <question> question with <product>." The question is served whole: soa stores no
+    short form of a question (`question_short` null, said so)."""
+    ranking = _ranking(vis)
+    rows = ranking.get('rows') or []
+    you = next((r for r in rows if r.get('you')), None)
+    if you is None:
+        return None
+    name = brand or you['name']
+    text = T['vis.headline.named'].format(brand=name, named=you['named'], of=ranking.get('denom') or 0,
+                                          first=you['first'])
+    rival = rival_of(rows)
+    lead = rival_question(_choice_rows(vis), rival['name']) if rival and rival.get('first') else None
+    if rival and rival.get('first'):
+        text += ' ' + (T['vis.headline.rival'].format(rival=rival['name'], rival_first=rival['first'], k=lead['k'],
+                                                      n=lead['n'], question=f"“{lead['q']}”",
+                                                      product=lead['product'])
+                       if lead else T['vis.headline.rival_only'].format(rival=rival['name'],
+                                                                         rival_first=rival['first']))
+    return {'text': text, 'brand': name, 'named': you['named'], 'of': ranking.get('denom') or 0, 'first': you['first'],
+            'rival': rival['name'] if rival else None, 'rival_first': rival['first'] if rival else None,
+            'question': lead, 'question_short': None,
+            'question_short_reason': 'soa stores no short form of a question, so it is served whole'}
+
+
+def visibility_gap(vis: dict, brand: Optional[str], lost: Optional[dict] = None) -> Optional[dict]:
+    """V2: {behind_or_ahead, n, rival, sentence, claim, dollars}, by the demo's rule (Leads.tsx
+    VisibilityLead): "named almost as often" when the brand is named within 75% to 200% of the rival.
+    `lost` is the revenue model's Lost pool ({dollars, reason}), its dollars beside."""
+    rows = _ranking(vis).get('rows') or []
+    you = next((r for r in rows if r.get('you')), None)
+    rival = rival_of(rows)
+    if you is None or rival is None:
+        return None
+    name, nm = brand or you['name'], rival['name']
+    gap = (rival.get('first') or 0) - (you.get('first') or 0)
+    close = you['named'] >= rival['named'] * 0.75 and you['named'] <= rival['named'] * 2
+    side = 'level' if gap == 0 else 'behind' if gap > 0 else 'ahead'
+    picks = 'pick' if abs(gap) == 1 else 'picks'
+    head = (T['vis.gap.level'].format(rival=nm) if gap == 0 else
+            T['vis.gap.behind' if gap > 0 else 'vis.gap.ahead'].format(n=abs(gap), picks=picks, rival=nm))
+    if gap == 0:
+        claim = T['vis.gap.level_line'].format(rival=nm, named=you['named'], rival_s=f"{nm}'s",
+                                               rival_named=rival['named'])
+    elif close:
+        how = ('far less' if you['first'] * 2 <= rival['first'] else 'less') if you['first'] < rival['first'] else 'more'
+        claim = T['vis.gap.close'].format(rival=nm, how=how)
+    else:
+        claim = T['vis.gap.far'].format(rival=nm, rival_first=rival['first'], brand=name, first=you['first'])
+    return {'behind_or_ahead': side, 'n': abs(gap), 'rival': nm, 'claim': claim, 'sentence': f"{head} · {claim}",
+            'dollars': (lost or {}).get('dollars'),
+            'dollars_reason': None if (lost or {}).get('dollars') is not None else
+            (lost or {}).get('reason') or 'no revenue model was read for this cycle'}
+
+
+def visibility_footnote(vis: dict) -> Optional[dict]:
+    """V3: the demo's one footnote, "One first pick each for ... N answers named no single first pick.
+    <successor> was named in A of B, <retired> in C." (console_brand_overview.first_pick_footnote, the
+    Overview's own), then the brand's own lines named outside the category, apart."""
+    from app.services import console_brand_overview as bo
+    out = bo.first_pick_footnote(vis, retired_named=vis.get('retired_named'))
+    if out is None:
+        return None
+    outside = (vis.get('ranking') or {}).get('outside_category') or {}
+    own = [o['name'] for o in outside.get('own') or []]
+    if own:
+        out['footnote'] += ' ' + T['vis.outside'].format(names=_join(own), verb='was' if len(own) == 1 else 'were')
+    out['outside_category'] = outside
+    return out
+
+
+def visibility_lead(vis: dict, brand: Optional[str], lost: Optional[dict] = None) -> dict:
+    """V1 to V3 for a brand at retail: `headline` is the demo's sentence (the every-agent line stays in
+    `headlines`), `headline_detail` its parts, `gap`, `footnote`."""
+    head = visibility_headline(vis, brand)
+    return {'headline': head['text'] if head else vis.get('headline'), 'headline_detail': head,
+            'gap': visibility_gap(vis, brand, lost), 'footnote': visibility_footnote(vis)}

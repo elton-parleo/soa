@@ -787,7 +787,9 @@ def first_pick_footnote(vis: dict, *, retired_named: Optional[dict]) -> Optional
         return None
     firsts = Counter((v.get('first') or {}).get('name') for v in rows if v.get('first'))
     singles = sorted(n for n, c in firsts.items() if c == 1 and n)
-    none = sum(1 for v in rows if not v.get('first'))
+    # 2T-5 (V4): no single first pick is the coded value (brands named, none first); a row with no coding
+    # or no brand named is not one
+    none = sum(1 for v in rows if (v.get('pick') == 'no_single_pick' if 'pick' in v else not v.get('first')))
     parts = []
     if singles:
         parts.append(T['first_pick.singles'].format(names=manu._and(singles)))

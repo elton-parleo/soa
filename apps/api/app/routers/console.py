@@ -201,7 +201,35 @@ async def get_visibility(cycle: str = Query(...), merchant: Optional[str] = Quer
     body['previous'] = _previous_block(compared)
     if compared and compared['status'] == 'compared':
         body['moved'] = rm.visibility_movement(body, compared['visibility'], compared['code'])
+    # 2T-5 (V1 to V3): a brand at retail's lead, the gap's dollars the revenue model's Lost pool
+    # (a brand's ranking opens on its brand-choice answers: build_visibility's `brand_choice`)
+    if (body.get('ranking') or {}).get('brand_choice'):
+        with engine.connect() as conn:
+            slug = merchant or score_svc.cycle_merchant(conn, row)
+            brand = rm.load_primary(conn, row)
+        lost = await _lost_pool(scope, row, slug, body.get('byQuestion') or [])
+        body.update(measure.visibility_lead(body, brand, lost))
     return body
+
+
+async def _lost_pool(scope: CustomerScope, row: dict, slug: Optional[str], vis_rows: list) -> dict:
+    """2T-5 (V2): {dollars, reason}, the revenue model's Lost pool today as the brand Overview builds it
+    (no access line), or why there are no dollars: no merchant, or the model's own dollars_reason."""
+    if not slug:
+        return {'dollars': None, 'reason': 'no merchant record for this cycle'}
+    from sqlalchemy.exc import SQLAlchemyError
+    ms = await check_merchant(scope, slug)
+    answers, _reference, _r_err = await _attribute_inputs(scope, row, slug)
+    try:
+        with engine.connect() as conn:
+            inputs = revenue_svc.inputs_view(revenue_svc.load_inputs(conn, scope.org.id, slug), slug)
+            site = next((a['site'] for a in answers if a.get('site')), None)
+            model = _revenue_model(conn, row, inputs, _merchant_meta(ms), None, vis_rows,
+                                   attribute_answers=answers or None, site=site)
+    except SQLAlchemyError as e:   # the dollars are beside the read: Visibility never fails for want of them
+        return {'dollars': None, 'reason': f"the revenue inputs could not be read ({type(e).__name__})"}
+    today = model.get('today') if model.get('dollars') else None
+    return {'dollars': round(today['lost']) if today else None, 'reason': None if today else model.get('dollars_reason')}
 
 
 def _visibility(conn, row: dict, merchant: Optional[dict] = None, errors: Optional[dict] = None) -> dict:
