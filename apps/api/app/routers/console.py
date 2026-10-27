@@ -1033,7 +1033,8 @@ async def get_truesync(merchant: str = Query(...), scope: CustomerScope = Depend
                                      reference=reference if r_err is None else None, drift=drift, reads=reads)
         errors = view.pop('read_errors')
         # 2T-1 (B3): the diff stays on /publishing; TrueSync is the release page
-        view.pop('diff', None)
+        for key in ('diff', 'diff_all', 'gtin_line'):
+            view.pop(key, None)
         body.update(view)
         release = await release_view(scope, ms, merchant, channels=active, publications=pubs or [], catalog=catalog,
                                      reference=reference if r_err is None else None, reads=reads)
@@ -1078,13 +1079,22 @@ async def _record_inputs(merchant: str, scope: CustomerScope, *, incentives: boo
     }
 
 
+def _is_brand_at_retail(ms: MerchantScope, merchant: str) -> bool:
+    """supply's `mode` manufacturer on the merchant's /tenant record (2R-2)."""
+    return (next((m for m in ms.merchants or [] if m.get('slug') == merchant), None) or {}).get('mode') == 'manufacturer'
+
+
 @router.get("/record/list")
 async def get_record_list(merchant: str = Query(...), scope: CustomerScope = Depends(console_scope)):
     """2C-1: Fix > Offer record, the product list. Every product in the
     merchant's record (supply's published catalog, or an external merchant's
     current feed), each with its status. A merchant with no record yet is an
     empty list, not an error."""
-    await check_merchant(scope, merchant)   # 2H: a slug that is not the org's is a 404
+    ms = await check_merchant(scope, merchant)   # 2H: a slug that is not the org's is a 404
+    if _is_brand_at_retail(ms, merchant):
+        # 2T-8 (B2): one row per feed SKU with its state from the readback, and the hero
+        from app.routers.console_manufacturer import brand_record_list
+        return await brand_record_list(scope, ms, merchant)
     got = await _record_inputs(merchant, scope, incentives=False)
     return rm.build_record_list(merchant, got['catalog'], merchant_record=got['merchant_record'],
                                 publications=got['publications'], channels=got['channels'],
@@ -1100,7 +1110,11 @@ async def get_record(merchant: str = Query(...), product: str = Query(...),
     the validator's issues, the variants with member prices, and the
     compiled schema.org artifact. `product` is the list's `sku` (or the
     listing id)."""
-    await check_merchant(scope, merchant)   # 2H: a slug that is not the org's is a 404
+    ms = await check_merchant(scope, merchant)   # 2H: a slug that is not the org's is a 404
+    if _is_brand_at_retail(ms, merchant):
+        # 2T-8 (B2): the demo's master record for one feed SKU
+        from app.routers.console_manufacturer import brand_record
+        return await brand_record(scope, ms, merchant, product)
     got = await _record_inputs(merchant, scope, incentives=True)
     listing = next((l for l in (got['catalog'] or {}).get('listings') or []
                     if product in (rm._listing_sku(l), str(l.get('listing_id')))), None)

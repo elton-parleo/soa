@@ -3075,6 +3075,8 @@ RECORD_PROV_UNKNOWN = 'unknown'
 RECORD_FINDINGS = {
     'name_differs': 'Name', 'pack_differs': 'Pack count', 'gtin_mismatch': 'GTIN',
     'gtin_missing_on_page': 'GTIN', 'brand_missing_on_page': 'Brand',
+    # 2T-8 (B1): soa's own comparison of a brand page's ProductGroup variant (console_product_record)
+    'size_differs': 'Size', 'weight_differs': 'Weight range',
 }
 RECORD_ISSUE_TONE = {'conflict': 'bad', 'dropped': 'warn', 'approx': 'warn', 'info': 'neu'}
 RECORD_ISSUE_LABEL = {'conflict': 'fails validation', 'dropped': 'dropped by the channel',
@@ -3208,6 +3210,21 @@ def _read_note(row: dict) -> str:
     return f"{row.get('retailer_domain') or 'the page'}, read {when or 'at an unrecorded time'} by {how}"
 
 
+def _markup_rows(rows: List[dict], variant: dict, listing: dict) -> List[dict]:
+    """2T-8 (B1): a brand page read whose markup is a ProductGroup carries soa's own findings for this
+    variant (the page's variant that is its own, the fields both carry), never supply's, which compare it
+    with the group's first variant. Every other read is as supply serves it."""
+    from app.services import console_product_record as pr
+    out = []
+    for row in rows:
+        if row.get('role') == 'own' and pr.is_product_group(row.get('json_ld')):
+            mine = {'gtin': variant.get('gtin'), 'label': variant.get('title'), 'count': variant.get('count'),
+                    'product_name': listing.get('title')}
+            row = {**row, 'findings': pr.markup_findings(row, mine, brand=listing.get('brand'))}
+        out.append(row)
+    return out
+
+
 def _diff_fields(variant: dict, rows: List[dict], prov: str) -> List[dict]:
     label = variant.get('title') or variant.get('variant_id') or 'variant'
     out = []
@@ -3331,7 +3348,7 @@ def build_record(merchant: str, listing: dict, *, merchant_record: Optional[dict
     variant_rows, diffs = [], 0
     page_members: Dict[str, tuple] = {}
     for v in variants:
-        rows = _reference_rows(reference, v, listing)
+        rows = _markup_rows(_reference_rows(reference, v, listing), v, listing)
         extra = _diff_fields(v, rows, prov)
         diffs += len(extra)
         fields.extend(extra)

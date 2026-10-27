@@ -178,13 +178,16 @@ async def publishing_view(scope: CustomerScope, ms: MerchantScope, merchant: str
             named = named_by_variant(conn, cycle)
         lifecycle = manu.lifecycle_rows(vis.get('retired_named'), cycle)
         sellers = manu.seller_rows(named, feed_rows, cycle, own_domains=[own] if own else [])
+    diff_all = manu.build_diff(drift=drift, flags=flags, lifecycle=lifecycle, sellers=sellers, cycle=cycle,
+                               read_at=read_at)
+    # 2T-8 (B3): one GTIN row per line, the per-size rows in diff_all
+    diff, gtin_line = manu.collapse_gtin_rows(diff_all)
     return {
         'mode': manu.MANUFACTURER,
         'surfaces': surfaces,
-        'diff': manu.build_diff(drift=drift, flags=flags, lifecycle=lifecycle, sellers=sellers, cycle=cycle,
-                                read_at=read_at),
+        'diff': diff, 'diff_all': diff_all, 'gtin_line': gtin_line,
         'preview': manu.build_preview(surfaces=surfaces, brand=_brand(catalog), name=(record or {}).get('name'),
-                                      domain=own),
+                                      domain=own, skus=len(feed_rows) if feed_rows is not None else None),
         'artifacts': manu.build_artifacts(merchant, pubs, channels, held),
         'held': held,
         'cycle': (cycle or {}).get('cycle_code'),
@@ -652,6 +655,110 @@ async def get_artifact(merchant: str = Query(...), channel: str = Query(...),
     return Response(content=got['content'], media_type=got['content_type'], headers=headers)
 
 
+# ─── 2T-8 (B2): the Product record per feed SKU ───────────────────────────
+
+async def brand_revenue(scope: CustomerScope, ms: MerchantScope, merchant: str, cycle: dict,
+                        attribute_answers: List[dict], domain: Optional[str], errors: dict) -> Optional[dict]:
+    """The revenue model the Overview and Impact read (console._revenue_model), for one cycle: the Gainable pool
+    the record's hero names, never a second count."""
+    from app.routers.console import _revenue_model
+    from app.services import console_revenue as revenue_svc
+    facts, routing_errors = await _routing_inputs(scope, cycle, merchant)
+    errors.update(routing_errors)
+    with engine.connect() as conn:
+        vis = _visibility(conn, cycle, facts, routing_errors)
+        inputs = revenue_svc.inputs_view(revenue_svc.load_inputs(conn, scope.org.id, merchant), merchant)
+        site = next((a['site'] for a in attribute_answers if a.get('site')), None) or domain
+        return _revenue_model(conn, cycle, inputs, _merchant_meta(ms), None, vis.get('byQuestion') or [],
+                              attribute_answers=attribute_answers or None, site=site)
+
+
+async def brand_record_reads(scope: CustomerScope, ms: MerchantScope, merchant: str) -> dict:
+    """What the Product record of a brand at retail reads, in one round: TrueSync's release page (its held
+    records, their master record and readback, release_view), the newest scored cycle's facts (cycle_facts), the
+    weight rows, the brand pages' GTIN flags and each line's chart, the revenue model."""
+    from app.services import console_brand_overview as bo
+    record = _record(ms)
+    client = full_loop._client(scope)
+    (_, channels, c_err), (_, pubs, p_err), (k_status, catalog, k_err), (_, reference, r_err), reads = \
+        await asyncio.gather(client.get_channels(), client.get_publications(limit=1000),
+                             _reads(scope).get_merchant_catalog(merchant), client.get_reference(merchant),
+                             brand_reads(scope, merchant))
+    errors = dict(reads['errors'])
+    for name, err in (('channels', c_err), ('publications', p_err), ('reference', r_err)):
+        if err is not None:
+            errors[name] = err
+    if k_err is not None and k_status != 404:
+        raise HTTPException(status_code=502, detail=f"TrueSync catalog unavailable: {k_err}")
+    channels = [c for c in (channels or []) if c.get('is_active', True)] if c_err is None else []
+    pubs = (pubs or []) if p_err is None else []
+    catalog = catalog if k_err is None else None
+    reference = reference if r_err is None else None
+    cycles = _scored_cycles(ms)
+    cycle = cycles[0] if cycles else None
+    facts = await cycle_facts(scope, cycle, merchant, reference) if cycle is not None else {}
+    release = await release_view(scope, ms, merchant, channels=channels, publications=pubs, catalog=catalog,
+                                 reference=reference, reads=reads, cycle=cycle, facts=facts)
+    errors.update(release.get('read_errors') or {})
+    brand = _brand(catalog)
+    own = _own_domain(reads['retailers'], record)
+    own_domains = [own] if own else []
+    feed_rows = (reads['feed'] or {}).get('rows')
+    revenue = await brand_revenue(scope, ms, merchant, cycle, facts.get('attribute_answers') or [], own, errors) \
+        if cycle is not None else None
+    return {
+        'catalog': catalog, 'pubs': manu.merchant_publications(pubs, _listing_ids(catalog), merchant),
+        'channels': rel._channel_names(channels), 'reference': reference, 'reads': reads, 'cycle': cycle,
+        'facts': facts, 'records': release['records'], 'brand': brand, 'own_domains': own_domains,
+        'feed_rows': feed_rows, 'drift': rm.build_weight_drift(reference, brand=brand),
+        'flags': manu.gtin_flags(manu.brand_pages(reads['prices'], own_domains), feed_rows, brand=brand),
+        'charts': rel.feed_line_charts(reads['prices'], feed_rows, own_domains, brand)
+        if reads['prices'] is not None else None,
+        'club_lines': bo.club_lines(feed_rows, own_domains), 'revenue': revenue, 'errors': errors,
+    }
+
+
+def _record_rows(got: dict) -> List[dict]:
+    from app.services import console_product_record as pr
+    return pr.record_list_rows(got['records'], catalog=got['catalog'], feed_rows=got['feed_rows'],
+                               prices=got['reads']['prices'], own_domains=got['own_domains'], brand=got['brand'],
+                               charts=got['charts'])
+
+
+async def brand_record_list(scope: CustomerScope, ms: MerchantScope, merchant: str) -> dict:
+    """B2: /record/list for a brand at retail: one row per feed SKU with its state from the readback, the hero."""
+    from app.services import console_product_record as pr
+    got = await brand_record_reads(scope, ms, merchant)
+    rows = _record_rows(got)
+    return {'merchant': merchant, 'mode': manu.MANUFACTURER, 'kind': 'brand', 'hero': pr.build_hero(
+        rows, revenue=got['revenue']), 'products': rows, 'cycle': (got['cycle'] or {}).get('cycle_code'),
+        'read_errors': got['errors']}
+
+
+async def brand_record(scope: CustomerScope, ms: MerchantScope, merchant: str, product: str) -> dict:
+    """B2: /record?product=<sku> for a brand at retail: the demo's master record for one feed SKU."""
+    from app.services import console_product_record as pr
+    got = await brand_record_reads(scope, ms, merchant)
+    rows = _record_rows(got)
+    for rec in got['records']:
+        for v in rel.record_variants(rec['record_ref'], got['catalog'], got['feed_rows']):
+            if not pr.is_sku(v, product):
+                continue
+            facts = got['facts']
+            reads = got['reads']
+            body = pr.build_product_record(
+                v, rec, prices=reads['prices'], retailers=(reads['retailers'] or {}).get('domains') or [],
+                own_domains=got['own_domains'], feed_rows=got['feed_rows'], charts=got['charts'], drift=got['drift'],
+                reference=got['reference'], flags=got['flags'], attribute_answers=facts.get('attribute_answers') or [],
+                deals=facts.get('deals'), channels=got['channels'], held_rows=rel.hold(got['pubs']).get(rec['record_ref'])
+                or {}, feed_version=(reads['feed'] or {}).get('version'), club_lines=got['club_lines'],
+                brand=got['brand'], hero=pr.build_hero(rows, revenue=got['revenue']))
+            body.update({'merchant': merchant, 'cycle': (got['cycle'] or {}).get('cycle_code'),
+                         'read_errors': got['errors']})
+            return body
+    raise HTTPException(status_code=404, detail=f"product {product!r} is not in {merchant!r}'s record")
+
+
 # ─── Impact ───────────────────────────────────────────────────────────────
 
 async def impact_block(scope: CustomerScope, ms: MerchantScope, errors: dict) -> Optional[dict]:
@@ -694,3 +801,4 @@ async def impact_block(scope: CustomerScope, ms: MerchantScope, errors: dict) ->
         with engine.connect() as conn:
             block['rows'] = rm.since_baseline(now_rows, then_rows, rm.cycle_name(conn, before))
     return block
+
