@@ -19,7 +19,12 @@ links, served as each feed row's retailers[].url):
                  (read_status ok or empty) by an own fetch, not a hosted render
   product_group  a ProductGroup with an Offer per retailer and a gtin13: the
                  page's markup is a ProductGroup, every variant carries a
-                 gtin13, and an Offer for each retailer the feed lists
+                 gtin13, and an Offer for each retailer the feed lists.
+                 2T-7 (7): the note says what the markup carries, "ProductGroup
+                 with gtin13 on 7 of 7. No Offer per retailer in the markup",
+                 so a 0 that is absence (no Offer node on any page, what
+                 pampers.com serves and the compile-and-hold fixes) reads as
+                 absence (`offers_absent`), not as a markup that disagrees
   prices         retailer prices filled in the markup: the variants with an
                  Offer that carries a price ("3 Swaddlers sizes only")
   gtin           GTINs in the markup well formed: none that is a GTIN only
@@ -65,8 +70,8 @@ T = {
     'value.gtin': '{lines} {verb} the leading zero',
     'basis.robots': "the access run's robots verdicts per answer-time token on {domain}'s product pages",
     'basis.html': "the feed's {d} pages on {domain}, read by our own fetch (read_status ok or empty), no hosted render",
-    'basis.product_group': ('pages whose markup is a ProductGroup: {group} of {d}. Every variant with a gtin13: {gtin}. '
-                            'An Offer for each retailer the feed lists: {offers}'),
+    'basis.product_group': 'ProductGroup with gtin13 on {both} of {d}. An Offer for each retailer the feed lists on {offers}',
+    'basis.product_group.no_offer': 'ProductGroup with gtin13 on {both} of {d}. No Offer per retailer in the markup',
     'basis.prices': 'variants in the markup with an Offer that carries a price',
     'basis.prices.some': '{lines} only',
     'basis.prices.none': 'no variant in the markup carries a retailer price',
@@ -191,7 +196,7 @@ def build(*, prices: Optional[List[dict]], feed_rows: Optional[List[dict]], refe
         if page:
             sold_at.setdefault(page, set()).update(_domain(x.get('domain')) for x in links
                                                    if x.get('domain') and _domain(x.get('domain')) not in owned)
-    group = gtin13 = offered = full = 0
+    group = gtin13 = offered = full = both = any_offer = 0
     priced_by_line: Dict[str, int] = {}
     variants = priced = 0
     for key, r in read.items():
@@ -204,6 +209,8 @@ def build(*, prices: Optional[List[dict]], feed_rows: Optional[List[dict]], refe
                                          for node in nodes)
         group += is_group
         gtin13 += has_gtin13
+        both += is_group and has_gtin13
+        any_offer += any(_offers(node) for node in nodes)
         offered += has_offers
         full += is_group and has_gtin13 and has_offers
         line = manu._line_display(rel.page_line(ld.get('name') if isinstance(ld, dict) else None) or '', brand)
@@ -213,7 +220,9 @@ def build(*, prices: Optional[List[dict]], feed_rows: Optional[List[dict]], refe
                 priced += 1
                 priced_by_line[line] = priced_by_line.get(line, 0) + 1
     group_row = _check('product_group', T['product_group'], full, n,
-                       basis=T['basis.product_group'].format(group=group, d=n, gtin=gtin13, offers=offered))
+                       basis=T['basis.product_group' if any_offer else 'basis.product_group.no_offer'].format(
+                           both=both, d=n, offers=offered))
+    group_row.update(group=group, gtin13=gtin13, offered=offered, offers_absent=bool(read) and not any_offer)
     if priced_by_line and priced < variants:
         some = ', '.join(f"{k} {line} size{'s' if k != 1 else ''}" for line, k in priced_by_line.items())
         prices_basis = T['basis.prices.some'].format(lines=some)

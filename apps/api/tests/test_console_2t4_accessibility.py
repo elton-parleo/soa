@@ -48,8 +48,9 @@ def test_the_six_checks_on_the_recorded_brand_pages():
     assert (checks['html']['value'], checks['html']['status']) == ('2 of 6', 'partial')
     # the ProductGroup is there: what fails is the Offer per retailer
     assert checks['product_group']['value'] == '0 of 6'
-    assert checks['product_group']['basis'] == ('pages whose markup is a ProductGroup: 2 of 6. Every variant with a '
-                                                'gtin13: 2. An Offer for each retailer the feed lists: 0')
+    # 2T-7 (7): the note says what the markup carries, and the 0 is absence
+    assert checks['product_group']['basis'] == 'ProductGroup with gtin13 on 2 of 6. No Offer per retailer in the markup'
+    assert checks['product_group']['offers_absent'] is True
     assert (checks['prices']['value'], checks['prices']['basis']) == \
         ('0 of 14', 'no variant in the markup carries a retailer price')
     assert (checks['gtin']['value'], checks['gtin']['status']) == ('14 of 14', 'ok')

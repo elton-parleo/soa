@@ -268,3 +268,43 @@ def test_with_no_live_deal_a_list_vs_sale_difference_then_the_most_asked():
     # 2T-5's pick: the most-asked cell, Swaddlers Newborn on Amazon, one line
     assert (a['sku'], a['retailer'], a['picked_by']) == ('nb', 'amazon.com', 'most_asked')
     assert [r['k'] for r in a['rows']] == ['One-time price']
+
+
+# ── 7: "Offer per retailer" on pampers.com ────────────────────────────────
+
+def test_the_recorded_pages_carry_productgroup_and_gtin13_and_no_offer():
+    """What #33's recorded pampers.com pages carry (FL15's live pages are production reads, not read here;
+    2T-4's report found the same on all 7): a ProductGroup, a gtin13 on every variant, no Offer node."""
+    reads = _own_reads()
+    assert len(reads) == 2
+    for r in reads:
+        assert r['json_ld']['@type'] == 'ProductGroup'
+        assert all(v.get('gtin13') for v in r['json_ld']['hasVariant'])
+        assert not any(v.get('offers') for v in r['json_ld']['hasVariant']) and 'offers' not in r['json_ld']
+
+
+def test_the_check_explains_its_zero_and_the_markup_counts_no_drift_for_it():
+    from app.services import console_manufacturer as manu
+    from tests.test_console_2t4_accessibility import _build, _by_key
+    check = _by_key(_build())['product_group']
+    assert (check['value'], check['status'], check['offers_absent']) == ('0 of 6', 'bad', True)
+    assert check['basis'] == 'ProductGroup with gtin13 on 2 of 6. No Offer per retailer in the markup'
+    # FL15's 7 pages, each a ProductGroup with gtin13 and no Offer, DERIVED from the recorded Swaddlers page
+    import copy
+    prices = f2r2.retailer_prices()['prices']
+    swaddlers = next(r for r in prices if r.get('role') == 'own' and r.get('json_ld') and 'swaddlers' in r['url'])
+    feed = [{'sku': f's{i}', 'retailers': [{'domain': 'pampers.com', 'url': f'https://www.pampers.com/p{i}'},
+                                           {'domain': 'amazon.com', 'url': f'https://www.amazon.com/p{i}'}]}
+            for i in range(7)]
+    pages = [{**copy.deepcopy(swaddlers), 'url': f'https://www.pampers.com/p{i}'} for i in range(7)]
+    from app.services import console_accessibility_brand as acc
+    out = acc.build(prices=pages, feed_rows=feed, reference=None, access=None, robots=None,
+                    own_domains=['pampers.com'], retailers=['amazon.com'], brand='Pampers')
+    seven = _by_key(out)['product_group']
+    assert (seven['value'], seven['basis']) == ('0 of 7', 'ProductGroup with gtin13 on 7 of 7. No Offer per retailer '
+                                                          'in the markup')
+    # not drift: the site markup surface and the lead's markup tile count weight rows and GTIN flags only
+    page_list = [{'url': p['url'], 'observed_at': p['observed_at'], 'brand_page': manu.row_brand_page(p) or {}}
+                 for p in pages]
+    flags = [f for f in manu.gtin_flags(page_list, None, brand='Pampers') if f.get('where') == 'markup']
+    assert flags == [] and manu.markup_reason([], None, flags) is None
