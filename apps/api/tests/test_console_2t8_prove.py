@@ -141,11 +141,14 @@ def test_the_charter_series_and_labels(http, db, upstream):
     overview = _read(http, 'overview', cycle=f2p1.CYCLE_2)
     assert body['charter'] == overview['charter']
     assert body['baseline_line'] == 'Baseline, Oct 21, 6 SKUs, 6 agents, 4 retailers'
+    # 2T-11 (B1): the series is /revenue/history's, read after first paint
+    assert 'series' not in body
+    series = _read(http, 'revenue/history')['series']
     # two scored cycles: two measured points per measure and nothing else
-    assert [len(s['points']) for s in body['series']] == [2, 2, 2, 2]
-    assert all(p['measured'] for s in body['series'] for p in s['points'])
-    assert body['scenario'] is None and all(s['scenario'] is None for s in body['series'])
-    newest = {s['key']: s['points'][-1]['value'] for s in body['series']}
+    assert [len(s['points']) for s in series] == [2, 2, 2, 2]
+    assert all(p['measured'] for s in series for p in s['points'])
+    assert body['scenario'] is None and all(s['scenario'] is None for s in series)
+    newest = {s['key']: s['points'][-1]['value'] for s in series}
     assert newest == {t['key']: t['value'] for t in body['charter']}
     assert (body['baseline_label']['day'], body['cycle_label']['day']) == ('Oct 14', 'Oct 21')
 

@@ -67,10 +67,15 @@ def _shift(value):
 
 def clone(db, encode):
     """Cycle 230: 229 copied seven days on, nothing else changed."""
+    clone_cycle(db, encode, ID_1, ID_2, CYCLE_2, RUN_OFFSET)
+
+
+def clone_cycle(db, encode, src, dst, code, run_offset):
+    """Cycle `dst` (`code`): `src` copied seven days on, its runs' ids `run_offset` on (2T-11: a longer series)."""
     have = set(inspect(db).get_table_names())
     with db.begin() as c:
-        [cycle] = _rows(c, "SELECT * FROM soa_cycles WHERE id = :i", i=ID_1)
-        cycle.update(id=ID_2, cycle_code=CYCLE_2, start_date=_shift(cycle['start_date']))
+        [cycle] = _rows(c, "SELECT * FROM soa_cycles WHERE id = :i", i=src)
+        cycle.update(id=dst, cycle_code=code, start_date=_shift(cycle['start_date']))
         for key in ('created_at', 'completed_at', 'reference_as_of', 'end_date'):
             if key in cycle:
                 cycle[key] = _shift(cycle[key])
@@ -87,23 +92,23 @@ def clone(db, encode):
             cycle['reference_prices'] = ref
         _insert(c, 'soa_cycles', cycle, encode)
         for table in (t for t in CYCLE_TABLES if t in have):
-            for row in _rows(c, f"SELECT * FROM {table} WHERE cycle_id = :i", i=ID_1):
-                row.update(id=_next_id(c, table), cycle_id=ID_2)
+            for row in _rows(c, f"SELECT * FROM {table} WHERE cycle_id = :i", i=src):
+                row.update(id=_next_id(c, table), cycle_id=dst)
                 _insert(c, table, row, encode)
-        runs = _rows(c, "SELECT * FROM soa_runs WHERE cycle_id = :i ORDER BY id", i=ID_1)
+        runs = _rows(c, "SELECT * FROM soa_runs WHERE cycle_id = :i ORDER BY id", i=src)
         for run in runs:
-            run = {**run, 'id': run['id'] + RUN_OFFSET, 'cycle_id': ID_2}
+            run = {**run, 'id': run['id'] + run_offset, 'cycle_id': dst}
             for key in ('run_at', 'created_at'):
                 if key in run:
                     run[key] = _shift(run[key])
             _insert(c, 'soa_runs', run, encode)
         for table in (t for t in RUN_TABLES if t in have):
             rows = _rows(c, f"SELECT t.* FROM {table} t JOIN soa_runs r ON r.id = t.run_id WHERE r.cycle_id = :i",
-                         i=ID_1)
+                         i=src)
             for row in rows:
-                row.update(id=_next_id(c, table), run_id=row['run_id'] + RUN_OFFSET)
+                row.update(id=_next_id(c, table), run_id=row['run_id'] + run_offset)
                 if 'cycle_id' in row:
-                    row['cycle_id'] = ID_2
+                    row['cycle_id'] = dst
                 if row.get('scored_at') is not None:
                     row['scored_at'] = _shift(row['scored_at'])
                 _insert(c, table, row, encode)

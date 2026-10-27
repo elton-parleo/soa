@@ -34,8 +34,8 @@ from app.console_merchants import MerchantScope, check_merchant, merchant_cycles
 from app.console_scope import console_scope
 from app.customer_context import CustomerScope
 from app.routers import full_loop
-from app.routers.console import (_baseline_rows, _compared, _json, _merchant_meta, _promo_inputs, _reads,
-                                 _routing_inputs, _rows, _true_value_inputs, _visibility)
+from app.routers.console import (_attribute_inputs, _baseline_rows, _compared, _json, _merchant_meta, _promo_inputs,
+                                 _reads, _routing_inputs, _rows, _true_value_inputs, _visibility)
 from app.routers.console_ops import operator_scope
 from app.routers.truesync import _unwrap
 from app.services import console_cache
@@ -779,6 +779,9 @@ async def _fix_inputs(scope: CustomerScope, ms: MerchantScope, merchant: str) ->
         errors['reference'], reference = r_err, None
     overview = await get_overview(cycle=cycle['cycle_code'], merchant=merchant, scope=scope) if cycle else {}
     errors.update(overview.get('read_errors') or {})
+    # 2T-11 (B2): the sizes the study asked about (its attribute answers'), the ones the size chart fix names
+    answers = (await _attribute_inputs(scope, cycle, merchant))[0] if cycle else []
+    asked = list(dict.fromkeys(a['size'] for a in answers or [] if a.get('size')))
     brand = _brand(catalog)
     own = _own_domain(reads['retailers'], record)
     feed_rows = (reads['feed'] or {}).get('rows')
@@ -792,14 +795,15 @@ async def _fix_inputs(scope: CustomerScope, ms: MerchantScope, merchant: str) ->
             'drift': rm.build_weight_drift(reference, brand=brand),
             'gtin_rows': manu.gtin_flags(pages, feed_rows, brand=brand), 'twice': fx.gtin_twice(pages),
             'records': len(rel.hold(pubs)), 'skus': len(feed_rows) if feed_rows is not None else None,
-            'errors': errors}
+            'asked': asked, 'errors': errors}
 
 
 def _fixes_of(got: dict) -> dict:
     from app.services import console_fixes as fx
     return fx.build_fixes(signals=got['signals'], rules=got['rules'], pubs=got['pubs'], feed_rows=got['feed_rows'],
                           drift=got['drift'], gtin_rows=got['gtin_rows'], twice=got['twice'], values=got['values'],
-                          brand=got['brand'], domain=got['domain'], records=got['records'], skus=got['skus'])
+                          brand=got['brand'], domain=got['domain'], records=got['records'], skus=got['skus'],
+                          asked=got['asked'])
 
 
 @router.get("/fixes")
@@ -965,16 +969,43 @@ async def brand_impact(scope: CustomerScope, ms: MerchantScope, row: dict, body:
     label = rm.cycle_label(row, zone) or {}
     body['baseline_line'] = IMPACT_TEMPLATES['baseline_line'].format(
         day=label.get('day') or row['cycle_code'], skus=len(feed_rows or []), agents=agents, retailers=len(retailers))
-    series = {t['key']: {'key': t['key'], 'label': t.get('label'), 'points': [], 'scenario': None} for t in body['charter']}
-    for c in reversed(_scored_cycles(ms)):
-        s = await _score(c, scope.org.id, ms.slug, False, scope)
-        tiles = {m['key']: m for m in (s or {}).get('metrics_by_kind', {}).get('brand') or []}
-        lab = rm.cycle_label(c, zone) or {}
-        for key, entry in series.items():
-            tile = tiles.get(key)
-            if tile and tile.get('value') is not None:
-                entry['points'].append({'cycle': c['cycle_code'], 'day': lab.get('day'), 'value': tile['value'],
-                                        'of': tile.get('denominator'), 'measured': True})
-    body['series'] = list(series.values())
+    # 2T-11 (B1): the series per charter measure is /revenue/history's (charter_series), read after first paint
     # 2P-1's scenario rule applies only once a fix ships (a stated send); until then none
     body['scenario'] = None
+
+
+async def charter_point(scope: CustomerScope, ms: MerchantScope, cycle: dict) -> dict:
+    """2T-11 (B1): a cycle's four charter measures, {key: {value, of}}, the score's brand tiles, kept under the
+    cycle's stamp and the scorer version: computed once, never per read."""
+    from app.routers.console import _score
+    from app.services import console_score as score_svc
+
+    async def compute():
+        s = await _score(cycle, scope.org.id, ms.slug, False, scope)
+        return {m['key']: {'value': m.get('value'), 'of': m.get('denominator')}
+                for m in (s or {}).get('metrics_by_kind', {}).get('brand') or []}
+    with engine.connect() as conn:
+        return await console_cache.cycle_value(conn, cycle, 'charter_point', compute, scope.org.id, ms.slug,
+                                               score_svc.SCORER_VERSION)
+
+
+async def charter_series(scope: CustomerScope, ms: MerchantScope, cycles: List[dict], zones: dict) -> List[dict]:
+    """2T-8 (B7), on /revenue/history since 2T-11: a series per charter measure of the newest cycle (bo.CHARTER's
+    order), measured points only, one per scored cycle oldest first (`cycles` newest first, as _scored_cycles), no
+    modeled history and no scenario before a send. Each point is the cycle's charter_point."""
+    from app.services import console_brand_overview as bo
+    points = [(c, await charter_point(scope, ms, c)) for c in reversed(cycles)]
+    newest = points[-1][1] if points else {}
+    out = []
+    for key, label in bo.CHARTER:
+        if key not in newest:
+            continue
+        entry = {'key': key, 'label': label, 'points': [], 'scenario': None}
+        for c, tiles in points:
+            tile = tiles.get(key)
+            if tile and tile.get('value') is not None:
+                entry['points'].append({'cycle': c['cycle_code'],
+                                        'day': (rm.cycle_label(c, zones.get(c['study_type'])) or {}).get('day'),
+                                        'value': tile['value'], 'of': tile.get('of'), 'measured': True})
+        out.append(entry)
+    return out

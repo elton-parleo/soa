@@ -18,6 +18,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Dict, Iterable, List, Optional
 
 from app.services import console_read_models as rm
+from soa_shared import per_unit
 from soa_shared import promo_pass_through as ppt
 from soa_shared import severity as sev
 
@@ -607,8 +608,9 @@ def anatomy(rows: List[dict], *, reads: Optional[List[dict]], deals: Optional[di
         lines.append({'k': f"Or {ppt.label(d, d.get('variant')).split(': ', 1)[-1]}", 'v': _money(
             (d.get('variant') or {}).get('price')) or '', 'tag': f"Named {named} of {len(asked)}"})
     said: Dict[str, List[str]] = {}
+    # 2T-11 (B2): a quote judged per_unit (a per-diaper figure, $0.38) is not a pack price: left out of the receipt
     for q in cell.get('quotes') or []:
-        if q.get('stated'):
+        if q.get('stated') and q.get('outcome') != per_unit.PER_UNIT:
             said.setdefault(_money(q['stated']) or q['stated'], []).append(rm.AGENT_NAMES.get(q.get('agent'), q.get('agent')))
     if said:
         lines.append({'k': 'What agents quoted', 'v': ', '.join(said), 'kind': 'plus',

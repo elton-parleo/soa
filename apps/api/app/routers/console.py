@@ -245,6 +245,12 @@ def _visibility(conn, row: dict, merchant: Optional[dict] = None, errors: Option
     return body
 
 
+def _plain_visibility(conn, row: dict) -> dict:
+    """rm.load_visibility with no merchant facts, as the revenue model and its history read it, kept per cycle
+    state (2T-11, B1)."""
+    return console_cache.cycle_read(conn, row, 'visibility_plain', lambda: rm.load_visibility(conn, row))
+
+
 def _rows(conn, row: dict, features=None) -> list:
     """parity.load_overview_rows, kept per cycle state and catalog features (2Q-1, B3)."""
     return console_cache.cycle_read(conn, row, 'overview_rows', lambda: parity.load_overview_rows(conn, row, features),
@@ -1438,15 +1444,21 @@ def _merchant_meta(ms: MerchantScope) -> dict:
 
 def _revenue_model(conn, row: dict, inputs: dict, meta: dict, access_requests, vis_rows: Optional[list] = None,
                    attribute_answers: Optional[list] = None, site: Optional[str] = None) -> dict:
-    """2T-1 (B2): `attribute_answers` for a brand at retail: Missed is its size answers wrong."""
-    if vis_rows is None:
-        vis_rows = rm.load_visibility(conn, row).get('byQuestion') or []
-    catalog = revenue_svc.load_catalog_rows(conn, row)
-    shares = revenue_svc.revenue_shares(vis_rows, catalog, inputs['lost_gainable']['value'], kind=meta['kind'],
-                                        attribute_answers=attribute_answers, site=site)
-    return revenue_svc.build_model(shares, inputs, cycle=row['cycle_code'], cycle_name=rm.cycle_name(conn, row),
-                                   kind=meta['kind'], name=meta['name'],
-                                   domain=meta['domain'], access_requests=access_requests)
+    """2T-1 (B2): `attribute_answers` for a brand at retail: Missed is its size answers wrong. 2T-11 (B1): the
+    cycle's point (lost, missed, at stake, gainable), computed once and kept under the cycle's stamp, the scorer
+    version and the revenue inputs' digest (console_cache.cycle_read): /revenue, the Overview's hero, Visibility's
+    lead and /revenue/history read the same entry, and a rescore, a refresh or an inputs change is a new key."""
+    def compute():
+        rows = (_plain_visibility(conn, row).get('byQuestion') or []) if vis_rows is None else vis_rows
+        catalog = revenue_svc.load_catalog_rows(conn, row)
+        shares = revenue_svc.revenue_shares(rows, catalog, inputs['lost_gainable']['value'], kind=meta['kind'],
+                                            attribute_answers=attribute_answers, site=site)
+        return revenue_svc.build_model(shares, inputs, cycle=row['cycle_code'], cycle_name=rm.cycle_name(conn, row),
+                                       kind=meta['kind'], name=meta['name'],
+                                       domain=meta['domain'], access_requests=access_requests)
+    return console_cache.cycle_read(conn, row, 'revenue_point', compute, score_svc.SCORER_VERSION, inputs, meta,
+                                    access_requests, attribute_answers, site,
+                                    None if vis_rows is None else console_cache.digest(vis_rows))
 
 
 @router.get("/prove")
@@ -1486,6 +1498,9 @@ async def get_prove(cycle: str = Query(...), merchant: Optional[str] = Query(Non
         prev_promo, prev_deals, _pa, prev_err = await _promo_inputs(scope, compared['row'], merchant)
         if prev_err is None and prev_deals is not None:
             rm.prove_changes(body, deals, prev_deals, promo, prev_promo, compared['name'])
+            # 2T-11 (B2): the chip's pair by its label ("+3 vs Oct 23"), never the cycle's code
+            if (body.get('aside') or {}).get('delta'):
+                body['aside']['delta']['vs'] = (compared.get('label') or {}).get('vs')
         elif prev_err is not None:
             body['read_errors']['previous_deals'] = prev_err
     return body
@@ -1524,19 +1539,14 @@ async def get_revenue(cycle: str = Query(...), merchant: Optional[str] = Query(N
     rows, vis = await _baseline_rows(scope, row, ms, meta, errors)
     if rows:
         body['baseline'] = list(body.get('baseline') or []) + rows
-    # 2P-1 (B3): the baseline is the first cycle of the run of compared cycles that ends
-    # here (this cycle on a first cycle, or after one that does not compare), and what
-    # moved since it
+    # 2P-1 (B3): what moved since the baseline. 2T-11 (B1): the baseline is the prior cycle when the two compare
+    # (this cycle on a first cycle, or after one that does not compare): /revenue reads this cycle and the prior,
+    # never the run of compared cycles back to its first (four full cycle reads on Oct 27, past the function's
+    # limit). The run is /revenue/history's vs_previous.
     body['baseline_cycle'], body['since_baseline'] = row['cycle_code'], None
     with engine.connect() as conn:
-        base, here, chain = None, row, []
-        while True:
-            here_rows = parity.load_overview_rows(conn, here)
-            compared = _compared(conn, here, here_rows, vis if here is row and vis else rm.load_visibility(conn, here))
-            if not compared or compared['status'] != 'compared' or compared['code'] in chain:
-                break
-            chain.append(compared['code'])
-            base = here = compared['row']
+        compared = _compared(conn, row, _rows(conn, row), vis or _visibility(conn, row))
+    base = compared['row'] if compared and compared['status'] == 'compared' else None
     if base is not None:
         base_rows, _vis = await _baseline_rows(scope, base, ms, meta, {})
         body['baseline_cycle'] = base['cycle_code']
@@ -1563,7 +1573,24 @@ async def get_revenue(cycle: str = Query(...), merchant: Optional[str] = Query(N
 async def _baseline_rows(scope: CustomerScope, row: dict, ms: MerchantScope, meta: dict, errors: dict) -> tuple:
     """(Impact's baseline rows for the cycle, its visibility or None). 2M-2: promo
     pass-through, absent when not measured; 2N-1: for a brand, the demo's other
-    three: Attribute accuracy, Retailer coverage, Category presence."""
+    three: Attribute accuracy, Retailer coverage, Category presence. 2T-11 (B1): kept per cycle (its stamp, the
+    merchant) when every read behind them answered; a failed read is named in `errors` and never kept."""
+    if not console_cache.enabled():
+        return await _read_baseline_rows(scope, row, ms, meta, errors)
+    with engine.connect() as conn:
+        key = ('cycle', 'baseline_rows', console_cache.cycle_stamp(conn, row), ms.slug, console_cache.digest(meta))
+    hit = console_cache.lookup(key)
+    if hit is not None:
+        return hit
+    mine = {}
+    got = await _read_baseline_rows(scope, row, ms, meta, mine)
+    errors.update(mine)
+    if not mine:
+        console_cache.keep(key, got)
+    return got
+
+
+async def _read_baseline_rows(scope: CustomerScope, row: dict, ms: MerchantScope, meta: dict, errors: dict) -> tuple:
     promo, _deals, _as_of, p_err = await _promo_inputs(scope, row, ms.slug)
     if p_err is not None:
         errors['deals'] = p_err
@@ -1615,13 +1642,13 @@ async def get_revenue_history(merchant: Optional[str] = Query(None), scope: Cust
         before = None
         for c in reversed(cycles):
             c = {**c, 'customer_org_id': scope.org.id}
-            vis_rows = rm.load_visibility(conn, c).get('byQuestion') or []
+            vis_rows = _plain_visibility(conn, c).get('byQuestion') or []
             answers, site = brand_answers.get(c['id'], (None, None))
             m = _revenue_model(conn, c, inputs, meta, None, vis_rows, attribute_answers=answers, site=site)
             # every agent together, as the revenue model counts them
             here = {**parity.surface_metrics([], vis_rows, surfaces.ALL), **rm.study_identity(conn, c),
                     # 2P-1 (B2): the version its outcomes compare under, as the score's
-                    'scorer_version': score_svc.outcomes_version(parity.load_overview_rows(conn, c))}
+                    'scorer_version': score_svc.outcomes_version(_rows(conn, c))}
             vs = None
             if before is not None:
                 ok, condition, reason = cycle_compare.cycles_comparable(
@@ -1635,4 +1662,9 @@ async def get_revenue_history(merchant: Optional[str] = Query(None), scope: Cust
                         'measured': m['measured'],
                         'reason': m['reason'], 'shares': m['shares'], 'counts': m['counts'],
                         'exposed': (m['today'] or {}).get('exposed'), 'gainable': (m['today'] or {}).get('gainable')})
-    return {'merchant': ms.slug, 'dollars': inputs['scope']['entered'], 'currency': inputs['currency'], 'cycles': out}
+    body = {'merchant': ms.slug, 'dollars': inputs['scope']['entered'], 'currency': inputs['currency'], 'cycles': out}
+    # 2T-11 (B1): Impact's series per charter measure, read here after first paint, never on /revenue
+    if _is_brand_at_retail(ms, ms.slug):
+        from app.routers.console_manufacturer import charter_series
+        body['series'] = await charter_series(scope, ms, [{**c, 'customer_org_id': scope.org.id} for c in cycles], zones)
+    return body

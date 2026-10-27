@@ -206,6 +206,8 @@ PRODUCT_RECORD_TEMPLATES.update({
     'issue.gtin.digits.text': '{where} gives {was} for {line} {size}, which drops its leading zero: {now}.',
     'issue.gtin.digits.where.markup': '{domain} markup',
     'issue.gtin.digits.where.feed': 'The feed',
+    'issue.gtin.markup.title': 'Another GTIN in the markup',
+    'issue.gtin.markup.text': "Markup names another GTIN for {size}: {page} against the feed's {record}.",
     'issue.ranges.title': 'Retailers that state the wrong range',
     'issue.ranges.text': '{wrong}.{right}',
     'issue.ranges.one': '{retailer} says {range}',
@@ -301,6 +303,17 @@ def sku_chart(prices: Optional[List[dict]], v: dict, *, charts: Optional[Dict[st
     return rel.record_chart(prices, [v], own_domains=own_domains, brand=brand)
 
 
+def record_sub(v: dict, chart) -> str:
+    """The subtitle under the record's title (its product name): the variant's words without the name again. 2T-11
+    (B2): a feed label that leads with the product name ("Pampers Swaddlers, Newborn, 84 ct") read "Pampers
+    Swaddlers, Pampers Swaddlers, Newborn, 84 ct" in the selected record's title."""
+    from app.services import console_release as rel
+    label, name = str(v.get('label') or ''), str(v.get('product_name') or '').strip()
+    if name and label.lower().startswith(name.lower()):
+        v = {**v, 'label': label[len(name):].lstrip(' ,-·').strip()}
+    return rel._variant_words(v, chart)
+
+
 def record_list_rows(records: List[dict], *, catalog: Optional[dict], feed_rows: Optional[List[dict]],
                      prices: Optional[List[dict]], own_domains: Iterable[str], brand: Optional[str],
                      charts: Optional[Dict[str, list]] = None) -> List[dict]:
@@ -314,7 +327,7 @@ def record_list_rows(records: List[dict], *, catalog: Optional[dict], feed_rows:
             st = sku_state(variant_lines(rec, v))
             succ = v.get('successor') or {}
             out.append({'sku': sku_of(v), 'title': v.get('product_name') or rec.get('name'),
-                        'sub': rel._variant_words(v, chart), 'line': _short_line(v.get('product_name'), brand),
+                        'sub': record_sub(v, chart), 'line': _short_line(v.get('product_name'), brand),
                         'record_ref': rec['record_ref'], 'variant_id': v.get('variant_id'), 'state': st['state'],
                         'disagree': {'n': st['n'], 'which': st['which']}, 'status': state_status(st),
                         'retired': {'successor': {'productName': succ.get('product_name'), 'sku': succ.get('sku')}
@@ -458,10 +471,12 @@ def _size_words(label) -> Optional[str]:
 
 def build_issues(v: dict, *, page: Optional[dict], charts: Optional[Dict[str, list]], feed_rows: Optional[List[dict]],
                  brand: Optional[str], domain: str, attribute_answers: List[dict], drift: List[dict],
-                 shelf_rows: List[dict], flags: List[dict], chart_weight: Optional[str]) -> List[dict]:
+                 shelf_rows: List[dict], flags: List[dict], chart_weight: Optional[str],
+                 markup: Optional[dict] = None) -> List[dict]:
     """B2: the record's issues, each {kind, title, text, fix_kind, tone}: two charts for the size across the
-    lines, a GTIN mapping (one GTIN on two counts in the markup, or 11 digits), retailers stating another range
-    than the chart, and markup sizes that carry another line's chart."""
+    lines, a GTIN mapping (one GTIN on two counts in the markup, or 11 digits; 2T-11: the markup naming another
+    GTIN than the feed's, the GTIN row's own mismatch, so the Issues card never says "None found" beside it),
+    retailers stating another range than the chart, and markup sizes that carry another line's chart."""
     from app.services import console_brand_overview as bo
     from app.services import console_release as rel
     from app.services import console_manufacturer as manu
@@ -521,6 +536,13 @@ def build_issues(v: dict, *, page: Optional[dict], charts: Optional[Dict[str, li
                                                                     now=f['now']),
                         'fix_kind': 'gtin', 'tone': 'bad'})
             break
+    # 2T-11 (B2): the markup names another GTIN for the variant (markup_differences, the GTIN row's `was`)
+    gtin_diff = next((d for d in (markup or {}).get('differences') or [] if d['field'] == 'gtin'), None)
+    if gtin_diff:
+        out.append({'kind': 'gtin_mapping', 'title': T['issue.gtin.markup.title'],
+                    'text': T['issue.gtin.markup.text'].format(size=size or 'this size', page=gtin_diff['page'],
+                                                               record=gtin_diff['record']),
+                    'fix_kind': 'gtin', 'tone': 'bad'})
     # retailers stating another range than the chart
     # each retailer's stated range: its shelf row's own when the row states one (the newer read), else 2M-1's row
     stated = {_drift_domain(r): r['was'] for r in drift if r.get('kind') == 'page' and _drift_domain(r)}
@@ -822,14 +844,14 @@ def build_product_record(v: dict, record: dict, *, prices: Optional[List[dict]],
     st = sku_state(variant_lines(record, v))
     issues = build_issues(v, page=page, charts=charts, feed_rows=feed_rows, brand=brand, domain=domain,
                           attribute_answers=attribute_answers, drift=mine_drift, shelf_rows=shelf, flags=flags,
-                          chart_weight=weight)
+                          chart_weight=weight, markup=markup)
     history, every = record_history(v, shelf_rows=shelf, page=page, held_rows=held_rows, channels=channels,
                                     domain=domain, feed_version=feed_version)
     succ = v.get('successor') or {}
     return {
         'mode': 'manufacturer', 'kind': 'product', 'sku': sku_of(v), 'record_ref': record.get('record_ref'),
         'title': v.get('product_name') or record.get('name'), 'line': _short_line(v.get('product_name'), brand),
-        'sub': rel._variant_words(v, chart), 'gtin': v.get('gtin'),
+        'sub': record_sub(v, chart), 'gtin': v.get('gtin'),
         'state': st['state'], 'disagree': {'n': st['n'], 'which': st['which']}, 'status': state_status(st),
         'retired': {'successor': {'productName': succ.get('product_name'), 'sku': succ.get('sku')} if succ else None}
         if v.get('status') == 'retired' else None,
