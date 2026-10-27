@@ -59,7 +59,7 @@ FIX_TEMPLATES = {
                    "each group the queue is ranked by what the fix wins back."),
     'approvals.release.title': '{n} records, Manufacturer Center first',
     'approvals.release.text': ("The held file: {n} records compiled in manufacturer mode, no price, every retailer shown "
-                               "the same way. {brand_s} own team sends it; it is stated sent on Publishing."),
+                               "the same way. {brand_s} own team sends it. Its send is stated on Publishing."),
     'approvals.requested.rule': 'Rule seeded',
     'approvals.requested.release': 'Hold compiled',
     'approvals.hero': '{k} of {n} requests waiting.',
