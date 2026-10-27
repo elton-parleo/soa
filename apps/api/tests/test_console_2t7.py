@@ -308,3 +308,129 @@ def test_the_check_explains_its_zero_and_the_markup_counts_no_drift_for_it():
                  for p in pages]
     flags = [f for f in manu.gtin_flags(page_list, None, brand='Pampers') if f.get('where') == 'markup']
     assert flags == [] and manu.markup_reason([], None, flags) is None
+
+
+# ── the console's samples ─────────────────────────────────────────────────
+
+def _dump(out, name, body):
+    import json
+    import os
+    os.makedirs(out, exist_ok=True)
+    with open(os.path.join(out, name), 'w') as fh:
+        json.dump(body, fh, indent=1, sort_keys=True)
+
+
+def _fl15_true_value(tv: dict) -> dict:
+    """True Value with FL15's shape laid on the harness's served body, DERIVED and said so, by soa's own
+    console_measure.true_value_brand: pampers.com's recorded ProductGroups as each row's brand page (no pack
+    count anywhere, item 4), an Amazon list price over v0's one-time price (item 6's receipt), FL15's Zzz row
+    on Size 4, 104 ct (item 5: Amazon's shown run $44.99 for Size 3, 116-count beside a live $44.99, Walmart's
+    $22.97 for Size 5, 56 ct), and the harness's deals and named counts."""
+    import copy
+    body = copy.deepcopy(tv)
+    page = next(r for r in _own_reads() if 'swaddlers' in r['url'])
+    reads = [{**copy.deepcopy(page), 'variant_ref': r['variant_id'], 'sku': None} for r in body['rows']]
+    reads.append({'retailer_domain': 'amazon.com', 'variant_ref': 'feed_sku:v0', 'price': '27.97',
+                  'list_price': '29.99', 'observed_at': '2026-10-21T14:00:00+00:00'})
+    zzz = next(r for r in body['rows'] if r['variant_id'] == 'feed_sku:v4')
+    zzz['cells']['amazon.com'].update(quoted='$44.99', live='$44.99', status='wrong', outcome='wrong', runs=5, quotes=[
+        _q('chatgpt', '44.99', clash='Pampers Zzz Size 3, 116-count'), _q('perplexity', '44.99'),
+        _q('copilot', '47.99'), _q('claude', '41.99'), _q('gemini', '44.99', 'exact')])
+    zzz['cells']['walmart.com'].update(quoted='$22.97', live='$38.97', status='wrong', outcome='wrong', runs=2, quotes=[
+        _q('chatgpt', '22.97', clash='Pampers Zzz Size 5, 56 ct'), _q('gemini', '22.97', clash='Pampers Zzz Size 5, 56 ct')])
+    deal = {'retailer_domain': 'amazon.com', 'kind': 'multi_buy', 'text': 'Save 40% on 1 when you buy 2',
+            'terms': 'buy 2, save 40% on 1', 'variants': [{'sku': 'v0', 'variant_ref': 'feed_sku:v0', 'price': '22.38'}]}
+    did = measure.ppt.deal_id(deal)
+    promo = {'judged': [{'variant_id': 'feed_sku:v0', 'live': [did], 'named': [did] if i < 2 else []}
+                        for i in range(10)]}
+    return measure.true_value_brand(body, reads=reads, deals={'read_date': '2026-10-21', 'deals': [deal]},
+                                    promo=promo, attribute_answers=[], feed_rows=None, own_domains=['pampers.com'],
+                                    brand='Wiggle & Snug')
+
+
+def _fl15_accessibility(acc_body: dict) -> dict:
+    """Accessibility's six checks with FL15's shape, DERIVED and said so, by soa's own
+    console_accessibility_brand.build: seven pampers.com pages, each the recorded Swaddlers ProductGroup (gtin13,
+    no Offer), the AMORE and Ultra pages' gtin13 written with 11 digits, and the markup's weight range against the
+    chart on four lines, three of them contradicting it (Baby-Dry, Cruisers 360, Zzz). The hero and the retailer
+    checks are the harness's."""
+    import copy
+    from app.services import console_accessibility_brand as acc
+    body = copy.deepcopy(acc_body)
+    swaddlers = next(r for r in _own_reads() if 'swaddlers' in r['url'])
+    lines = (('swaddlers', 'Swaddlers', None), ('baby-dry', 'Baby-Dry', None), ('cruisers-360', 'Cruisers 360', None),
+             ('zzz', 'Zzz', None), ('pure', 'Pure Protection', None), ('amore', 'AMORE', '30772244425'),
+             ('ultra', 'Swaddlers Ultra Day + Night', '37000833970'))
+    pages, feed = [], []
+    for slug, line, short in lines:
+        url = f'https://www.pampers.com/en-us/products/pampers-{slug}'
+        page = copy.deepcopy(swaddlers)
+        page.update(url=url, observed_at='2026-10-24T04:00:00+00:00')
+        page['json_ld'] = {**page['json_ld'], 'name': f'Pampers® {line} Diapers'}
+        if short:
+            page['json_ld']['hasVariant'] = [{**page['json_ld']['hasVariant'][2], 'gtin13': short}]
+        pages.append(page)
+        feed.append({'sku': slug, 'retailers': [{'domain': 'pampers.com', 'url': url},
+                                                {'domain': 'amazon.com', 'url': f'https://www.amazon.com/{slug}'}]})
+    attrs = [{'variant_ref': f'feed_sku:{slug}', 'product_name': f'Pampers {line}', 'variant_label': 'Size 4',
+              'markup': {'min': 15, 'max': 34}, 'chart': {'min': 15 if slug == 'swaddlers' else 22, 'max': 34 if
+                                                          slug == 'swaddlers' else 37}}
+             for slug, line, _s in lines[:4]]
+    out = acc.build(prices=pages, feed_rows=feed, reference={'attributes': attrs}, access=None, robots=None,
+                    own_domains=['pampers.com'], retailers=['amazon.com'], brand='Pampers')
+    body['checks'] = out['checks']
+    return body
+
+
+def _fl15_visibility(vis: dict) -> dict:
+    """Visibility's gap with FL15's counts, DERIVED and said so: the brand named 103 times and first in 80, Huggies
+    named 64 and first in 26, every other brand behind Huggies, laid on the harness's brand-choice ranking, the lead rebuilt by soa's own
+    console_measure.visibility_lead."""
+    import copy
+    body = copy.deepcopy(vis)
+    rows = body['ranking']['brand_choice']['rows']
+    for r in rows:
+        if r.get('you'):
+            r.update(named=103, first=80)
+        elif r['name'] == f2t5.RIVAL:
+            r.update(named=64, first=26)
+        else:   # the harness's third brand stays behind Huggies, as every other brand was on FL15
+            r.update(first=min(r['first'], 12), named=min(r['named'], 40))
+    body.update(measure.visibility_lead(body, f2t5.BRAND, {'dollars': None,
+                                                           'reason': 'enter sales in scope on Impact'}))
+    return body
+
+
+def test_the_console_samples(http, db, upstream):
+    """SOA_2T7_SAMPLE_DUMP=<dir>: the 2T-5 samples re-recorded on this branch (the 2T-1 harness, FL15's comparison
+    questions, #33's /reference), and the FL15-shaped samples DERIVED above for the items the harness cannot show."""
+    import os
+    _shape(db, http, upstream)
+    f2t5.comparison(db, _encode)
+    upstream.answer('GET', f'{f2r2.BASE}/reference', body=f2r2.body('reference'), token=f2r2.TOKEN_A)
+    read = {name: _read(http, ep, **({} if ep == 'accessibility' else {'cycle': f2p1.CYCLE_2}))
+            for name, ep in (('answers-2t5.json', 'answers'), ('answers-summary-2t5.json', 'answers/summary'),
+                             ('visibility-2t5.json', 'visibility'), ('true-value-2t5.json', 'true-value'),
+                             ('accessibility-2t5.json', 'accessibility'))}
+    derived = {'true-value-2t7.json': _fl15_true_value(read['true-value-2t5.json']),
+               'accessibility-2t7.json': _fl15_accessibility(read['accessibility-2t5.json']),
+               'visibility-2t7.json': _fl15_visibility(read['visibility-2t5.json'])}
+    tv = derived['true-value-2t7.json']
+    assert tv['brand_column_note'] == 'Markup lists no pack count'
+    assert {r['variant_id']: r['cells']['pampers.com'].get('note') for r in tv['rows']} == \
+        {r['variant_id']: None for r in tv['rows']}
+    zzz = next(r for r in tv['rows'] if r['variant_id'] == 'feed_sku:v4')['cells']
+    assert (zzz['amazon.com']['clash'], zzz['walmart.com']['clash']) == ('$44.99 for Size 3, 116 ct',
+                                                                       '$22.97 for Size 5, 56 ct')
+    assert (tv['anatomy']['picked_by'], [r['k'] for r in tv['anatomy']['rows']][:3]) == (
+        'live_deal', ['List price', 'Amazon price cut', 'One-time price'])
+    checks = {c['key']: c for c in derived['accessibility-2t7.json']['checks']}
+    assert checks['weight']['value'] == '3 of 4 pages: Baby-Dry, Cruisers 360 and Zzz'
+    assert checks['gtin']['value'] == 'AMORE and Swaddlers Ultra Day + Night drop the leading zero'
+    assert checks['product_group']['basis'] == 'ProductGroup with gtin13 on 7 of 7. No Offer per retailer in the markup'
+    assert derived['visibility-2t7.json']['gap']['sentence'] == (
+        '54 first picks ahead of Huggies · Named more often than Huggies, picked first more often')
+    out = os.environ.get('SOA_2T7_SAMPLE_DUMP')
+    if out:
+        for name, body in {**read, **derived}.items():
+            _dump(out, name, body)

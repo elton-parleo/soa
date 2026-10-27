@@ -8539,3 +8539,51 @@ Tests: `test_console_2t5_answers.py`, `test_console_2t5_visibility.py`, `test_co
 `test_console_2t5_accessibility.py` on the 2T-1 harness plus `console_fixture_2t5` (FL15's shape, DERIVED: two
 comparison questions in FL15's wording with the harness's brand, rival products and names outside the category, and
 FL15's live Answers counts as rows), and brand-page reads built in supply's shape.
+
+## 2T-7: seven items from the Oct 26 walk of the Measure screens
+
+No migration, no model call, no new production read, no scorer change. Findings are the live console on Oct 26
+(org 12, FL15-pampers-20261024, scorer 18).
+
+1. **Visibility's gap** (`gap.claim`): built from the counts, not from one band. Named more often than / almost as
+   often as (within 10% of the rival's count, fewer) / about as often as (within 10%, as many or more) / less often
+   than the rival, then picked first more / about as / less / far less (half or fewer) often. FL15's 103 to 64
+   named, 80 to 26 first reads "54 first picks ahead of Huggies · Named more often than Huggies, picked first more
+   often"; the demo's 25 to 27, 5 to 9 is "Named almost as often as Huggies, picked first less often". Level on first
+   picks keeps its own line. `gap.named_vs` and `gap.first_vs` (`more`, `about`, `less`) sit beside.
+2. **One cycle label** (`rm.cycle_label`): a cycle's start day in its study's zone (`cycle_dates`, else its UTC
+   start date) as {code, day, name, since, vs}: "Oct 23", "the Oct 23 cycle", "Since Oct 23", "vs Oct 23"; with no
+   date at all the code stands in. Every string that named a cycle by its code now reads the label: the Changes
+   details and agent deltas, the "Not comparable" notes (cycle_compare's, the score's, the revenue history's),
+   Visibility's moved rows and lede ("in the Oct 21 cycle"), True Value's drift, Prove's change notes, the
+   since-baseline rows, the revenue basis, the Overview's `vs_label`. The code stays the identifier where one is
+   served (`previous.cycle`, `vs_cycle`, `baseline_cycle`). Every `previous` block (Visibility, True Value, the
+   score) adds {day, name, since, vs} for the console's headers ("Since Oct 14", "-3 vs Oct 14").
+3. **Accessibility's checks**: `weight` is "Weight in markup contradicts the size selector", its count the
+   contradicting pages (good when zero), its value "3 of 4 pages: Baby-Dry, Cruisers 360 and Zzz" ("0 of 4 pages"
+   when none), its note naming them. `gtin`'s value names the lines that drop a digit, "AMORE and Ultra drop the
+   leading zero", the count in the note.
+4. **True Value's brand column**: `markup_lists` reads the brand's markup once. With no pack count on any variant
+   (pampers.com's ProductGroups, as recorded), the brand's column says "Markup lists no pack count" once
+   (`brand_column_note`, and `note` on the brand's column in every column list) and no cell repeats it. "No <N> ct
+   listed" stays for a line whose markup lists other counts; a line listing none while others do reads "Markup lists
+   no pack count". "No price in markup" likewise only when some variant in the markup carries a price.
+5. **The variant clash**: a retailer cell's `clash` follows the run the cell shows (`shown_runs`: the deciding
+   outcome's runs at the quote the cell displays), whatever the amount: FL15's Zzz on Amazon, "$44.99 for Size 3,
+   116 ct" beside a live $44.99.
+6. **The receipt** (`anatomy`): `anatomy_pick` takes each SKU on its most-asked retailer (each of a tie, by domain),
+   the SKUs most asked first: the first with a deal live there, else the first whose read lists a price above the
+   one it sells at, else the most-asked cell as before. `anatomy.picked_by` is `live_deal`, `list_vs_sale` or
+   `most_asked`.
+7. **"Offer per retailer"**: the `product_group` check's note says what the markup carries, "ProductGroup with
+   gtin13 on 7 of 7. No Offer per retailer in the markup" (no semicolon, by the house rule), with `offers_absent`
+   and the `group`, `gtin13`, `offered` counts beside; its count is unchanged. #33's recorded pampers.com pages carry
+   a ProductGroup, a gtin13 on every variant and no Offer node. The site markup surface and the lead's markup tile
+   count weight rows and GTIN flags only, so the absence was never drift there.
+
+Tests: `test_console_2t7.py` (each item; the cycle-code scan over every string the four Measure screens, the
+Overview, its score and TrueSync serve, on the compared pair and on FL15's comparison shape). The pins of earlier
+mains read the body with the codes put back (`tests/cycle_label_2t7.py`). Samples:
+`SOA_2T7_SAMPLE_DUMP=<dir> pytest tests/test_console_2t7.py -k samples` writes the 2T-5 set re-recorded and three
+FL15-shaped samples DERIVED by soa's own functions on the harness's served bodies (`true-value-2t7`,
+`accessibility-2t7`, `visibility-2t7`).
