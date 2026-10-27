@@ -49,6 +49,7 @@ from app import worker_surfaces
 from app.routers import full_loop
 from app.routers.customers import _tenant_view
 from app.services import console_claims
+from app.services import console_measure as measure
 from app.services import console_narratives as narratives_svc
 from app.services import console_parity as parity
 from app.services import console_prompts
@@ -151,12 +152,16 @@ async def get_answers_summary(cycle: str = Query(...), scope: CustomerScope = De
     its own, and answered_with_other_brand. 2I-8: every agent together
     (`all`) first, counts summed; each surface beside it. 2T-4 (2):
     `severity`, the Answers list's flagged counts (soa_shared/severity.tally
-    over the answers /answers serves)."""
+    over the answers /answers serves). 2T-5 (A1 to A3): the lead over the
+    same answers, `flagged`, `hero`, `worst_answer_id`, `chips` and `kinds`
+    (console_measure.answers_lead)."""
     row = dict(cycle_in_scope(cycle, scope))
     clubs = await _club_keys(row, scope)
     with engine.connect() as conn:
         body = rm.load_answers_summary(conn, row)
-        body['severity'] = severity.tally(rm.load_answers(conn, row, club_keys=clubs))
+        answers = rm.load_answers(conn, row, club_keys=clubs)
+        body['severity'] = severity.tally(answers)
+        body.update(measure.answers_lead(answers, rm.load_primary(conn, row)))
         return body
 
 

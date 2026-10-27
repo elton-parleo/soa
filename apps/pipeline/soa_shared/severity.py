@@ -21,7 +21,9 @@ the narratives' flag rule, sync copies in apps/api and apps/pipeline.
           and for a seller a store off its own list).
   medium  a live deal on the SKU not named; one of the feed's retailers named
           (or none) where two or more could be; no weight given when asked; a
-          partial price (whole-dollar).
+          partial price (whole-dollar). 2T-5 (A5b): the agent said it could
+          not find the product (brand verdict `acknowledged_unknown`), which
+          2T-4 left unflagged because no bullet placed it.
   ok      right: an exact price, a grounded brand claim (the demo's "Confirmed
           right"), the weight range matching, the successor named, the deal
           named, two or more of the brand's retailers named.
@@ -59,6 +61,7 @@ MISSED_DEAL = 'missed_deal'
 FEWER_RETAILERS = 'fewer_retailers'
 NO_WEIGHT = 'no_weight'
 PARTIAL_PRICE = 'partial_price'
+COULD_NOT_FIND = 'could_not_find'
 RIGHT = 'right'
 NO_DEAL_LIVE = 'no_deal_live'
 UNCHECKED = 'could_not_check'
@@ -110,6 +113,18 @@ def classify(*, tier: Optional[str], outcome: Optional[str], reason_code: Option
     named is one, `brand_in_question` and `brand_first` for a comparison
     answer. See the module docstring.
     """
+    out = _classify(tier=tier, outcome=outcome, flags=flags, merchant_kind=merchant_kind, intent=intent,
+                    intent_verdict=intent_verdict, listed=listed, club_only=club_only,
+                    first_store_club=first_store_club, retired_called_current=retired_called_current,
+                    brand_in_question=brand_in_question, brand_first=brand_first)
+    # 2T-5 (A5b): "I could not find that product" is Medium wherever no other bullet flagged it
+    if tier == BRAND_TIER and outcome == 'acknowledged_unknown' and out['severity'] == LOW:
+        return _out(MEDIUM, COULD_NOT_FIND)
+    return out
+
+
+def _classify(*, tier, outcome, flags, merchant_kind, intent, intent_verdict, listed, club_only, first_store_club,
+              retired_called_current, brand_in_question, brand_first) -> dict:
     names = _flag_names(counted_flags(flags, merchant_kind))
     if names & set(FABRICATED_FLAGS):
         return _out(HIGH, FABRICATED)

@@ -225,6 +225,72 @@ def catalog_verdict(intent: str, source_ref: dict, extraction: Optional[dict], a
             'severity': 'ok' if covered else 'low', 'tone': 'ok' if covered else 'neu'}
 
 
+# ─── 2T-5: the Answers tabs and the rule-built summary ──────────────────────
+
+#: The demo's four tabs (Answer.queryType there). Tier stays its own field.
+ACCURACY, VALUE, CATEGORY, BRAND_DIRECT = 'Accuracy', 'Value', 'Category', 'Brand-direct'
+ANSWER_KINDS = (ACCURACY, VALUE, CATEGORY, BRAND_DIRECT)
+#: catalog-built brand-direct intents that ask where to buy or what it costs
+VALUE_INTENTS = ('where_to_buy', 'cheapest_place')
+ORDINALS = {2: 'second', 3: 'third', 4: 'fourth', 5: 'fifth', 6: 'sixth', 7: 'seventh', 8: 'eighth', 9: 'ninth'}
+#: A flagged answer whose verdict carried no line of its own reads its rule's (never "Not scored").
+RULE_LINES = {
+    severity.WRONG_PRICE: 'quoted a price the page did not show',
+    severity.WRONG_FACT: '{brand_s} facts stated wrong',
+    severity.FABRICATED: 'cited a source or a store that does not hold up',
+    severity.RETIRED_CURRENT: 'called a retired line current',
+    severity.NO_SUCCESSOR: 'did not name the successor of a retired line',
+    severity.CLUB_ELSEWHERE: 'sent a club-only line to a store that is not a club',
+    severity.MISSED_DEAL: 'named none of the deals live that day',
+    severity.FEWER_RETAILERS: "named fewer than two of the brand's retailers",
+    severity.NO_WEIGHT: 'gave no weight range',
+    severity.PARTIAL_PRICE: 'quoted a price near the page, not on it',
+    severity.COULD_NOT_FIND: 'said it could not find the product',
+}
+
+
+def answer_kind(tier: Optional[str], intent: Optional[str]) -> str:
+    """2T-5 (A4): Accuracy (weight, count and size questions), Value (where to buy, the cheapest place, the
+    price at a retailer), Category (category control and comparison), Brand-direct (the rest asked by name)."""
+    if tier in ('category_control', 'comparison'):
+        return CATEGORY
+    if tier in severity.VALUE_TIERS or intent in VALUE_INTENTS:
+        return VALUE
+    if intent == claim_kinds.ATTRIBUTE_INTENT:
+        return ACCURACY
+    return BRAND_DIRECT
+
+
+def _brand_first(mentions: List[dict], ours: Optional[str], answer_status: Optional[str]) -> Optional[bool]:
+    """Whether the brand came first, for the comparison rule; None when it cannot be said. 2T-5 (A5): an
+    answer that never came back (AI Mode returned nothing) or whose coding ranked no brand has no rival
+    first, so it is not "left out where it should be first". A coding whose lowest position is 2 or more
+    had another brand first (build_visibility's rule)."""
+    if not ours or answer_status not in (None, surfaces.ANSWERED):
+        return None
+    if not any(m.get('position') is not None for m in mentions):
+        return None
+    return any(m.get('position') == 1 and m.get('role') == 'primary' for m in mentions)
+
+
+def ranking_line(mentions: List[dict], ours: Optional[str]) -> str:
+    """2T-5 (A5): a comparison answer that left the brand out of first place, from the coded ranking:
+    "Huggies first, Pampers second", "Huggies first, Pampers not named"."""
+    brand = ours or 'the brand'
+    top = next((m['name'] for m in mentions if m.get('position') == 1 and m.get('role') != 'primary'), None)
+    mine = next((m for m in mentions if m.get('role') == 'primary'), None)
+    lead = f"{top} first" if top else 'Another brand first'
+    if mine is None:
+        return f"{lead}, {brand} not named"
+    pos = mine.get('position')
+    return f"{lead}, {brand} {ORDINALS.get(pos, f'{pos}th') if pos and pos > 1 else 'named'}"
+
+
+def rule_summary(rule: Optional[str], ours: Optional[str]) -> Optional[str]:
+    line = RULE_LINES.get(rule)
+    return line.format(brand_s=f"{ours}'s" if ours else "the brand's") if line else None
+
+
 #: 2C: the classifier's reason codes (scoring/expectation_comparator.py
 #: REASON_*), carried in Check.reason and Answer.reason. A code soa adds
 #: later passes through verbatim; the console renders an unknown one neutral.
@@ -515,9 +581,18 @@ def build_answer(run: dict, query: dict, outcome: Optional[dict], mentions: List
         club_only=stores is not None, first_store_club=(stores[0].get('domain') in severity.CLUB_DOMAINS)
         if stores else None,
         brand_in_question=bool(ours) and ea_names_brand(query.get('query_text') or '', ours),
-        brand_first=None if not ours else any(m.get('position') == 1 and m.get('role') == 'primary' for m in mentions))
+        brand_first=_brand_first(mentions, ours, run.get('answer_status')))
     if own is not None:
         own = {**own, 'severity': graded['severity']}
+    summary = (own or {}).get('line') or (outcome or {}).get('outcome_reason') or (
+        f"No answer ({run.get('answer_status')})" if run.get('answer_status') not in (None, 'answered')
+        else 'Not scored')
+    # 2T-5 (A5): a flagged answer's summary is never "Not scored". A comparison answer that put a rival
+    # first reads the coded ranking; any other with no line of its own reads its rule's
+    if graded['rule'] == severity.BRAND_NOT_FIRST:
+        summary = ranking_line(mentions, ours)
+    elif severity.is_flagged(graded['severity']) and summary == 'Not scored':
+        summary = rule_summary(graded['rule'], ours) or summary
     return compact({
         'id': f"run-{run['id']}",
         'agent': agent,
@@ -526,9 +601,7 @@ def build_answer(run: dict, query: dict, outcome: Optional[dict], mentions: List
         'runAt': _iso(run.get('run_at')),
         'runs': f"run {run.get('run_number')} of {runs_per_query}" if runs_per_query else None,
         'severity': graded['severity'],
-        'summary': (own or {}).get('line') or (outcome or {}).get('outcome_reason') or (
-            f"No answer ({run.get('answer_status')})" if run.get('answer_status') not in (None, 'answered')
-            else 'Not scored'),
+        'summary': summary,
         'paragraphs': segments(run.get('raw_response'), extraction.get('spans'), claims),
         'named': named,
         'first': first,
@@ -540,6 +613,8 @@ def build_answer(run: dict, query: dict, outcome: Optional[dict], mentions: List
         'collector': run.get('collector') or surfaces.collector_of(platform),
         'answer_status': run.get('answer_status'),
         'tier': tier,
+        # 2T-5 (A4): the demo's tab, Accuracy, Value, Category or Brand-direct
+        'kind': answer_kind(tier, source_ref.get('intent') or intent),
         # 2K-3: the study's question code (the drawer's "Q13") and its stage
         'query_code': query.get('query_code'),
         'stage': query.get('stage'),
@@ -3249,6 +3324,14 @@ STUDIO_MIRROR = [
 
 # ─── loaders ───────────────────────────────────────────────────────────────
 
+def load_primary(conn, cycle: dict) -> Optional[str]:
+    """The cycle's primary entity's name (the brand), None without one."""
+    return conn.execute(text("""
+        SELECT e.name FROM soa_cycle_entities ce JOIN soa_entities e ON e.id = ce.entity_id
+        WHERE ce.cycle_id = :c AND ce.role = 'primary' ORDER BY e.id LIMIT 1
+    """), {'c': cycle['id']}).scalar()
+
+
 def load_answers(conn, cycle: dict, features: Optional[List[str]] = None,
                  club_keys: Optional[set] = None) -> List[dict]:
     """Every answer of the cycle (build_answer). 2T-4 (2): `club_keys` the
@@ -3271,10 +3354,7 @@ def load_answers(conn, cycle: dict, features: Optional[List[str]] = None,
     """), {'c': cycle['id'], 'yes': True}).mappings():
         mentions.setdefault(m['run_id'], []).append(dict(m))
     # 2T-4 (2): the brand, for a comparison answer that put a rival first
-    ours = conn.execute(text("""
-        SELECT e.name FROM soa_cycle_entities ce JOIN soa_entities e ON e.id = ce.entity_id
-        WHERE ce.cycle_id = :c AND ce.role = 'primary' ORDER BY e.id LIMIT 1
-    """), {'c': cycle['id']}).scalar()
+    ours = load_primary(conn, cycle)
     names = load_variant_names(conn, cycle)
     reference = cycle.get('reference_prices') if 'reference_prices' in cycle else conn.execute(text(
         "SELECT reference_prices FROM soa_cycles WHERE id = :c"), {'c': cycle['id']}).scalar()
