@@ -543,14 +543,16 @@ def anatomy_pick(rows: List[dict], *, reads: Optional[List[dict]], deals: Option
     """2T-7 (6): (row, domain, cell, picked_by) for the receipt. Each SKU on its most-asked retailer, the SKUs
     most asked first (their runs over every retailer): the first with a deal live there (FL15: Swaddlers Size 4
     on Walmart, its Rollback), else the first whose read there lists a price above the one it sells at, else
-    the most-asked (2T-5's pick). None when no cell was asked."""
+    the most-asked (2T-5's pick). A SKU asked as often on two retailers tries each, by domain. None when no cell
+    was asked."""
     cands = []
     for i, row in enumerate(rows):
         asked = [(d, c) for d, c in _cells(row).items() if c.get('runs')]
         if not asked:
             continue
-        domain, cell = max(asked, key=lambda dc: dc[1]['runs'])   # max keeps the first of a tie
-        cands.append((-sum(c['runs'] for _d, c in asked), i, row, domain, cell))
+        top = max(c['runs'] for _d, c in asked)
+        for domain, cell in sorted((dc for dc in asked if dc[1]['runs'] == top), key=lambda dc: _domain(dc[0])):
+            cands.append((-sum(c['runs'] for _d, c in asked), i, row, domain, cell))
     cands.sort(key=lambda c: c[:2])
 
     def has_deal(row, domain):
