@@ -12,10 +12,13 @@ already build, so a test can feed them any shape.
 
 House rules (as console_brand_overview): sentences, no semicolons, no dashes.
 """
+import re
 from collections import Counter
+from decimal import Decimal, InvalidOperation
 from typing import Dict, Iterable, List, Optional
 
 from app.services import console_read_models as rm
+from soa_shared import promo_pass_through as ppt
 from soa_shared import severity as sev
 
 AGENT_ORDER = list(rm.AGENT_NAMES)
@@ -279,3 +282,280 @@ def visibility_lead(vis: dict, brand: Optional[str], lost: Optional[dict] = None
     head = visibility_headline(vis, brand)
     return {'headline': head['text'] if head else vis.get('headline'), 'headline_detail': head,
             'gap': visibility_gap(vis, brand, lost), 'footnote': visibility_footnote(vis)}
+
+
+# ─── True Value ──────────────────────────────────────────────────────────
+
+#: TV9: the cell captions in brand mode (a brand sets no price, so every price is a retailer's)
+TV_CAPTIONS = {
+    'exact': 'The price the retailer\'s page showed',
+    'wrong': "A price the retailer's page did not show",
+    'partial': 'Near the page, not on it',
+    'missed': 'The retailer listed it and no answer quoted it',
+    'unverifiable': 'The page could not be read',
+    'none': 'Not read, not sold there, or not priced',
+}
+#: a status that counts as a price read (TV1): one an answer could be judged against
+READ_STATUSES = ('exact', 'wrong', 'partial', 'missed')
+_COUNT = re.compile(r'(\d+)\s*(?:ct|count)\b', re.I)
+
+
+def _domain(value) -> str:
+    return str(value or '').lower().removeprefix('www.')
+
+
+def _money(value) -> Optional[str]:
+    if value in (None, ''):
+        return None
+    try:
+        return f"${Decimal(str(value)):.2f}"
+    except (InvalidOperation, ValueError):
+        return None
+
+
+def row_keys(row: dict) -> set:
+    """Every key a True Value row's variant goes by (its variant_id, sku, feed code, GTIN)."""
+    keys = {row.get('variant_id'), row.get('sku'), row.get('gtin'), row.get('feed_sku')}
+    if row.get('feed_sku'):
+        keys |= {f"sku:{row['feed_sku']}", f"feed_sku:{row['feed_sku']}"}
+    return {str(k) for k in keys if k}
+
+
+def _ref_of(row: dict) -> dict:
+    return {'variant_id': row.get('variant_id'), 'gtin': row.get('gtin'), 'sku': row.get('feed_sku') or row.get('sku')}
+
+
+def _reads_for(reads: Optional[List[dict]], row: dict, domain: Optional[str] = None) -> List[dict]:
+    keys = row_keys(row)
+    out = []
+    for r in reads or []:
+        mine = {str(k) for k in (r.get('variant_ref'), r.get('sku'), f"sku:{r['sku']}" if r.get('sku') else None,
+                                 r.get('gtin')) if k}
+        if mine & keys and (domain is None or _domain(r.get('retailer_domain')) == domain):
+            out.append(r)
+    return sorted(out, key=lambda r: str(r.get('observed_at') or ''), reverse=True)
+
+
+def order_columns(columns: List[dict], own_domains: Iterable[str]) -> List[dict]:
+    """TV3: the brand's own domain first, then the retailers alphabetical by name."""
+    own = {_domain(d) for d in own_domains or () if d}
+    return sorted(columns, key=lambda c: (not (c.get('you') or _domain(c.get('id')) in own), str(c.get('name')).lower()))
+
+
+def cell_deals(row: dict, domain: str, deals: Optional[dict]) -> List[str]:
+    """TV4: the deals live on the row's SKU at that retailer that day, each as its one label (ppt.label)."""
+    out = []
+    for d in ppt.live_for(deals, _ref_of(row)):
+        if _domain(d.get('retailer_domain')) == domain:
+            line = ppt.label(d, d.get('variant'))
+            if line not in out:
+                out.append(line)
+    return out
+
+
+def brand_note(row: dict, reads: Optional[List[dict]], own_domains: Iterable[str], brand: Optional[str]) -> Optional[str]:
+    """TV4: the brand column's note from the brand page's read: "Retired. Redirects to AMORE", "No 84 ct listed.
+    Markup prices the 140 ct at $44.94", "No price in markup. GTIN has 11 digits". None with no read of it."""
+    retired = row.get('retired')
+    own = [_domain(d) for d in own_domains or () if d]
+    page = next((r for d in own for r in _reads_for(reads, row, d)), None)
+    if retired:
+        succ = ((retired.get('successor') or {}).get('label')) or None
+        moved = page is not None and page.get('final_url') and page.get('url') and \
+            rel_key(page['final_url']) != rel_key(page['url'])
+        if succ:
+            return f"Retired. Redirects to {succ}" if moved else f"Retired. {succ} is its successor"
+        return 'Retired'
+    if page is None:
+        return None
+    from app.services import console_manufacturer as manu
+    from soa_shared import attribute_accuracy
+    bp = manu.row_brand_page(page) or {}
+    nodes = manu._products(bp.get('json_ld'))
+    if not nodes:
+        return 'No markup read' if page.get('read_status') in ('ok', 'empty') else None
+    label = row.get('product') or ''
+    size, count = attribute_accuracy.size_of(label), (_COUNT.search(label) or [None, None])[1]
+
+    def words(node):
+        return ' '.join(str(node.get(k) or '') for k in ('name', 'size', 'sku'))
+
+    def node_size(node):   # the markup's size is "1" as often as "Size 1" (manu.markup_gtins)
+        raw = str(node.get('size') or '')
+        return attribute_accuracy.size_of(f"Size {raw}" if raw.isdigit() else raw or words(node))
+
+    same_size = [n for n in nodes if not size or node_size(n) == size]
+    match = next((n for n in same_size if count and (_COUNT.search(words(n)) or [None, None])[1] == count), None)
+    parts = []
+    if match is None and count and same_size:
+        parts.append(f"No {count} ct listed")
+        priced = next(((n, o) for n in same_size for o in _offers(n) if _money(o.get('price'))), None)
+        if priced:
+            other = (_COUNT.search(words(priced[0])) or [None, None])[1]
+            parts.append(f"Markup prices {'the ' + other + ' ct' if other else size or 'it'} at "
+                         f"{_money(priced[1].get('price'))}")
+    else:
+        node = match or (same_size[0] if same_size else None)
+        if node is not None and not any(_money(o.get('price')) for o in _offers(node)):
+            parts.append('No price in markup')
+        if node is not None:
+            gtin = next((node.get(k) for k in ('gtin13', 'gtin12', 'gtin14', 'gtin') if node.get(k)), None)
+            if gtin and manu.gtin_correction(gtin):
+                parts.append(f"GTIN has {len(''.join(ch for ch in str(gtin) if ch.isdigit()))} digits")
+    return '. '.join(parts) if parts else None
+
+
+def _offers(node: dict) -> List[dict]:
+    offers = node.get('offers')
+    if isinstance(offers, dict):
+        offers = offers.get('offers') if isinstance(offers.get('offers'), list) else [offers]
+    return [o for o in offers or [] if isinstance(o, dict)]
+
+
+def rel_key(url) -> str:
+    from app.services import console_release as rel
+    return rel._url_key(url)
+
+
+def clash_text(cell: dict) -> Optional[str]:
+    """TV8: a cell whose wrong quotes mostly named a variant the record does not have shows it, as the
+    Overview's signal does (console_parity.variant_clash): "$44.99 for Size 3, 116 ct"."""
+    from app.services import console_parity as parity
+    wrong = [q for q in cell.get('quotes') or [] if q.get('outcome') in ('wrong', 'stale') and q.get('stated')]
+    clashed = [q for q in wrong if q.get('clash')]
+    if not clashed or len(clashed) * 2 <= len(wrong):
+        return None
+    (stated, named), _n = Counter((q['stated'], q['clash']) for q in clashed).most_common(1)[0]
+    return f"{_money(stated) or stated} for {parity.variant_words(named) or named}"
+
+
+def _judged_for(row: dict, promo: Optional[dict]) -> List[dict]:
+    keys = row_keys(row)
+    return [j for j in (promo or {}).get('judged') or [] if str(j.get('variant_id') or '') in keys]
+
+
+def product_line(row: dict, *, deals: Optional[dict], promo: Optional[dict], attribute_answers: List[dict]) -> Optional[str]:
+    """TV5: the row's deal clause and weight clause, from the Overview's helpers: "Amazon: save 40% on 1 when you
+    buy 2 and Kroger: spend $60, save $15 were live. 0 of 5 cheapest-place answers named either. Weight right in 5
+    of 5." None when it has neither."""
+    parts = []
+    live = []
+    for d in ppt.live_for(deals, _ref_of(row)):
+        line = ppt.label(d, d.get('variant'))
+        if line not in live:
+            live.append(line)
+    if live:
+        judged = _judged_for(row, promo)
+        which = 'it' if len(live) == 1 else 'either' if len(live) == 2 else 'any'
+        parts.append(T['tv.line.deals'].format(deals=_join(live), verb='was' if len(live) == 1 else 'were',
+                                               named=sum(1 for j in judged if j.get('named')), asked=len(judged),
+                                               which=which) if judged else
+                     f"{_join(live)} {'was' if len(live) == 1 else 'were'} live.")
+    keys = row_keys(row)
+    weight = [a for a in attribute_answers or [] if str(a.get('variant_id') or '') in keys
+              and a.get('verdict') is not None]
+    if weight:
+        parts.append(T['tv.line.weight'].format(k=sum(1 for a in weight if a['verdict'] == 'match'), n=len(weight)))
+    return ' '.join(parts) or None
+
+
+def anatomy(rows: List[dict], *, reads: Optional[List[dict]], deals: Optional[dict], promo: Optional[dict],
+            brand: Optional[str], day: Optional[str]) -> Optional[dict]:
+    """TV6: the most-asked SKU on its most-asked retailer, line by line, from the reference row and the
+    quotes: list price, the price cut (sale against list), the one-time price, each deal live there with how
+    many answers named it, what agents quoted and who. No modeled dollars."""
+    best = None
+    for row in rows:
+        for domain, cell in (row.get('retailer_cells') or row.get('cells') or {}).items():
+            if cell.get('runs') and (best is None or cell['runs'] > best[2]['runs']):
+                best = (row, domain, cell)
+    if best is None:
+        return None
+    row, domain, cell = best
+    read = next(iter(_reads_for(reads, row, _domain(domain))), None) or {}
+    price, listed = read.get('price'), read.get('list_price')
+    lines = []
+    if _money(listed):
+        lines.append({'k': 'List price', 'v': _money(listed), 'tag': domain})
+    if _money(listed) and _money(price) and Decimal(str(listed)) > Decimal(str(price)):
+        cut = Decimal(str(listed)) - Decimal(str(price))
+        lines.append({'k': f"{rm._retailer_name(domain)} price cut", 'v': f"-${cut:.2f}", 'kind': 'minus',
+                      'tag': f"-{round(cut / Decimal(str(listed)) * 100)}% vs list"})
+    if _money(price):
+        lines.append({'k': 'One-time price', 'v': _money(price), 'kind': 'big'})
+    judged = _judged_for(row, promo)
+    for d in ppt.live_for(deals, _ref_of(row)):
+        if _domain(d.get('retailer_domain')) != _domain(domain):
+            continue
+        asked = [j for j in judged if ppt.deal_id(d) in (j.get('live') or [])]
+        named = sum(1 for j in asked if ppt.deal_id(d) in (j.get('named') or []))
+        lines.append({'k': f"Or {ppt.label(d, d.get('variant')).split(': ', 1)[-1]}", 'v': _money(
+            (d.get('variant') or {}).get('price')) or '', 'tag': f"Named {named} of {len(asked)}"})
+    said: Dict[str, List[str]] = {}
+    for q in cell.get('quotes') or []:
+        if q.get('stated'):
+            said.setdefault(_money(q['stated']) or q['stated'], []).append(rm.AGENT_NAMES.get(q.get('agent'), q.get('agent')))
+    if said:
+        lines.append({'k': 'What agents quoted', 'v': ', '.join(said), 'kind': 'plus',
+                      'tag': _join(list(dict.fromkeys(a for v in said.values() for a in v if a)))})
+    return {'title': T['tv.anatomy.title'].format(brand=brand or 'the brand'),
+            'sub': T['tv.anatomy.sub'].format(product=row.get('product'), retailer=rm._retailer_name(domain),
+                                              day=day or 'the read day'),
+            'sku': row.get('sku'), 'variant_id': row.get('variant_id'), 'retailer': domain, 'runs': cell['runs'],
+            'rows': lines, 'observed_at': read.get('observed_at')}
+
+
+def true_value_hero(rows: List[dict]) -> dict:
+    """TV1: from the tiles: "<wrong + left out> of <read> prices read are wrong or missing · <wrong> quoted prices
+    are off the live page, and <left out> retailer prices were left out"."""
+    cells = [c for r in rows for c in (r.get('retailer_cells') or r.get('cells') or {}).values()]
+    wrong = sum(1 for c in cells if c.get('status') == 'wrong')
+    left = sum(1 for c in cells if c.get('status') == 'missed')
+    read = sum(1 for c in cells if c.get('status') in READ_STATUSES)
+    sub = T['tv.hero.sub'].format(n=wrong + left, read=read)
+    claim = T['tv.hero.claim'].format(wrong=_plural(wrong, 'quoted price is', 'quoted prices are'),
+                                      left=_plural(left, 'retailer price was', 'retailer prices were'))
+    return {'n': wrong + left, 'read': read, 'wrong': wrong, 'left_out': left, 'sub': sub, 'claim': claim,
+            'text': f"{wrong + left} {sub.split(' ', 1)[1]} · {claim}"}
+
+
+def true_value_brand(body: dict, *, reads: Optional[List[dict]], deals: Optional[dict], promo: Optional[dict],
+                     attribute_answers: List[dict], feed_rows: Optional[List[dict]], own_domains: Iterable[str],
+                     brand: Optional[str]) -> dict:
+    """TV1 to TV9 on the body build_true_value served, for a brand at retail. Mutates and returns it."""
+    own = [_domain(d) for d in own_domains or () if d]
+    if body.get('column_kind') == 'retailer':
+        body['columns'] = order_columns(body.get('columns') or [], own)
+        body['retailer_columns'] = order_columns(body.get('retailer_columns') or [], own)
+        body['columns_by_surface'] = {s: order_columns(cols, own) for s, cols in (body.get('columns_by_surface') or {}).items()}
+    sold_at: Dict[str, set] = {}
+    for f in feed_rows or []:
+        code = str(f.get('sku') or '')
+        sold_at.setdefault(code, set()).update(_domain(x.get('domain')) for x in f.get('retailers') or []
+                                               if isinstance(x, dict) and x.get('domain'))
+    day = rm._short_day((deals or {}).get('read_date') or body.get('as_of')) if \
+        ((deals or {}).get('read_date') or body.get('as_of')) else None
+    for row in body.get('rows') or []:
+        listed = sold_at.get(str(row.get('feed_sku') or '')) if feed_rows is not None else None
+        for domain, cell in (row.get('retailer_cells') or row.get('cells') or {}).items():
+            d = _domain(domain)
+            if d in own:
+                cell['note'] = brand_note(row, reads, own, brand)
+                continue
+            found = cell_deals(row, d, deals)
+            cell['live_deal'] = '. '.join(found) if found else None
+            cell['live_deals'] = found
+            # the feed lists no page for it at this retailer (None when the feed was not read)
+            cell['not_sold'] = None if listed is None else d not in listed
+            clash = clash_text(cell)
+            if clash:
+                cell['clash'] = clash
+        row['line'] = product_line(row, deals=deals, promo=promo, attribute_answers=attribute_answers)
+    body['hero'] = true_value_hero(body.get('rows') or [])
+    body['anatomy'] = anatomy(body.get('rows') or [], reads=reads, deals=deals, promo=promo, brand=brand, day=day)
+    body['captions'] = TV_CAPTIONS
+    if not body.get('programs'):
+        body['programs'] = None
+        body['programs_reason'] = 'the brand runs no programs of its own (its owned incentives are empty)'
+    body['mode'] = 'manufacturer'
+    return body

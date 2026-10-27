@@ -808,7 +808,32 @@ async def get_true_value(cycle: str = Query(...), merchant: Optional[str] = Quer
         catalog if k_err is None else None, incentives if i_err is None else None, value_outcomes,
         reads=history if history is not None else ((reference or {}).get('rows') if r_err is None else None))
     body['read_errors'] = errors
+    # 2T-5 (TV1 to TV9): a brand at retail's True Value in the demo's shape
+    ms = await check_merchant(scope, merchant)
+    record_row = next((m for m in getattr(ms, 'merchants', None) or [] if m.get('slug') == merchant), None) or {}
+    if record_row.get('mode') == 'manufacturer':
+        await _true_value_brand(scope, dict(row), merchant, body, record_row,
+                                reference=reference if r_err is None else None,
+                                feed_rows=(feed or {}).get('rows') if f_err is None else None)
     return with_drift(narratives_svc.with_true_value(body, lines))
+
+
+async def _true_value_brand(scope: CustomerScope, row: dict, merchant: str, body: dict, record_row: dict, *,
+                            reference: Optional[dict], feed_rows: Optional[list]) -> None:
+    """2T-5: the deals live that day and the cheapest-place answers judged against them (_promo_inputs), the
+    weight answers (_attribute_inputs) and the brand's own domains (/retailers) beside the reads /true-value
+    made, then console_measure.true_value_brand. A failed read is named in read_errors, never raised."""
+    (promo, deals, _as_of, p_err), (answers, _ref, a_err), (_, retailers, o_err) = await asyncio.gather(
+        _promo_inputs(scope, row, merchant), _attribute_inputs(scope, row, merchant),
+        _reads(scope).get_retailers(merchant))
+    own = (retailers or {}).get('own_domains') or [(retailers or {}).get('own_domain')] if o_err is None else []
+    own = [str(d).lower().removeprefix('www.') for d in own or record_row.get('own_domains') or [] if d]
+    with engine.connect() as conn:
+        brand = record_row.get('brand') or rm.load_primary(conn, row)
+    measure.true_value_brand(body, reads=(reference or {}).get('rows'), deals=deals, promo=promo,
+                             attribute_answers=answers or [], feed_rows=feed_rows, own_domains=own, brand=brand)
+    body['read_errors'].update({k: e for k, e in (('deals', p_err), ('attribute_reference', a_err),
+                                                  ('retailers', o_err)) if e})
 
 
 #: 2C-2c: reads per variant x retailer a member price is looked for in.
