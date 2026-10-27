@@ -759,6 +759,106 @@ async def brand_record(scope: CustomerScope, ms: MerchantScope, merchant: str, p
     raise HTTPException(status_code=404, detail=f"product {product!r} is not in {merchant!r}'s record")
 
 
+# ─── 2T-8 (B4, B5): the Fix queue and Approvals ──────────────────────────
+
+async def _fix_inputs(scope: CustomerScope, ms: MerchantScope, merchant: str) -> dict:
+    """What the Fix queue and Approvals read: the newest scored cycle's Overview (its ranked signals and the revenue
+    model's pools, get_overview itself, so no second count), supply's rules, the hold and its journal, the feed, the
+    brand pages' GTIN rows and 2M-1's weight rows."""
+    from app.routers.console import get_overview
+    from app.services import console_brand_overview as bo
+    record = _record(ms)
+    errors: dict = {}
+    cycles = _scored_cycles(ms)
+    cycle = cycles[0] if cycles else None
+    (catalog, pubs, held_errors), reads, (_, reference, r_err) = await asyncio.gather(
+        _held_inputs(scope, merchant), brand_reads(scope, merchant), full_loop._client(scope).get_reference(merchant))
+    errors.update(held_errors)
+    errors.update(reads['errors'])
+    if r_err is not None:
+        errors['reference'], reference = r_err, None
+    overview = await get_overview(cycle=cycle['cycle_code'], merchant=merchant, scope=scope) if cycle else {}
+    errors.update(overview.get('read_errors') or {})
+    brand = _brand(catalog)
+    own = _own_domain(reads['retailers'], record)
+    feed_rows = (reads['feed'] or {}).get('rows')
+    pages = manu.brand_pages(reads['prices'], [own] if own else [])
+    from app.services import console_fixes as fx
+    return {'record': record, 'cycle': cycle, 'catalog': catalog, 'pubs': pubs, 'rules': reads['rules'],
+            'feed_rows': feed_rows, 'brand': brand or (record or {}).get('name') or merchant,
+            'name': (record or {}).get('name') or merchant, 'domain': own or 'the brand site',
+            'signals': ((overview.get('by_surface') or {}).get(surfaces.ALL) or {}).get('signals') or [],
+            'values': bo.pool_values(overview.get('revenue')),
+            'drift': rm.build_weight_drift(reference, brand=brand),
+            'gtin_rows': manu.gtin_flags(pages, feed_rows, brand=brand), 'twice': fx.gtin_twice(pages),
+            'records': len(rel.hold(pubs)), 'skus': len(feed_rows) if feed_rows is not None else None,
+            'errors': errors}
+
+
+def _fixes_of(got: dict) -> dict:
+    from app.services import console_fixes as fx
+    return fx.build_fixes(signals=got['signals'], rules=got['rules'], pubs=got['pubs'], feed_rows=got['feed_rows'],
+                          drift=got['drift'], gtin_rows=got['gtin_rows'], twice=got['twice'], values=got['values'],
+                          brand=got['brand'], domain=got['domain'], records=got['records'], skus=got['skus'])
+
+
+@router.get("/fixes")
+async def get_fixes(merchant: str = Query(...), scope: CustomerScope = Depends(console_scope)):
+    """2T-8 (B4): the Fix queue of a brand at retail, a view over the Overview's signals, the rules, the hold and
+    the sent journal: one fix per source, ranked by what it wins back. No owner or due date is recorded: None. 404
+    for a merchant not in manufacturer mode."""
+    ms, _record_ = await _manufacturer(scope, merchant)
+    got = await _fix_inputs(scope, ms, merchant)
+    body = _fixes_of(got)
+    return {'merchant': merchant, 'mode': manu.MANUFACTURER, **body, 'cycle': (got['cycle'] or {}).get('cycle_code'),
+            'read_errors': got['errors']}
+
+
+async def _approvals_body(scope: CustomerScope, ms: MerchantScope, merchant: str) -> dict:
+    from app.services import console_fixes as fx
+    got = await _fix_inputs(scope, ms, merchant)
+    fixes = _fixes_of(got)['fixes']
+    body = fx.build_approvals(fixes=fixes, rules=got['rules'], pubs=got['pubs'], records=got['records'],
+                              skus=got['skus'], brand=got['brand'])
+    return {'merchant': merchant, 'mode': manu.MANUFACTURER, **body, 'cycle': (got['cycle'] or {}).get('cycle_code'),
+            'read_errors': got['errors']}
+
+
+@router.get("/approvals")
+async def get_approvals(merchant: str = Query(...), scope: CustomerScope = Depends(console_scope)):
+    """2T-8 (B5): the rules that gate a fix and the held release, as requests. No team or condition is recorded:
+    None. 404 for a merchant not in manufacturer mode."""
+    ms, _record_ = await _manufacturer(scope, merchant)
+    return await _approvals_body(scope, ms, merchant)
+
+
+class Decision(BaseModel):
+    decision: str
+    note: Optional[str] = None
+
+
+@router.post("/approvals/{code}")
+async def post_approval(code: str, body: Decision, merchant: str = Query(...),
+                        scope: CustomerScope = Depends(operator_scope), user: dict = Depends(verify_token)):
+    """2T-8 (B5): approve or return a rule's request, through supply's PUT /rules/{code} (put_rule's own call):
+    approve sets approval approved and the rule on; return sets it declined and off. Operator only, journaled by
+    supply per changed field and logged here (`approvals.post`). Reversible: the other decision sets it back. The
+    release has no write: its send is stated on Publishing (409)."""
+    ms, _record_ = await _manufacturer(scope, merchant)
+    if body.decision not in ('approve', 'return'):
+        raise HTTPException(status_code=422, detail="decision must be approve or return")
+    if code == 'release':
+        raise HTTPException(status_code=409, detail="the release has no approval here: its send is stated on Publishing")
+    change = {'approval': 'approved', 'on': True} if body.decision == 'approve' else {'approval': 'declined', 'on': False}
+    if body.note:
+        change['note'] = body.note
+    actor = user.get('email') or user.get('sub')
+    _unwrap(*await full_loop._client(scope).put_rule(merchant, code, {**change, 'actor': actor}))
+    score_svc.log_event('approvals.post', org=scope.org.id, merchant=merchant, code=code, decision=body.decision,
+                        actor=actor)
+    return await _approvals_body(scope, ms, merchant)
+
+
 # ─── Impact ───────────────────────────────────────────────────────────────
 
 async def impact_block(scope: CustomerScope, ms: MerchantScope, errors: dict) -> Optional[dict]:
