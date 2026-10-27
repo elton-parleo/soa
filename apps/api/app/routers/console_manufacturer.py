@@ -178,13 +178,16 @@ async def publishing_view(scope: CustomerScope, ms: MerchantScope, merchant: str
             named = named_by_variant(conn, cycle)
         lifecycle = manu.lifecycle_rows(vis.get('retired_named'), cycle)
         sellers = manu.seller_rows(named, feed_rows, cycle, own_domains=[own] if own else [])
+    diff_all = manu.build_diff(drift=drift, flags=flags, lifecycle=lifecycle, sellers=sellers, cycle=cycle,
+                               read_at=read_at)
+    # 2T-8 (B3): one GTIN row per line, the per-size rows in diff_all
+    diff, gtin_line = manu.collapse_gtin_rows(diff_all)
     return {
         'mode': manu.MANUFACTURER,
         'surfaces': surfaces,
-        'diff': manu.build_diff(drift=drift, flags=flags, lifecycle=lifecycle, sellers=sellers, cycle=cycle,
-                                read_at=read_at),
+        'diff': diff, 'diff_all': diff_all, 'gtin_line': gtin_line,
         'preview': manu.build_preview(surfaces=surfaces, brand=_brand(catalog), name=(record or {}).get('name'),
-                                      domain=own),
+                                      domain=own, skus=len(feed_rows) if feed_rows is not None else None),
         'artifacts': manu.build_artifacts(merchant, pubs, channels, held),
         'held': held,
         'cycle': (cycle or {}).get('cycle_code'),
@@ -652,6 +655,210 @@ async def get_artifact(merchant: str = Query(...), channel: str = Query(...),
     return Response(content=got['content'], media_type=got['content_type'], headers=headers)
 
 
+# ─── 2T-8 (B2): the Product record per feed SKU ───────────────────────────
+
+async def brand_revenue(scope: CustomerScope, ms: MerchantScope, merchant: str, cycle: dict,
+                        attribute_answers: List[dict], domain: Optional[str], errors: dict) -> Optional[dict]:
+    """The revenue model the Overview and Impact read (console._revenue_model), for one cycle: the Gainable pool
+    the record's hero names, never a second count."""
+    from app.routers.console import _revenue_model
+    from app.services import console_revenue as revenue_svc
+    facts, routing_errors = await _routing_inputs(scope, cycle, merchant)
+    errors.update(routing_errors)
+    with engine.connect() as conn:
+        vis = _visibility(conn, cycle, facts, routing_errors)
+        inputs = revenue_svc.inputs_view(revenue_svc.load_inputs(conn, scope.org.id, merchant), merchant)
+        site = next((a['site'] for a in attribute_answers if a.get('site')), None) or domain
+        return _revenue_model(conn, cycle, inputs, _merchant_meta(ms), None, vis.get('byQuestion') or [],
+                              attribute_answers=attribute_answers or None, site=site)
+
+
+async def brand_record_reads(scope: CustomerScope, ms: MerchantScope, merchant: str) -> dict:
+    """What the Product record of a brand at retail reads, in one round: TrueSync's release page (its held
+    records, their master record and readback, release_view), the newest scored cycle's facts (cycle_facts), the
+    weight rows, the brand pages' GTIN flags and each line's chart, the revenue model."""
+    from app.services import console_brand_overview as bo
+    record = _record(ms)
+    client = full_loop._client(scope)
+    (_, channels, c_err), (_, pubs, p_err), (k_status, catalog, k_err), (_, reference, r_err), reads = \
+        await asyncio.gather(client.get_channels(), client.get_publications(limit=1000),
+                             _reads(scope).get_merchant_catalog(merchant), client.get_reference(merchant),
+                             brand_reads(scope, merchant))
+    errors = dict(reads['errors'])
+    for name, err in (('channels', c_err), ('publications', p_err), ('reference', r_err)):
+        if err is not None:
+            errors[name] = err
+    if k_err is not None and k_status != 404:
+        raise HTTPException(status_code=502, detail=f"TrueSync catalog unavailable: {k_err}")
+    channels = [c for c in (channels or []) if c.get('is_active', True)] if c_err is None else []
+    pubs = (pubs or []) if p_err is None else []
+    catalog = catalog if k_err is None else None
+    reference = reference if r_err is None else None
+    cycles = _scored_cycles(ms)
+    cycle = cycles[0] if cycles else None
+    facts = await cycle_facts(scope, cycle, merchant, reference) if cycle is not None else {}
+    release = await release_view(scope, ms, merchant, channels=channels, publications=pubs, catalog=catalog,
+                                 reference=reference, reads=reads, cycle=cycle, facts=facts)
+    errors.update(release.get('read_errors') or {})
+    brand = _brand(catalog)
+    own = _own_domain(reads['retailers'], record)
+    own_domains = [own] if own else []
+    feed_rows = (reads['feed'] or {}).get('rows')
+    revenue = await brand_revenue(scope, ms, merchant, cycle, facts.get('attribute_answers') or [], own, errors) \
+        if cycle is not None else None
+    return {
+        'catalog': catalog, 'pubs': manu.merchant_publications(pubs, _listing_ids(catalog), merchant),
+        'channels': rel._channel_names(channels), 'reference': reference, 'reads': reads, 'cycle': cycle,
+        'facts': facts, 'records': release['records'], 'brand': brand, 'own_domains': own_domains,
+        'feed_rows': feed_rows, 'drift': rm.build_weight_drift(reference, brand=brand),
+        'flags': manu.gtin_flags(manu.brand_pages(reads['prices'], own_domains), feed_rows, brand=brand),
+        'charts': rel.feed_line_charts(reads['prices'], feed_rows, own_domains, brand)
+        if reads['prices'] is not None else None,
+        'club_lines': bo.club_lines(feed_rows, own_domains), 'revenue': revenue, 'errors': errors,
+    }
+
+
+def _record_rows(got: dict) -> List[dict]:
+    from app.services import console_product_record as pr
+    return pr.record_list_rows(got['records'], catalog=got['catalog'], feed_rows=got['feed_rows'],
+                               prices=got['reads']['prices'], own_domains=got['own_domains'], brand=got['brand'],
+                               charts=got['charts'])
+
+
+async def brand_record_list(scope: CustomerScope, ms: MerchantScope, merchant: str) -> dict:
+    """B2: /record/list for a brand at retail: one row per feed SKU with its state from the readback, the hero."""
+    from app.services import console_product_record as pr
+    got = await brand_record_reads(scope, ms, merchant)
+    rows = _record_rows(got)
+    return {'merchant': merchant, 'mode': manu.MANUFACTURER, 'kind': 'brand', 'hero': pr.build_hero(
+        rows, revenue=got['revenue']), 'products': rows, 'cycle': (got['cycle'] or {}).get('cycle_code'),
+        'read_errors': got['errors']}
+
+
+async def brand_record(scope: CustomerScope, ms: MerchantScope, merchant: str, product: str) -> dict:
+    """B2: /record?product=<sku> for a brand at retail: the demo's master record for one feed SKU."""
+    from app.services import console_product_record as pr
+    got = await brand_record_reads(scope, ms, merchant)
+    rows = _record_rows(got)
+    for rec in got['records']:
+        for v in rel.record_variants(rec['record_ref'], got['catalog'], got['feed_rows']):
+            if not pr.is_sku(v, product):
+                continue
+            facts = got['facts']
+            reads = got['reads']
+            body = pr.build_product_record(
+                v, rec, prices=reads['prices'], retailers=(reads['retailers'] or {}).get('domains') or [],
+                own_domains=got['own_domains'], feed_rows=got['feed_rows'], charts=got['charts'], drift=got['drift'],
+                reference=got['reference'], flags=got['flags'], attribute_answers=facts.get('attribute_answers') or [],
+                deals=facts.get('deals'), channels=got['channels'], held_rows=rel.hold(got['pubs']).get(rec['record_ref'])
+                or {}, feed_version=(reads['feed'] or {}).get('version'), club_lines=got['club_lines'],
+                brand=got['brand'], hero=pr.build_hero(rows, revenue=got['revenue']))
+            body.update({'merchant': merchant, 'cycle': (got['cycle'] or {}).get('cycle_code'),
+                         'read_errors': got['errors']})
+            return body
+    raise HTTPException(status_code=404, detail=f"product {product!r} is not in {merchant!r}'s record")
+
+
+# ─── 2T-8 (B4, B5): the Fix queue and Approvals ──────────────────────────
+
+async def _fix_inputs(scope: CustomerScope, ms: MerchantScope, merchant: str) -> dict:
+    """What the Fix queue and Approvals read: the newest scored cycle's Overview (its ranked signals and the revenue
+    model's pools, get_overview itself, so no second count), supply's rules, the hold and its journal, the feed, the
+    brand pages' GTIN rows and 2M-1's weight rows."""
+    from app.routers.console import get_overview
+    from app.services import console_brand_overview as bo
+    record = _record(ms)
+    errors: dict = {}
+    cycles = _scored_cycles(ms)
+    cycle = cycles[0] if cycles else None
+    (catalog, pubs, held_errors), reads, (_, reference, r_err) = await asyncio.gather(
+        _held_inputs(scope, merchant), brand_reads(scope, merchant), full_loop._client(scope).get_reference(merchant))
+    errors.update(held_errors)
+    errors.update(reads['errors'])
+    if r_err is not None:
+        errors['reference'], reference = r_err, None
+    overview = await get_overview(cycle=cycle['cycle_code'], merchant=merchant, scope=scope) if cycle else {}
+    errors.update(overview.get('read_errors') or {})
+    brand = _brand(catalog)
+    own = _own_domain(reads['retailers'], record)
+    feed_rows = (reads['feed'] or {}).get('rows')
+    pages = manu.brand_pages(reads['prices'], [own] if own else [])
+    from app.services import console_fixes as fx
+    return {'record': record, 'cycle': cycle, 'catalog': catalog, 'pubs': pubs, 'rules': reads['rules'],
+            'feed_rows': feed_rows, 'brand': brand or (record or {}).get('name') or merchant,
+            'name': (record or {}).get('name') or merchant, 'domain': own or 'the brand site',
+            'signals': ((overview.get('by_surface') or {}).get(surfaces.ALL) or {}).get('signals') or [],
+            'values': bo.pool_values(overview.get('revenue')),
+            'drift': rm.build_weight_drift(reference, brand=brand),
+            'gtin_rows': manu.gtin_flags(pages, feed_rows, brand=brand), 'twice': fx.gtin_twice(pages),
+            'records': len(rel.hold(pubs)), 'skus': len(feed_rows) if feed_rows is not None else None,
+            'errors': errors}
+
+
+def _fixes_of(got: dict) -> dict:
+    from app.services import console_fixes as fx
+    return fx.build_fixes(signals=got['signals'], rules=got['rules'], pubs=got['pubs'], feed_rows=got['feed_rows'],
+                          drift=got['drift'], gtin_rows=got['gtin_rows'], twice=got['twice'], values=got['values'],
+                          brand=got['brand'], domain=got['domain'], records=got['records'], skus=got['skus'])
+
+
+@router.get("/fixes")
+async def get_fixes(merchant: str = Query(...), scope: CustomerScope = Depends(console_scope)):
+    """2T-8 (B4): the Fix queue of a brand at retail, a view over the Overview's signals, the rules, the hold and
+    the sent journal: one fix per source, ranked by what it wins back. No owner or due date is recorded: None. 404
+    for a merchant not in manufacturer mode."""
+    ms, _record_ = await _manufacturer(scope, merchant)
+    got = await _fix_inputs(scope, ms, merchant)
+    body = _fixes_of(got)
+    return {'merchant': merchant, 'mode': manu.MANUFACTURER, **body, 'cycle': (got['cycle'] or {}).get('cycle_code'),
+            'read_errors': got['errors']}
+
+
+async def _approvals_body(scope: CustomerScope, ms: MerchantScope, merchant: str) -> dict:
+    from app.services import console_fixes as fx
+    got = await _fix_inputs(scope, ms, merchant)
+    fixes = _fixes_of(got)['fixes']
+    body = fx.build_approvals(fixes=fixes, rules=got['rules'], pubs=got['pubs'], records=got['records'],
+                              skus=got['skus'], brand=got['brand'])
+    return {'merchant': merchant, 'mode': manu.MANUFACTURER, **body, 'cycle': (got['cycle'] or {}).get('cycle_code'),
+            'read_errors': got['errors']}
+
+
+@router.get("/approvals")
+async def get_approvals(merchant: str = Query(...), scope: CustomerScope = Depends(console_scope)):
+    """2T-8 (B5): the rules that gate a fix and the held release, as requests. No team or condition is recorded:
+    None. 404 for a merchant not in manufacturer mode."""
+    ms, _record_ = await _manufacturer(scope, merchant)
+    return await _approvals_body(scope, ms, merchant)
+
+
+class Decision(BaseModel):
+    decision: str
+    note: Optional[str] = None
+
+
+@router.post("/approvals/{code}")
+async def post_approval(code: str, body: Decision, merchant: str = Query(...),
+                        scope: CustomerScope = Depends(operator_scope), user: dict = Depends(verify_token)):
+    """2T-8 (B5): approve or return a rule's request, through supply's PUT /rules/{code} (put_rule's own call):
+    approve sets approval approved and the rule on; return sets it declined and off. Operator only, journaled by
+    supply per changed field and logged here (`approvals.post`). Reversible: the other decision sets it back. The
+    release has no write: its send is stated on Publishing (409)."""
+    ms, _record_ = await _manufacturer(scope, merchant)
+    if body.decision not in ('approve', 'return'):
+        raise HTTPException(status_code=422, detail="decision must be approve or return")
+    if code == 'release':
+        raise HTTPException(status_code=409, detail="the release has no approval here: its send is stated on Publishing")
+    change = {'approval': 'approved', 'on': True} if body.decision == 'approve' else {'approval': 'declined', 'on': False}
+    if body.note:
+        change['note'] = body.note
+    actor = user.get('email') or user.get('sub')
+    _unwrap(*await full_loop._client(scope).put_rule(merchant, code, {**change, 'actor': actor}))
+    score_svc.log_event('approvals.post', org=scope.org.id, merchant=merchant, code=code, decision=body.decision,
+                        actor=actor)
+    return await _approvals_body(scope, ms, merchant)
+
+
 # ─── Impact ───────────────────────────────────────────────────────────────
 
 async def impact_block(scope: CustomerScope, ms: MerchantScope, errors: dict) -> Optional[dict]:
@@ -674,8 +881,13 @@ async def impact_block(scope: CustomerScope, ms: MerchantScope, errors: dict) ->
     t = manu.MANUFACTURER_TEMPLATES
     day = manu.short_day(sent['sent_at'])
     before, after = manu.around_send(_scored_cycles(ms), sent)
+    with engine.connect() as conn:
+        zones = rm.study_timezones(conn, [c['study_type'] for c in (before, after) if c])
+    # 2T-8 (B7): the pair by its labels, never its codes
     block = {'state': 'unlocked', 'title': t['unlocked.title'].format(sent=day), 'sent': sent,
              'before': (before or {}).get('cycle_code'), 'after': (after or {}).get('cycle_code'),
+             'baseline_label': rm.cycle_label(before, zones.get((before or {}).get('study_type'))),
+             'cycle_label': rm.cycle_label(after, zones.get((after or {}).get('study_type'))),
              'status': None, 'note': None, 'rows': None}
     if after is None:
         block['note'] = t['unlocked.waiting'].format(sent=day)
@@ -694,3 +906,75 @@ async def impact_block(scope: CustomerScope, ms: MerchantScope, errors: dict) ->
         with engine.connect() as conn:
             block['rows'] = rm.since_baseline(now_rows, then_rows, rm.cycle_name(conn, before))
     return block
+
+
+# ─── 2T-8 (B7): Impact for a brand at retail ──────────────────────────────
+
+IMPACT_TEMPLATES = {
+    'baseline_line': 'Baseline, {day}, {skus} SKUs, {agents} agents, {retailers} retailers',
+}
+
+
+async def brand_impact(scope: CustomerScope, ms: MerchantScope, row: dict, body: dict, errors: dict, *,
+                       attribute_answers: List[dict], vis: Optional[dict], zone: Optional[str]) -> None:
+    """2T-8 (B7), on /revenue in place: the charter block (the Overview's own, bo.build_charter, from the score's
+    tiles), its baseline line, a series per charter measure of measured points only (one per scored cycle; no
+    modeled history, no scenario before a send), and the third driver: the Record (the brand's own sources
+    disagree), with Access a driver only when the brand's own pages refuse an answer-time agent."""
+    from app.routers.console import _score
+    from app.services import console_accessibility_brand as cab
+    from app.services import console_brand_overview as bo
+    from app.services import console_revenue as revenue_svc
+    record = _record(ms)
+    client = full_loop._client(scope)
+    (k_status, catalog, k_err), reads, (_, reference, r_err), (_, access, a_err) = await asyncio.gather(
+        _reads(scope).get_merchant_catalog(ms.slug), brand_reads(scope, ms.slug), client.get_reference(ms.slug),
+        client.get_access(ms.slug))
+    errors.update(reads['errors'])
+    reference = reference if r_err is None else None
+    brand = _brand(catalog if k_err is None else None) or (record or {}).get('name') or ms.slug
+    domain = _own_domain(reads['retailers'], record) or 'the brand site'
+    feed_rows = (reads['feed'] or {}).get('rows')
+    # the Record driver, from the size-chart, GTIN and retired signals the Overview ranks
+    drift = rm.build_weight_drift(reference, brand=brand)
+    charts = rel.feed_line_charts(reads['prices'], feed_rows, [domain], brand) if reads['prices'] is not None else None
+    accuracy = rm.build_attribute_accuracy(attribute_answers, reference) if attribute_answers else None
+    size_signal = bo.size_chart_signal(drift, reference, accuracy, domain=domain, brand=brand, charts=charts,
+                                       feed_rows=feed_rows)
+    flags = manu.gtin_flags(manu.brand_pages(reads['prices'], [domain]), feed_rows, brand=brand)
+    driver = revenue_svc.record_driver(domain=domain, size_signal=size_signal, gtin_rows=flags,
+                                       retired_signal=bo.retired_signal((vis or {}).get('retired_named')))
+    own_refused = sorted(t for t, v in cab._tokens_by_domain(access if a_err is None else None).get(domain, {}).items()
+                         if v and v != 'allow')
+    body['access_all'] = body.get('access')
+    if not own_refused:
+        body['access'] = None
+    body['record_driver'] = driver
+    body['third_driver'] = 'access' if own_refused else ('record' if driver else None)
+    # the charter, the Overview's own, for this cycle and each scored one
+    with engine.connect() as conn:
+        store = store_answers(conn, row)
+    clubs = bo.club_counts(bo.club_lines(feed_rows, [domain]), store)
+    promo, _deals, _as_of, _p = await _promo_inputs(scope, row, ms.slug)
+    score = await _score(row, scope.org.id, ms.slug, False, scope)
+    body['charter'] = bo.build_charter(score, domain=domain, club=clubs, promo=promo)
+    with engine.connect() as conn:
+        agents = conn.execute(text("SELECT COUNT(DISTINCT platform) FROM soa_runs WHERE cycle_id = :c"),
+                              {'c': row['id']}).scalar() or 0
+    retailers = [d for d in (reads['retailers'] or {}).get('domains') or [] if rel._domain(d) != domain]
+    label = rm.cycle_label(row, zone) or {}
+    body['baseline_line'] = IMPACT_TEMPLATES['baseline_line'].format(
+        day=label.get('day') or row['cycle_code'], skus=len(feed_rows or []), agents=agents, retailers=len(retailers))
+    series = {t['key']: {'key': t['key'], 'label': t.get('label'), 'points': [], 'scenario': None} for t in body['charter']}
+    for c in reversed(_scored_cycles(ms)):
+        s = await _score(c, scope.org.id, ms.slug, False, scope)
+        tiles = {m['key']: m for m in (s or {}).get('metrics_by_kind', {}).get('brand') or []}
+        lab = rm.cycle_label(c, zone) or {}
+        for key, entry in series.items():
+            tile = tiles.get(key)
+            if tile and tile.get('value') is not None:
+                entry['points'].append({'cycle': c['cycle_code'], 'day': lab.get('day'), 'value': tile['value'],
+                                        'of': tile.get('denominator'), 'measured': True})
+    body['series'] = list(series.values())
+    # 2P-1's scenario rule applies only once a fix ships (a stated send); until then none
+    body['scenario'] = None

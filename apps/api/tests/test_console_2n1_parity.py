@@ -316,8 +316,9 @@ def test_b6_the_deal_is_titled_from_its_fields_in_its_retailer_s_words():
     body = rm.build_prove(promo, {'deals': [FL14_DEAL], 'walled': []}, 'Pampers', '2026-10-23')
     [row] = body['rows']
     assert row['title'] == 'Amazon: 25% off list price on AMORE Size 1, $36.18 from $47.99' and row['kind_label'] == 'list price cut'
-    assert row['detail'] == ('Live on Pampers AMORE Diapers. Pampers AMORE Diapers $47.99 to $36.18. '
-                             'The shelf said: $36.18 with 25 percent savings -25% List Price: $47.99.')
+    # 2T-8 (B6): the shelf's words ride beside the sentence as `shelf_text`
+    assert row['detail'] == 'Live on Pampers AMORE Diapers. Pampers AMORE Diapers $47.99 to $36.18.'
+    assert row['shelf_text'] == '$36.18 with 25 percent savings -25% List Price: $47.99'
     assert body['aside']['sub'] == 'Answers named Amazon list price cut 3 times.'
 
 

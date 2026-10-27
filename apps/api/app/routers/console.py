@@ -1033,7 +1033,8 @@ async def get_truesync(merchant: str = Query(...), scope: CustomerScope = Depend
                                      reference=reference if r_err is None else None, drift=drift, reads=reads)
         errors = view.pop('read_errors')
         # 2T-1 (B3): the diff stays on /publishing; TrueSync is the release page
-        view.pop('diff', None)
+        for key in ('diff', 'diff_all', 'gtin_line'):
+            view.pop(key, None)
         body.update(view)
         release = await release_view(scope, ms, merchant, channels=active, publications=pubs or [], catalog=catalog,
                                      reference=reference if r_err is None else None, reads=reads)
@@ -1078,13 +1079,22 @@ async def _record_inputs(merchant: str, scope: CustomerScope, *, incentives: boo
     }
 
 
+def _is_brand_at_retail(ms: MerchantScope, merchant: str) -> bool:
+    """supply's `mode` manufacturer on the merchant's /tenant record (2R-2)."""
+    return (next((m for m in ms.merchants or [] if m.get('slug') == merchant), None) or {}).get('mode') == 'manufacturer'
+
+
 @router.get("/record/list")
 async def get_record_list(merchant: str = Query(...), scope: CustomerScope = Depends(console_scope)):
     """2C-1: Fix > Offer record, the product list. Every product in the
     merchant's record (supply's published catalog, or an external merchant's
     current feed), each with its status. A merchant with no record yet is an
     empty list, not an error."""
-    await check_merchant(scope, merchant)   # 2H: a slug that is not the org's is a 404
+    ms = await check_merchant(scope, merchant)   # 2H: a slug that is not the org's is a 404
+    if _is_brand_at_retail(ms, merchant):
+        # 2T-8 (B2): one row per feed SKU with its state from the readback, and the hero
+        from app.routers.console_manufacturer import brand_record_list
+        return await brand_record_list(scope, ms, merchant)
     got = await _record_inputs(merchant, scope, incentives=False)
     return rm.build_record_list(merchant, got['catalog'], merchant_record=got['merchant_record'],
                                 publications=got['publications'], channels=got['channels'],
@@ -1100,7 +1110,11 @@ async def get_record(merchant: str = Query(...), product: str = Query(...),
     the validator's issues, the variants with member prices, and the
     compiled schema.org artifact. `product` is the list's `sku` (or the
     listing id)."""
-    await check_merchant(scope, merchant)   # 2H: a slug that is not the org's is a 404
+    ms = await check_merchant(scope, merchant)   # 2H: a slug that is not the org's is a 404
+    if _is_brand_at_retail(ms, merchant):
+        # 2T-8 (B2): the demo's master record for one feed SKU
+        from app.routers.console_manufacturer import brand_record
+        return await brand_record(scope, ms, merchant, product)
     got = await _record_inputs(merchant, scope, incentives=True)
     listing = next((l for l in (got['catalog'] or {}).get('listings') or []
                     if product in (rm._listing_sku(l), str(l.get('listing_id')))), None)
@@ -1455,7 +1469,11 @@ async def get_prove(cycle: str = Query(...), merchant: Optional[str] = Query(Non
         job = conn.execute(text("SELECT tier_config FROM soa_query_generation_jobs WHERE study_type = :st"),
                            {"st": row['study_type']}).fetchone()
     brand = (((_json(job[0]) if job else None) or {}).get('merchant') or {}).get('study_brand') or study.get('brand')
-    body = rm.build_prove(promo, deals, brand, as_of)
+    # 2T-8 (B6): who named each deal and who quoted its price without naming it, by agent
+    with engine.connect() as conn:
+        agent_of_run = {r[0]: rm.AGENT_NAMES.get(surfaces.agent_of(r[1]) or r[1], r[1]) for r in conn.execute(
+            text("SELECT id, platform FROM soa_runs WHERE cycle_id = :c"), {'c': row['id']})}
+    body = rm.build_prove(promo, deals, brand, as_of, agent_of_run=agent_of_run)
     body.update(cycle=row['cycle_code'], read_errors={'deals': p_err} if p_err else {})
     if promo is not None:
         body['promo_pass_through'] = {k: v for k, v in promo.items() if k != 'judged'}
@@ -1526,10 +1544,17 @@ async def get_revenue(cycle: str = Query(...), merchant: Optional[str] = Query(N
         with engine.connect() as conn:
             body['since_baseline'] = rm.since_baseline(rows, base_rows, rm.cycle_name(conn, base))
     # 2R-2 (B3): a brand at retail: locked until it states it sent the record, then what moved since
-    from app.routers.console_manufacturer import impact_block
+    from app.routers.console_manufacturer import brand_impact, impact_block
     locked = await impact_block(scope, ms, errors)
     if locked is not None:
         body['locked'] = locked
+    # 2T-8 (B7): the cycle labels of the since-baseline block, never its codes
+    with engine.connect() as conn:
+        zone = rm.study_timezones(conn, [row['study_type']]).get(row['study_type'])
+    body['cycle_label'] = rm.cycle_label(row, zone)
+    body['baseline_label'] = rm.cycle_label(base, zone) if base is not None else body['cycle_label']
+    if _is_brand_at_retail(ms, ms.slug):
+        await brand_impact(scope, ms, row, body, errors, attribute_answers=answers or [], vis=vis, zone=zone)
     body['merchant'] = ms.slug
     body['read_errors'] = errors
     return body
@@ -1575,15 +1600,24 @@ async def get_revenue_history(merchant: Optional[str] = Query(None), scope: Cust
     meta = _merchant_meta(ms)
     out = []
     with engine.connect() as conn:
-        inputs = revenue_svc.inputs_view(revenue_svc.load_inputs(conn, scope.org.id, ms.slug), ms.slug)
         scored = {r[0] for r in conn.execute(text("SELECT DISTINCT cycle_id FROM soa_expectation_outcomes"))}
         cycles = [c for c in merchant_cycles(conn, ms) if c['id'] in scored and c.get('status') == 'complete']
+    # 2T-8 (B7): a brand at retail's series is recomputed under the model its hero reads (Missed is its size
+    # answers wrong, 2T-1 B2), never the price model the stored shares predate
+    brand_answers = {}
+    if _is_brand_at_retail(ms, ms.slug):
+        for c in cycles:
+            answers, _reference, _err = await _attribute_inputs(scope, {**c, 'customer_org_id': scope.org.id}, ms.slug)
+            brand_answers[c['id']] = (answers, next((a['site'] for a in answers if a.get('site')), None))
+    with engine.connect() as conn:
+        inputs = revenue_svc.inputs_view(revenue_svc.load_inputs(conn, scope.org.id, ms.slug), ms.slug)
         zones = rm.study_timezones(conn, [c['study_type'] for c in cycles])   # 2K-3
         before = None
         for c in reversed(cycles):
             c = {**c, 'customer_org_id': scope.org.id}
             vis_rows = rm.load_visibility(conn, c).get('byQuestion') or []
-            m = _revenue_model(conn, c, inputs, meta, None, vis_rows)
+            answers, site = brand_answers.get(c['id'], (None, None))
+            m = _revenue_model(conn, c, inputs, meta, None, vis_rows, attribute_answers=answers, site=site)
             # every agent together, as the revenue model counts them
             here = {**parity.surface_metrics([], vis_rows, surfaces.ALL), **rm.study_identity(conn, c),
                     # 2P-1 (B2): the version its outcomes compare under, as the score's

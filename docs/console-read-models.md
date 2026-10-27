@@ -8588,3 +8588,128 @@ mains read the body with the codes put back (`tests/cycle_label_2t7.py`). Sample
 `SOA_2T7_SAMPLE_DUMP=<dir> pytest tests/test_console_2t7.py -k samples` writes the 2T-5 set re-recorded and three
 FL15-shaped samples DERIVED by soa's own functions on the harness's served bodies (`true-value-2t7`,
 `accessibility-2t7`, `visibility-2t7`).
+
+## 2T-8: Product record, Fix queue and Approvals, and the Prove fixes (brand at retail)
+
+The spec is the console demo (`parleohq/truesync` `console-demo`: `data/pg.ts` `record`, `products`, `fixes`,
+`approvals`, and the seed Product record, Fix queue, Approvals, Trade promotions and Impact screens). For a merchant
+whose supply `mode` is `manufacturer`, except B1 and B6, which correct readers every merchant shares. No migration, no
+new table, no model call, `SCORER_VERSION` unchanged. Builders: `app/services/console_product_record.py` (B1, B2;
+copy in `PRODUCT_RECORD_TEMPLATES`), `app/services/console_fixes.py` (B4, B5; `FIX_TEMPLATES`); reads:
+`app/routers/console_manufacturer.py` (`brand_record_reads`, `brand_record_list`, `brand_record`, `_fix_inputs`,
+`brand_impact`).
+
+### B1: a feed variant against its own variant in the markup
+
+A brand page read whose `json_ld` is a ProductGroup carries soa's findings, never supply's (which compare every feed
+row with the group's first variant: "GTIN · 037000749622 · Page shows 037000863403", "Name · Page shows Preemie" on
+every Swaddlers SKU). The page's variant is the feed variant's own by GTIN (both zero-padded to 14 digits, so an
+11-digit GTIN finds its 12-digit self), else by size and pack count, else by size when one variant has it. Only fields
+both carry are compared (GTIN, size, pack count, weight range, the line's name); one the markup lacks is
+`not_in_markup`, never a difference. Unmatched: no difference is claimed. `RECORD_FINDINGS` gains `size_differs` and
+`weight_differs`. A page without a ProductGroup keeps supply's findings.
+
+### B2: `/record` per feed SKU
+
+* `GET /record/list?merchant=` (manufacturer): `{mode, kind: 'brand', hero, products, cycle, read_errors}`. One row
+  per feed SKU, in the hold's order: `{sku (merchant SKU, else GTIN-14), title, sub ("Size 4, 104 ct, 22 to 37 lb",
+  the line's chart), line, record_ref, variant_id, state (agents_disagree | match | not_quoted), disagree {n, which},
+  status, retired}`. State is the record's readback lines on the SKU: an agent with a wrong or partial fact disagrees.
+* `hero` `{disagree: {n, of}, sentence, gainable: {value, currency, measured}}`: "Agents contradict the record on 3
+  products this cycle. Swaddlers and Zzz each have 2 agents disagreeing."; the Gainable pool is the revenue model's
+  `today.gainable` (None with no sales entered, never $0).
+* `GET /record?merchant=&product=<sku>` (manufacturer): `{mode, kind, sku, record_ref, title, line, sub, gtin, state,
+  disagree, status, retired, hero, record[], differences[] (B1), not_in_markup, issues[], issues_none, surfaces[],
+  variants[], history[], history_all[], cycle, read_errors}`.
+  * `record[]` `{k, v, prov (brand | retail | parleo), note, mono, diff, was, struck}`: Name on <domain> (the page's
+    markup name), GTIN (the markup's other pack from its offers, absent when the markup has none; B1's difference as
+    `diff`/`was`), Weight range ("<domain> size chart, <day>", else the size and "No chart on <domain>"), <size> packs
+    on <domain> (the markup's counts and offer sellers, absent when none), Claims, Price "Not set. Retailers price
+    it", one row per retailer read ("$49.77, from $59.77. Page says 16 to 28 lb"; `diff` and `struck` the chart when
+    the page states another range), Couldn't read (walled, with supply's HTTP code when the row has one), Not read yet,
+    Not carried (the merchant's retailers the feed lists no page at; the club note only when a club-only line covers
+    them), Last verified.
+  * `issues[]` `{kind, title, text, fix_kind, tone}`: `two_charts` (the size has two ranges across the feed's lines;
+    the agents that gave both ranges, else those that gave the other), `gtin_mapping` (one GTIN on two counts in the
+    markup, or 11 digits on the feed or the markup), `retailers_wrong_range` (each retailer's stated range, its shelf
+    row's own over 2M-1's row), `markup_borrows` (markup sizes whose weights are another line's chart, not their own).
+    None: `issues_none` "None found on this record."
+  * `surfaces[]` `{channel, name, s, word (Held in preview | Published | Blocked | Not applicable), drift (drift | none |
+    unquoted | None), drift_word, n, note}`: a blocked or na cell has no drift word.
+  * `variants[]` `{id (the read's GTIN, else the retailer's id from its URL), count, retailer, name, price, note,
+    tone}`; walled "Not read · walled[, HTTP n]".
+  * `history[]` `{kind (verified | compiled | first_read), at, day, text, detail}` newest first; `history_all[]` each
+    page read.
+
+### B3: Publishing
+
+`preview.title` counts the feed's SKUs (`skus`), the note the held file's `records`. `diff` has one GTIN row per line
+("swaddlers_ultra.gtin (markup)", was "9 sizes drop the leading zero"), `diff_all` the per-size rows, `gtin_line`
+"Swaddlers Ultra: 9 sizes drop the leading zero · AMORE: 8". `/truesync` serves none of the three.
+
+### B4: `GET /fixes?merchant=`
+
+A view, no table: `{fixes, summary, cycle, read_errors}`. One fix per source, ranked by the pool's modeled value (the
+Overview's `pool_values`; `both` is lost plus missed), then the signal's count, numbered in rank order. Each `{id, n,
+kind, title, text, pool, severity, state, state_label, scope, surfaces, owner: null, due: null, gate, signal, count,
+value}`.
+
+| kind | source | state |
+|---|---|---|
+| size_chart | the size-chart signal; text from its `facts.two` groups and 2M-1's markup rows | r5 not approved and on: needs_decision; on, newest hold before the change: in_flight; a hold after: shipped |
+| gtin | the brand pages' 11-digit GTINs and one GTIN on two counts | needs_decision (no history says a later read fixed them) |
+| retired | the retired signal | shipped when r6 is on and a hold exists, else needs_decision |
+| store | the club-only signal | as r2, by the size chart's rule |
+| release | the held rows | in_flight ("Compiled, held") until `sent_by_merchant`, then shipped |
+| deals | rule r4 | needs_decision until approved, queued while approved and off |
+
+Severity: the signal's tone (bad High, warn Medium), the club-only fix Quick, the release High, deals Medium.
+`summary` `{by_state, by_pool, by_surface, hero ("3 of 4 fixes need a decision. First up: …"), first, order_note (the
+demo's copy), total}`.
+
+### B5: `GET /approvals?merchant=`, `POST /approvals/{code}?merchant=`
+
+One request per rule that gates a fix (in the fixes' order) and the release: `{code, kind (rule | release), title (the
+rule's name; "<N> records, Manufacturer Center first"), text, requested {what (Rule seeded | Hold compiled), at, by},
+decided, scope (SKUs), state (pending | approved | returned from `approval`; the release held | sent), approval, on,
+pool, condition: null, chain [TrueSync, "Approver"], team: null, writable, fix, fix_title}`; `summary` `{hero ("3 of 4
+requests waiting. <first pending> waits on approval."), waiting, total, by_state}`; `chains` the demo's five changes,
+each `team: null`; `teams: null`. The POST (operator only) `{decision: approve | return, note}` is put_rule's own call:
+approve `{approval: approved, on: true}`, return `{approval: declined, on: false}`, logged `approvals.post`, supply
+journals each field; the other decision reverses it. The release is 409: its send is stated on Publishing.
+
+### B6: Trade promotions
+
+* A deal across cycles is (retailer, SKU key, mechanic, amount) per SKU it ran on (`ppt.deal_key`; the amount the
+  label's percent, else its value), never `deal_id` (whose shelf text changes between reads). In both: `continuing`
+  (was `kept`), note "Live in the Oct 23 cycle too."; only now: `new`; only before: `ended` / `not_read`.
+* The detail is a sentence: the SKUs, from and to, "<agents> named it.", "<agents> quoted the <line> cut without the
+  word Rollback, which the study rule does not count." (`judge`'s new `quoted`: the answer states the deal price at
+  its retailer without naming it; beside the rule, never in it). The shelf's own words are `shelf_text`, None when
+  they say no more than the title.
+
+### B7: Impact
+
+* `/revenue/history` for a brand at retail recomputes each cycle under the hero's model (its size answers), so the
+  newest point equals `/revenue`'s.
+* `record_driver` `{id: record, kind: root, title "<domain> disagrees with itself", tag "Root cause", sub "Feeds the
+  two above", measured, fix, route, facts}` from the size-chart, GTIN and retired signals; `third_driver` record, or
+  access only when the brand's own pages refuse an answer-time token in the access run (`access` is null otherwise,
+  the run's own as `access_all`).
+* `missed_tile` `{label, unit}`: "Missed on facts" over "size answers" on the attribute basis.
+* `cycle_label` / `baseline_label` on `/revenue` and on the sent block (`locked`), so its "against" line names days.
+  2T-7's no-code scan covers `/revenue` and `/prove`.
+* `charter` (the Overview's own `build_charter`), `baseline_line` "Baseline, Oct 21, 6 SKUs, 6 agents, 4 retailers",
+  `series[]` per charter measure `{key, label, points [{cycle, day, value, of, measured: true}], scenario: null}`, one
+  measured point per scored cycle, and `scenario: null` until a send.
+
+### Served `null`, and why
+
+Every fix's `owner` and `due`, every request's `condition` and `team`, `teams` and each chain's `team` (none is
+recorded); a request's `requested.at` for a rule (supply records no seeding time); the hero's Gainable value with no
+sales entered; `scenario` (no fix has shipped); a GTIN row's mapping note when the markup carries no offers.
+
+### Tests
+
+`tests/test_console_2t8_record.py`, `test_console_2t8_fixes.py`, `test_console_2t8_prove.py` on the 2T-1 harness, the
+recorded pampers.com pages and FL15-shaped rows (labelled). `SOA_2T8_SAMPLE_DUMP=<dir>` writes the console's samples.

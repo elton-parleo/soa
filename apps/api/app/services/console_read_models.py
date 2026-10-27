@@ -3075,6 +3075,8 @@ RECORD_PROV_UNKNOWN = 'unknown'
 RECORD_FINDINGS = {
     'name_differs': 'Name', 'pack_differs': 'Pack count', 'gtin_mismatch': 'GTIN',
     'gtin_missing_on_page': 'GTIN', 'brand_missing_on_page': 'Brand',
+    # 2T-8 (B1): soa's own comparison of a brand page's ProductGroup variant (console_product_record)
+    'size_differs': 'Size', 'weight_differs': 'Weight range',
 }
 RECORD_ISSUE_TONE = {'conflict': 'bad', 'dropped': 'warn', 'approx': 'warn', 'info': 'neu'}
 RECORD_ISSUE_LABEL = {'conflict': 'fails validation', 'dropped': 'dropped by the channel',
@@ -3208,6 +3210,21 @@ def _read_note(row: dict) -> str:
     return f"{row.get('retailer_domain') or 'the page'}, read {when or 'at an unrecorded time'} by {how}"
 
 
+def _markup_rows(rows: List[dict], variant: dict, listing: dict) -> List[dict]:
+    """2T-8 (B1): a brand page read whose markup is a ProductGroup carries soa's own findings for this
+    variant (the page's variant that is its own, the fields both carry), never supply's, which compare it
+    with the group's first variant. Every other read is as supply serves it."""
+    from app.services import console_product_record as pr
+    out = []
+    for row in rows:
+        if row.get('role') == 'own' and pr.is_product_group(row.get('json_ld')):
+            mine = {'gtin': variant.get('gtin'), 'label': variant.get('title'), 'count': variant.get('count'),
+                    'product_name': listing.get('title')}
+            row = {**row, 'findings': pr.markup_findings(row, mine, brand=listing.get('brand'))}
+        out.append(row)
+    return out
+
+
 def _diff_fields(variant: dict, rows: List[dict], prov: str) -> List[dict]:
     label = variant.get('title') or variant.get('variant_id') or 'variant'
     out = []
@@ -3331,7 +3348,7 @@ def build_record(merchant: str, listing: dict, *, merchant_record: Optional[dict
     variant_rows, diffs = [], 0
     page_members: Dict[str, tuple] = {}
     for v in variants:
-        rows = _reference_rows(reference, v, listing)
+        rows = _markup_rows(_reference_rows(reference, v, listing), v, listing)
         extra = _diff_fields(v, rows, prov)
         diffs += len(extra)
         fields.extend(extra)
@@ -3867,6 +3884,11 @@ PROMO_TEMPLATES = {
     'prove.note.walled': ' {names} walled every read, so their deals could not be checked.',
     'prove.none': 'No deals read this cycle: supply found no deal live on a retailer shelf for these SKUs on {date}.',
     'prove.agents': 'Named {k} of {n}',
+    # 2T-8 (B6): the derived detail
+    'prove.named_by': '{agents} named it.',
+    'prove.quoted': '{agents} quoted the {line} cut without {word}, which the study rule does not count.',
+    'prove.word.rollback': 'the word Rollback',
+    'prove.word.other': 'naming the {kind}',
     # 2Q-1 (B4): a deal beside "Out of stock" on the shelf
     'prove.out_of_stock': 'Not live: the shelf said out of stock on {date}, so no answer is counted against it.',
     'prove.agents.out_of_stock': 'Not counted: out of stock',
@@ -4036,7 +4058,22 @@ def _deal_terms(deal: dict) -> str:
     return f"{af.retailer_name(deal.get('retailer_domain'))}, {term}" if deal.get('kind') == 'multi_buy' else term
 
 
-def build_prove(promo: Optional[dict], deals: Optional[dict], brand: Optional[str], as_of: Optional[str]) -> dict:
+def _entry_flat_keys(deal: dict) -> set:
+    """2T-8 (B6): a deal's identity per SKU it ran on, (retailer, SKU key, mechanic, amount) (ppt.deal_key)."""
+    out = set()
+    for v in deal.get('variants') or ([deal['variant']] if deal.get('variant') else []):
+        domain, skus, kind, amount = ppt.deal_key(deal, v)
+        out |= {(domain, k, kind, amount) for k in skus}
+    return out
+
+
+def _agents_words(names: List[str]) -> str:
+    names = list(dict.fromkeys(n for n in names if n))
+    return names[0] if len(names) == 1 else f"{', '.join(names[:-1])} and {names[-1]}"
+
+
+def build_prove(promo: Optional[dict], deals: Optional[dict], brand: Optional[str], as_of: Optional[str],
+                agent_of_run: Optional[Dict] = None) -> dict:
     """
     /prove, the Trade promotions screen: {state, title, sub, rows: [{retailer,
     retailer_domain, title, detail, terms, agents, value, tone, kind, asked,
@@ -4063,10 +4100,24 @@ def build_prove(promo: Optional[dict], deals: Optional[dict], brand: Optional[st
         gone = ppt.out_of_stock(deal)
         # 2Q-1 (B4): a deal beside "Out of stock" was shown, never live
         detail = f"{'Shown' if gone else 'Live'} on {where}." + (f" {prices}." if prices else '')
-        # 2N-1: the shelf's own words, trimmed of its price-per-count noise, go here, never in the title
+        # 2T-8 (B6): the shelf's own words are `shelf_text`, behind an expander, never in the sentence
         said = ppt.evidence(next((v.get('evidence') for v in variants if v.get('evidence')), None) or deal.get('text'))
-        if said and re.search(r"\d", said) and said.rstrip('.').lower() not in ppt.title(deal).lower():
-            detail += f" The shelf said: {said.rstrip('.')}."
+        shelf_text = said.rstrip('.') if said and re.search(r"\d", said) and \
+            said.rstrip('.').lower() not in ppt.title(deal).lower() else None
+        # who named it, and who quoted its price without naming it (the study rule counts naming only)
+        did = ppt.deal_id(deal)
+        judged = (promo or {}).get('judged') or []
+        if agent_of_run is not None:
+            namers = [agent_of_run.get(j.get('run_id')) for j in judged if did in (j.get('named') or [])]
+            quoters = [agent_of_run.get(j.get('run_id')) for j in judged if did in (j.get('quoted') or [])]
+            if any(namers):
+                detail += ' ' + t['prove.named_by'].format(agents=_agents_words(namers))
+            if any(quoters):
+                line = next((ppt.deal_line(v) for v in variants if ppt.deal_line(v)), None)
+                word = t['prove.word.rollback'] if deal.get('kind') == 'rollback_or_was' and \
+                    deal.get('retailer_domain') == 'walmart.com' else t['prove.word.other'].format(kind=ppt.kind_words(deal))
+                detail += ' ' + t['prove.quoted'].format(agents=_agents_words(quoters), line=(line or 'the').split(' Size')[0],
+                                                          word=word)
         asked, named = tally['asked'], tally['named']
         if gone:
             # 2Q-1 (B4): never live, so never asked about: the row says why
@@ -4078,7 +4129,8 @@ def build_prove(promo: Optional[dict], deals: Optional[dict], brand: Optional[st
                      'value': _deal_value(deal), 'kind': deal.get('kind'), 'kind_label': ppt.kind_words(deal),
                      'asked': asked, 'named': named,
                      'tone': 'neu' if gone else 'ok' if asked and named * 2 >= asked else ('warn' if named else 'bad'),
-                     'skus': len(variants), **({'live': False, 'not_live': 'out_of_stock'} if gone else {})})
+                     'skus': len(variants), 'shelf_text': shelf_text,
+                     **({'live': False, 'not_live': 'out_of_stock'} if gone else {})})
     rows.sort(key=lambda r: (r.get('live') is False, -r['asked'], r['named'], r['retailer'] or ''))
     who = brand or 'the brand'
     if promo is None or deals is None:
@@ -4253,6 +4305,7 @@ def brand_baseline(*, attribute: Optional[dict], vis: Optional[dict], promo: Opt
 
 MOVED_TEMPLATES = {
     'prove.new': 'New since {code}.',
+    'prove.continuing': 'Live in {code} too.',
     'prove.ended': 'Ended since {code}. {retailer} was read on {date} and no longer ran it.',
     'prove.not_read': 'Not read on {date}: {retailer} walled every read. Live in {code}.',
     # 2Q-1 (B4): live last cycle, beside "Out of stock" this one
@@ -4285,24 +4338,31 @@ def prove_changes(body: dict, deals: Optional[dict], prev_deals: Optional[dict],
     from soa_shared import retailers as af
     t = MOVED_TEMPLATES
     day = _read_day(deals, None) or 'the read date'
+    # 2T-8 (B6): a deal is the same deal across cycles by retailer, SKU, mechanic and amount (ppt.deal_key), never
+    # its id or shelf text, which change between reads: in both cycles it is `continuing`
     before = {ppt.deal_id(d): d for d in (prev_deals or {}).get('deals') or [] if not ppt.out_of_stock(d)}
-    now = {ppt.deal_id(d) for d in (deals or {}).get('deals') or []}
-    titles = {ppt.title(d): ppt.deal_id(d) for d in (deals or {}).get('deals') or []}
+    before_keys = set().union(*(_entry_flat_keys(d) for d in before.values())) if before else set()
+    now_keys = set().union(*(_entry_flat_keys(d) for d in (deals or {}).get('deals') or [])) \
+        if (deals or {}).get('deals') else set()
+    by_title = {ppt.title(d): d for d in (deals or {}).get('deals') or []}
     for row in body.get('rows') or []:
-        new = titles.get(row['title']) not in before
+        deal = by_title.get(row['title'])
+        new = not (deal is not None and _entry_flat_keys(deal) & before_keys)
         if row.get('not_live') == 'out_of_stock':
             # 2Q-1 (B4): the row's own note says why; against the previous cycle it is out of stock, or new
             row['change'] = 'new' if new else 'out_of_stock'
             if not new:
                 row['change_note'] = t['prove.out_of_stock'].format(date=day, retailer=row['retailer'], code=prev_code)
             continue
-        row['change'] = 'new' if new else 'kept'
+        row['change'] = 'new' if new else 'continuing'
         if new:
             row['change_note'] = t['prove.new'].format(code=prev_code)
+        else:
+            row['change_note'] = t['prove.continuing'].format(code=prev_code)
     walled = set((deals or {}).get('walled') or [])
     ended = []
     for key, deal in before.items():
-        if key in now:
+        if _entry_flat_keys(deal) & now_keys:
             continue
         domain = deal.get('retailer_domain')
         state = 'not_read' if domain in walled else 'ended'

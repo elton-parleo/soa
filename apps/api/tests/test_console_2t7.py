@@ -56,8 +56,10 @@ def _strings(body, path=''):
         yield path, body
 
 
-#: the four Measure screens, the Overview (and its score card) and TrueSync
-SCREENS = ('overview', 'score', 'answers', 'answers/summary', 'visibility', 'true-value', 'accessibility', 'truesync')
+#: the four Measure screens, the Overview (and its score card) and TrueSync; 2T-8 (B7): Impact (/revenue) and Trade
+#: promotions (/prove)
+SCREENS = ('overview', 'score', 'answers', 'answers/summary', 'visibility', 'true-value', 'accessibility', 'truesync',
+           'revenue', 'prove')
 
 
 @pytest.mark.parametrize('shape', ['compared', 'fl15'])

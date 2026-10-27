@@ -205,10 +205,31 @@ def names_deal(answer: Optional[str], deal: dict) -> bool:
     return bool(answer) and names_retailer(answer, deal.get('retailer_domain')) and names_terms(answer, deal)
 
 
+def quotes_price(answer: Optional[str], deal: dict) -> bool:
+    """2T-8 (B6): the answer states the deal's price on the SKU (its sale price on the shelf) at the deal's
+    retailer, whether or not it names the deal. Beside the rule, never in it: the rule counts naming only."""
+    price = _money((deal.get('variant') or {}).get('price'))
+    return bool(answer) and price is not None and price in amounts(answer) and names_retailer(answer, deal.get('retailer_domain'))
+
+
+def deal_key(deal: dict, entry: Optional[dict] = None) -> tuple:
+    """2T-8 (B6): one deal across cycles: (retailer, the SKU's keys, the mechanic, the amount in the deal label's
+    normalised form). Never its id or its shelf text, which change between reads of the same deal."""
+    variants = [entry] if entry else deal.get('variants') or ([deal['variant']] if deal.get('variant') else [])
+    one = {**deal, 'variants': variants}
+    pct = _pct_off(one)
+    amount = f"{pct}%" if pct else str(_money(deal.get('value')) or '') + str(deal.get('value_unit') or '')
+    skus = frozenset(k for v in variants for k in _entry_keys(v or {}))
+    return (str(deal.get('retailer_domain') or '').lower().removeprefix('www.'), skus, deal.get('kind'), amount)
+
+
 def judge(answer: Optional[str], live: List[dict]) -> dict:
-    """One answer against the deals live for its variant: {named: [deal ids], loose, subscribe}."""
-    return {'named': [deal_id(d) for d in live if names_deal(answer, d)],
-            'loose': bool(LOOSE.search(answer or '')), 'subscribe': bool(SUBSCRIBE.search(answer or ''))}
+    """One answer against the deals live for its variant: {named: [deal ids], loose, subscribe, quoted: [deal ids
+    whose price it states without naming the deal]}."""
+    named = [deal_id(d) for d in live if names_deal(answer, d)]
+    return {'named': named,
+            'loose': bool(LOOSE.search(answer or '')), 'subscribe': bool(SUBSCRIBE.search(answer or '')),
+            'quoted': [deal_id(d) for d in live if deal_id(d) not in named and quotes_price(answer, d)]}
 
 
 #: 2N-1: what each retailer calls a price cut against a struck price, in its

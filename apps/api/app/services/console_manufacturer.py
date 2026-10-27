@@ -82,6 +82,10 @@ MANUFACTURER_TEMPLATES = {
     'diff.lifecycle.now': 'retired, successor {successor}',
     'diff.lifecycle.now_none': 'retired',
     'preview.title': '{count} {brand} records, Manufacturer Center first',
+    'diff.gtin.zero': '{n} {sizes} {verb} the leading zero',
+    'diff.gtin.bad': '{n} {sizes} carry a GTIN that is not one as written',
+    'diff.gtin.now.zero': 'leading zero restored',
+    'diff.gtin.now.bad': 'the corrected GTIN',
     'preview.title.none': 'No {brand} record compiled yet',
     'preview.note': "Compiled {day} from {name_s} feed and {domain}. {valid}. Held until {name_s} team sends it.",
     'preview.note.blocked': "Compiled {day} from {name_s} feed and {domain}. {valid}, so nothing is ready to send: {error}",
@@ -631,8 +635,39 @@ def build_diff(*, drift: List[dict], flags: List[dict], lifecycle: List[dict], s
     return out + list(lifecycle) + list(sellers)
 
 
+def collapse_gtin_rows(diff: List[dict]) -> tuple:
+    """2T-8 (B3): (diff, gtin_line). The diff's GTIN rows become one row per product line ("Swaddlers Ultra: 9
+    sizes drop the leading zero"), in the order the lines first appear; every other row stays where it is.
+    `gtin_line` joins the lines' counts ("Swaddlers Ultra: 9 sizes drop the leading zero · AMORE: 8"). The per-size
+    rows are the caller's `diff_all`."""
+    groups: Dict[str, List[dict]] = {}
+    for r in diff:
+        if r.get('kind') == 'gtin':
+            groups.setdefault(r.get('line') or r['field'].split('.')[0], []).append(r)
+    out, done = [], set()
+    for r in diff:
+        if r.get('kind') != 'gtin':
+            out.append(r)
+            continue
+        line = r.get('line') or r['field'].split('.')[0]
+        if line in done:
+            continue
+        done.add(line)
+        rows = groups[line]
+        zeros = all(x.get('digits') == 11 for x in rows)
+        n = len(rows)
+        out.append({'field': f"{rm._slug(line)}.gtin ({'markup' if all(x.get('where') == 'markup' for x in rows) else 'feed' if all(x.get('where') == 'feed' for x in rows) else 'markup and feed'})",
+                    'was': T['diff.gtin.zero' if zeros else 'diff.gtin.bad'].format(n=n, sizes='size' if n == 1 else 'sizes',
+                                                                                  verb='drops' if n == 1 else 'drop'),
+                    'now': T['diff.gtin.now.zero' if zeros else 'diff.gtin.now.bad'], 'prov': 'parleo', 'kind': 'gtin',
+                    'line': line, 'count': n, 'source': rows[0].get('source'), 'rows': len(rows)})
+    parts = [f"{line}: {T['diff.gtin.zero' if all(x.get('digits') == 11 for x in rows) else 'diff.gtin.bad'].format(n=len(rows), sizes='size' if len(rows) == 1 else 'sizes', verb='drops' if len(rows) == 1 else 'drop')}"
+             if i == 0 else f"{line}: {len(rows)}" for i, (line, rows) in enumerate(groups.items())]
+    return out, (' · '.join(parts) or None)
+
+
 def build_preview(*, surfaces: List[dict], brand: Optional[str], name: Optional[str],
-                  domain: Optional[str]) -> dict:
+                  domain: Optional[str], skus: Optional[int] = None) -> dict:
     """{title, note, records, valid, compiled_at, held, sent}: Manufacturer
     Center's held file, its counts from supply's /tenant `held`."""
     mfc = next(s for s in surfaces if s['id'] == 'mfc')
@@ -650,8 +685,10 @@ def build_preview(*, surfaces: List[dict], brand: Optional[str], name: Optional[
         note = T['preview.note.sent'].format(**said, sent=short_day(mfc['sent']))
     else:
         note = T['preview.note'].format(**said)
-    return {'title': T['preview.title'].format(count=_NUMBER_WORDS.get(n, str(n)), brand=brand), 'note': note,
-            'records': n, 'valid': mfc['records_valid'], 'compiled_at': mfc.get('compiled_at'),
+    # 2T-8 (B3): the title counts the feed's SKUs (the demo's "Ten Pampers records"), the note the held file's records
+    count = skus or n
+    return {'title': T['preview.title'].format(count=_NUMBER_WORDS.get(count, str(count)), brand=brand), 'note': note,
+            'skus': skus, 'records': n, 'valid': mfc['records_valid'], 'compiled_at': mfc.get('compiled_at'),
             'held': mfc['status'] == 'held' and not mfc.get('sent'), 'sent': mfc.get('sent')}
 
 

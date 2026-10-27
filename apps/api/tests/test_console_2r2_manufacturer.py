@@ -151,8 +151,9 @@ def test_the_diff_preview_and_artifacts(http, db, upstream):
     assert [(r['field'], r['was'], r['now'], r['prov']) for r in body['diff'] if r['kind'] == 'lifecycle'] == [
         ('pure_protection.status', 'sold, per 4 of 6 agents', 'retired, successor AMORE', 'brand')]
     assert {r['source']['cycle'] for r in body['diff']} == {f2p1.CYCLE_2}
+    # 2T-8 (B3): the title counts the feed's six SKUs; the note keeps the held file's four records
     assert body['preview'] == {
-        'title': 'Four Pampers records, Manufacturer Center first',
+        'title': 'Six Pampers records, Manufacturer Center first', 'skus': 6,
         'note': "Compiled Oct 25 from Pampers 2R-1's feed and pampers.com. 2 of 4 valid. Held until Pampers 2R-1's "
                 "team sends it.",
         'records': 4, 'valid': 2, 'compiled_at': f2r2.body('tenant-held')['merchants'][0]['held']['compiled_at'],
