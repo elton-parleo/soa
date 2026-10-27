@@ -755,6 +755,9 @@ def build_artifacts(merchant: str, pubs: List[dict], channels: List[dict], held:
     slugs = list(dict.fromkeys(p.get('channel_slug') or p.get('channel') for p in pubs or []))
     order = ('manufacturer_center', 'schema_org', 'acp')
     for slug in sorted(slugs, key=lambda s: (order.index(s) if s in order else len(order), str(s))):
+        if slug == 'mcp':
+            # 2U-2: Parleo serves the brand's records on its own MCP server: nothing is held, and supply serves no file
+            continue
         rows = [p for p in latest_by_record(pubs, slug) if is_held(p) or is_blocked(p) or p.get('status') == LIVE_STATUS]
         newest = _newest(rows)
         if newest is None:

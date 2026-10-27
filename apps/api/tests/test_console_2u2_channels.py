@@ -150,6 +150,8 @@ def test_publishing_lists_the_same_channels(http, db, upstream):
     assert (surfaces['mfc']['status'], surfaces['oai']['status'], surfaces['coupons']['status']) == \
         ('held', 'blocked', 'next')
     assert surfaces['directory']['label'] == 'Not for a brand'
+    # nothing is held for the MCP server, so there is no file to download
+    assert [a['channel'] for a in pub['artifacts']] == ['manufacturer_center', 'schema_org', 'acp']
 
 
 def test_the_compile_passes_supply_s_readback_and_reasons(http, db, upstream):
