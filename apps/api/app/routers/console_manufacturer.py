@@ -165,8 +165,11 @@ async def publishing_view(scope: CustomerScope, ms: MerchantScope, merchant: str
     feed_rows = (reads['feed'] or {}).get('rows') if reads['feed'] is not None else None
     flags = manu.gtin_flags(pages, feed_rows, brand=_brand(catalog))
     held = (record or {}).get('held')
+    # 2U-2: every channel supply has, one list (console_release.channel_list), as /truesync reads it
+    channel_states = rel.channel_list(pubs=pubs, channels=channels, plan=(record or {}).get('channels'), held=held)
     surfaces = manu.build_surfaces(pubs=pubs, channels=channels, drift=drift, reference=reference, pages=pages,
-                                   flags=flags, own_domain=own, held=held, read_at=read_at, rules=reads['rules'])
+                                   flags=flags, own_domain=own, held=held, read_at=read_at, rules=reads['rules'],
+                                   channel_states=channel_states)
     cycles = _scored_cycles(ms)
     cycle = cycles[0] if cycles else None
     lifecycle, sellers = [], []
@@ -241,17 +244,22 @@ async def release_view(scope: CustomerScope, ms: MerchantScope, merchant: str, *
     errors.update(facts.get('errors') or {})
     brand, name = _brand(catalog), (record or {}).get('name') or merchant
     feed = reads['feed'] or {}
+    # 2U-2: every channel supply has, with its state and line: the matrix's columns, the workspace's and the
+    # release card's surfaces, the Overview's card and Publishing all read this one list
+    channel_states = rel.channel_list(pubs=pubs, channels=channels, plan=(record or {}).get('channels'),
+                                      held=(record or {}).get('held'))
     records = rel.build_records(
         pubs=pubs, catalog=catalog, feed_rows=feed.get('rows'), prices=reads['prices'],
         retailers=(reads['retailers'] or {}).get('domains') or [], own_domains=own_domains, channels=channels,
         brand=brand, cycle=cycle, attribute_answers=facts.get('attribute_answers') or [],
         true_value_rows=facts.get('true_value_rows') or [], promo=facts.get('promo'), deals=facts.get('deals'),
-        agents=facts.get('agents') or [], rules=reads['rules'])
+        agents=facts.get('agents') or [], rules=reads['rules'], channel_states=channel_states)
     return {
         'workspace': rel.build_workspace(pubs=pubs, records=records, prices=reads['prices'], own_domains=own_domains,
-                                         brand=brand or name, domain=own),
+                                         brand=brand or name, domain=own, channel_states=channel_states),
         'release': rel.build_release(pubs=pubs, records=records, channels=channels, rules=reads['rules'], name=name,
-                                     brand=brand),
+                                     brand=brand, channel_states=channel_states),
+        'channel_states': channel_states,
         'destinations': rel.build_destinations(pubs=pubs, all_pubs=publications, merchants=ms.merchants or [],
                                                slug=merchant, name=name, brand=brand, domain=own, channels=channels),
         'records': records,
@@ -425,11 +433,13 @@ async def post_compile(merchant: str = Query(...), dry_run: bool = Query(False),
     """2R-2a (A2): compile the brand's current SKU feed in manufacturer mode
     and hold it (supply's POST /merchants/{slug}/publish, with the tenant
     token). Operator only. This is the one call here that changes supply's
-    state, and what it writes is held rows only: every row
-    compiled_not_published (held_for_merchant, or blocked). Nothing is sent
-    anywhere, to Google or a retailer. `dry_run` writes nothing. The answer
-    is the re-read Publishing with `compile`: {dry_run, rows, by_channel,
-    not_compiled: supply's notes per channel it did not compile}."""
+    state, and what it writes is held rows: every row
+    compiled_not_published (held_for_merchant, or blocked), and (2U-2) the
+    mcp rows supply publishes on Parleo's own MCP server, with its readback.
+    Nothing is sent anywhere, to Google or a retailer. `dry_run` writes
+    nothing. The answer is the re-read Publishing with `compile`: {dry_run,
+    rows, by_channel, not_compiled: supply's notes (and 2U-2 reasons) per
+    channel it did not compile, readback: supply's mcp readback or None}."""
     await _manufacturer(scope, merchant)
     body = _unwrap(*await full_loop._client(scope).publish_merchant(merchant, dry_run=dry_run))
     rows = (body or {}).get('rows') or []
@@ -443,7 +453,7 @@ async def post_compile(merchant: str = Query(...), dry_run: bool = Query(False),
                         by=by)
     out = await get_publishing(merchant=merchant, scope=scope)
     out['compile'] = {'dry_run': dry_run, 'rows': len(rows), 'by_channel': by_channel,
-                      'not_compiled': (body or {}).get('skipped') or []}
+                      'not_compiled': (body or {}).get('skipped') or [], 'readback': (body or {}).get('readback')}
     return out
 
 

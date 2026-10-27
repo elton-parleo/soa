@@ -91,10 +91,11 @@ async def _tenant_view(org: customers.CustomerOrg) -> dict:
         )
         return entry
     # 2R-2: supply 2R-1's `mode` ('manufacturer' for a brand at retail) and what it holds
-    # (`held`: total, by_channel, blocked, compiled_at, sent), only when it sends them
+    # (`held`: total, by_channel, blocked, compiled_at, sent), only when it sends them.
+    # 2U-2: `channels`, every channel with its reason for a brand (supply's channel_plan)
     entry["merchants"] = [
         {**{k: m.get(k) for k in ("slug", "name", "domain", "kind", "hosting", "has_record")},
-         **{k: m[k] for k in ("mode", "held") if m.get(k)}}
+         **{k: m[k] for k in ("mode", "held", "channels") if m.get(k)}}
         for m in (data or {}).get("merchants", [])
     ]
     return entry

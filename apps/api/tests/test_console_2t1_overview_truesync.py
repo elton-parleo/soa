@@ -175,7 +175,17 @@ def test_the_truesync_card_and_the_workspace_count_the_held_rows(http, db, upstr
     # the Overview's card is the same count, never a second one
     assert (card['products'], card['cells'], card['drifting'], card['surfaces']) == \
         (ws['records'], ws['compiled'], ws['disagree'], ws['surfaces'])
-    assert [s['line'] for s in card['surfaces']] == ['4 of 4 compiled', '4 of 4 compiled', '0 of 4 compiled']
+    # 2U-2: every channel supply has (console_release.channel_list); #33's tenant serves no plan, so soa's fallback
+    # reads it, and #33 compiled no mcp row
+    assert [(s['channel'], s['state'], s['line']) for s in card['surfaces']] == [
+        ('schema_org', 'held', '4 of 4 compiled · Oct 25'),
+        ('merchant_center', 'not_for_brand', "a seller's channel (rule r3)"),
+        ('manufacturer_center', 'held', '4 of 4 compiled · Oct 25'),
+        ('acp', 'blocked', 'its spec refuses the record'),
+        ('ucp_uip', 'not_compiled', 'Not compiled yet'),
+        ('deals_api', 'next', 'after rule r4'),
+        ('mcp', 'not_compiled', 'Not compiled yet'),
+        ('deal_directory', 'not_for_brand', "a seller's channel (rule r3)")]
     assert card['mode_note'] == ("Manufacturer records compiled from the feed and pampers.com. Nothing publishes until "
                                  "Pampers' team sends it.")
 
@@ -190,11 +200,16 @@ def test_the_matrix_is_one_row_per_held_record_on_this_pass_s_channels(http, db,
         r['record_ref'] for r in sorted(rows, key=lambda r: r['id'])))
     assert len(ts['products']) == len({r['record_ref'] for r in rows})
     assert ts['pass_channels'] == ['schema_org', 'manufacturer_center', 'acp']
-    assert [c['id'] for c in ts['channels']] == ts['pass_channels']   # no Merchant Center, no deal directory
-    assert ts['cell_states'] == ['held', 'published', 'blocked', 'na']
+    # 2U-2: the columns are every channel supply has, in its order, each with its state
+    assert [(c['id'], c['state']) for c in ts['channels']] == [
+        ('schema_org', 'held'), ('merchant_center', 'not_for_brand'), ('manufacturer_center', 'held'),
+        ('acp', 'blocked'), ('ucp_uip', 'not_compiled'), ('deals_api', 'next'), ('mcp', 'not_compiled'),
+        ('deal_directory', 'not_for_brand')]
+    assert ts['cell_states'] == ['held', 'published', 'live', 'blocked', 'next', 'not_for_brand', 'na']
     cells = {p['name']: {k: c['s'] for k, c in p['cells'].items()} for p in ts['products']}
     assert set(cells) == {'Pampers Swaddlers', 'Pampers Pure Protection', 'Pampers AMORE', 'Pampers Zzz'}
-    assert {tuple(c.values()) for c in cells.values()} == {('held', 'held', 'blocked')}
+    assert {tuple(c.values()) for c in cells.values()} == {
+        ('held', 'not_for_brand', 'held', 'blocked', 'na', 'next', 'na', 'not_for_brand')}
     by = {p['name']: p for p in ts['products']}
     assert by['Pampers Zzz']['sub'] == 'Size 4, 104 ct, 22 to 37 lb'
     assert by['Pampers Swaddlers']['sub'] == 'Newborn, 84 ct, under 10 lb · Size 1, 96 ct, 8 to 14 lb · Size 4, 15 to 34 lb'
@@ -245,9 +260,10 @@ def test_the_release_releases_and_destinations(http, db, upstream):
     assert (release['name'], release['status'], release['approved_by'], release['requested'], release['rules_on']) == \
         ('Four records, Manufacturer Center first', 'Compiled, held', None, 'parleo', {'on': 0, 'of': 6})
     assert [(s['channel'], s['status']) for s in release['surfaces']] == [
-        ('schema_org', 'Compiled, held · Oct 25'), ('manufacturer_center', 'Compiled, held · Oct 25'),
-        ('acp', 'Blocked · Oct 25'), ('ucp_uip', 'Not in this pass'), ('deals_api', 'Not in this pass'),
-        ('mcp', 'Not in this pass')]
+        ('schema_org', 'Compiled, held · Oct 25'), ('merchant_center', "Not for a brand · a seller's channel (rule r3)"),
+        ('manufacturer_center', 'Compiled, held · Oct 25'), ('acp', 'Blocked · Oct 25'),
+        ('ucp_uip', 'Not in this pass'), ('deals_api', 'Next release · after rule r4'), ('mcp', 'Not in this pass'),
+        ('deal_directory', "Not for a brand · a seller's channel (rule r3)")]
     assert {s['channel']: s['spec_version'] for s in release['surfaces']}['acp'] == 'acp-feed-stable-2026-08-18'
     assert ts['releases'] == [{'version': 'v1', 'compiled_at': '2026-10-25T22:02:33', 'day': 'Oct 25',
                                'what_changed': 'Feed version 1, first compile', 'status': 'Compiled, held',

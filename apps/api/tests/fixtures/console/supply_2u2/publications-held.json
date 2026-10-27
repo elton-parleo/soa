@@ -1,0 +1,2661 @@
+{
+ "body": [
+  {
+   "channel": "mcp",
+   "channel_slug": "mcp",
+   "compiled_at": "2026-10-27T22:02:35",
+   "error": null,
+   "expressiveness": [],
+   "external_ref": "https://mcp.parleo.example#get_product_facts",
+   "held": false,
+   "id": 22,
+   "journal": [
+    {
+     "at": "2026-10-27T22:02:35+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-27T22:02:35.444024+00:00",
+     "by": "parleo",
+     "event": "published",
+     "note": "https://mcp.parleo.example#get_product_facts"
+    }
+   ],
+   "listing_id": null,
+   "mode": "manufacturer",
+   "payload": {
+    "held_publication_id": 15,
+    "line": "Pampers Zzz",
+    "merchant": "pampers-2r1",
+    "record_ref": "feed:pampers-2r1:00037000833970",
+    "served": 1,
+    "server": "https://mcp.parleo.example",
+    "skus": [
+     {
+      "gtin": "037000833970",
+      "product": "Pampers Zzz Size 4, 104 ct",
+      "query": "037000833970",
+      "resolved": true
+     }
+    ],
+    "tool": "get_product_facts"
+   },
+   "published_at": "2026-10-27T22:02:35.444024",
+   "reason": null,
+   "record_ref": "feed:pampers-2r1:00037000833970",
+   "spec_clause": null,
+   "spec_version": "parleo-internal",
+   "status": "published",
+   "validation": {
+    "errors": [],
+    "ok": true
+   }
+  },
+  {
+   "channel": "mcp",
+   "channel_slug": "mcp",
+   "compiled_at": "2026-10-27T22:02:35",
+   "error": null,
+   "expressiveness": [],
+   "external_ref": "https://mcp.parleo.example#get_product_facts",
+   "held": false,
+   "id": 21,
+   "journal": [
+    {
+     "at": "2026-10-27T22:02:35+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-27T22:02:35.443784+00:00",
+     "by": "parleo",
+     "event": "published",
+     "note": "https://mcp.parleo.example#get_product_facts"
+    }
+   ],
+   "listing_id": null,
+   "mode": "manufacturer",
+   "payload": {
+    "held_publication_id": 11,
+    "line": "Pampers AMORE",
+    "merchant": "pampers-2r1",
+    "record_ref": "feed:pampers-2r1:sku:sku_pg_amore_s1_132",
+    "served": 1,
+    "server": "https://mcp.parleo.example",
+    "skus": [
+     {
+      "gtin": null,
+      "product": "Pampers AMORE Size 1, 132 ct",
+      "query": "Pampers AMORE Size 1, 132 ct",
+      "resolved": true
+     }
+    ],
+    "tool": "get_product_facts"
+   },
+   "published_at": "2026-10-27T22:02:35.443784",
+   "reason": null,
+   "record_ref": "feed:pampers-2r1:sku:sku_pg_amore_s1_132",
+   "spec_clause": null,
+   "spec_version": "parleo-internal",
+   "status": "published",
+   "validation": {
+    "errors": [],
+    "ok": true
+   }
+  },
+  {
+   "channel": "mcp",
+   "channel_slug": "mcp",
+   "compiled_at": "2026-10-27T22:02:35",
+   "error": null,
+   "expressiveness": [],
+   "external_ref": "https://mcp.parleo.example#get_product_facts",
+   "held": false,
+   "id": 20,
+   "journal": [
+    {
+     "at": "2026-10-27T22:02:35+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-27T22:02:35.443546+00:00",
+     "by": "parleo",
+     "event": "published",
+     "note": "https://mcp.parleo.example#get_product_facts"
+    }
+   ],
+   "listing_id": null,
+   "mode": "manufacturer",
+   "payload": {
+    "held_publication_id": 7,
+    "line": "Pampers Pure Protection",
+    "merchant": "pampers-2r1",
+    "record_ref": "feed:pampers-2r1:sku:sku_pg_pure_s1",
+    "served": 1,
+    "server": "https://mcp.parleo.example",
+    "skus": [
+     {
+      "gtin": null,
+      "product": "Pampers Pure Protection Size 1",
+      "query": "Pampers Pure Protection Size 1",
+      "resolved": true
+     }
+    ],
+    "tool": "get_product_facts"
+   },
+   "published_at": "2026-10-27T22:02:35.443546",
+   "reason": null,
+   "record_ref": "feed:pampers-2r1:sku:sku_pg_pure_s1",
+   "spec_clause": null,
+   "spec_version": "parleo-internal",
+   "status": "published",
+   "validation": {
+    "errors": [],
+    "ok": true
+   }
+  },
+  {
+   "channel": "mcp",
+   "channel_slug": "mcp",
+   "compiled_at": "2026-10-27T22:02:35",
+   "error": null,
+   "expressiveness": [],
+   "external_ref": "https://mcp.parleo.example#get_product_facts",
+   "held": false,
+   "id": 19,
+   "journal": [
+    {
+     "at": "2026-10-27T22:02:35+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-27T22:02:35.443193+00:00",
+     "by": "parleo",
+     "event": "published",
+     "note": "https://mcp.parleo.example#get_product_facts"
+    }
+   ],
+   "listing_id": null,
+   "mode": "manufacturer",
+   "payload": {
+    "held_publication_id": 1,
+    "line": "Pampers Swaddlers",
+    "merchant": "pampers-2r1",
+    "record_ref": "feed:pampers-2r1:sku:sku_pg_swd_nb_84",
+    "served": 3,
+    "server": "https://mcp.parleo.example",
+    "skus": [
+     {
+      "gtin": null,
+      "product": "Pampers Swaddlers Newborn, 84 ct",
+      "query": "Pampers Swaddlers Newborn, 84 ct",
+      "resolved": true
+     },
+     {
+      "gtin": null,
+      "product": "Pampers Swaddlers Size 1, 96 ct",
+      "query": "Pampers Swaddlers Size 1, 96 ct",
+      "resolved": true
+     },
+     {
+      "gtin": "037000799818",
+      "product": "Pampers Swaddlers Size 4",
+      "query": "037000799818",
+      "resolved": true
+     }
+    ],
+    "tool": "get_product_facts"
+   },
+   "published_at": "2026-10-27T22:02:35.443193",
+   "reason": null,
+   "record_ref": "feed:pampers-2r1:sku:sku_pg_swd_nb_84",
+   "spec_clause": null,
+   "spec_version": "parleo-internal",
+   "status": "published",
+   "validation": {
+    "errors": [],
+    "ok": true
+   }
+  },
+  {
+   "channel": "ucp_uip",
+   "channel_slug": "ucp_uip",
+   "compiled_at": "2026-10-27T22:02:35",
+   "error": "blocked: rule_off: rule r1 off (\"Never publish a retail price as Pampers 2R-1's: Retailer prices appear only as what a retailer charges, labeled with the retailer and dated. Every retailer read that day, never a chosen one.\"); rule r2 off (\"Retailers in the same order every time: Alphabetical, every retailer that carries the product, no favorites.\"). Manufacturer mode states no retailer price while either rule is off, and a UCP variant requires one: truesync/specs/ucp/ucp-2026-08-25/shopping/types/variant.json: \"required\": [\"id\", \"title\", \"description\", \"price\"].; product: 'price_range' is a required property; product/variants/0: 'price' is a required property; product/variants/1: 'price' is a required property; product/variants/2: 'price' is a required property",
+   "expressiveness": [
+    {
+     "field": "channel",
+     "note": "rule_off: rule r1 off (\"Never publish a retail price as Pampers 2R-1's: Retailer prices appear only as what a retailer charges, labeled with the retailer and dated. Every retailer read that day, never a chosen one.\"); rule r2 off (\"Retailers in the same order every time: Alphabetical, every retailer that carries the product, no favorites.\"). Manufacturer mode states no retailer price while either rule is off, and a UCP variant requires one: truesync/specs/ucp/ucp-2026-08-25/shopping/types/variant.json: \"required\": [\"id\", \"title\", \"description\", \"price\"].",
+     "severity": "blocked"
+    },
+    {
+     "field": "price",
+     "note": "Manufacturer mode: price-free while rule r1 or r2 is off, so this channel, which requires a price, is blocked.",
+     "severity": "dropped"
+    },
+    {
+     "field": "rule_r1",
+     "note": "rule r1 off: no retailer price, and the channel is blocked. With r1 and r2 both on, each retailer read on the read day (none yet) carries its own read price, labeled with the retailer and dated.",
+     "severity": "info"
+    },
+    {
+     "field": "rule_r2",
+     "note": "rule r2 off: no retailer price, and the channel is blocked. With r1 and r2 both on, each retailer read on the read day (none yet) carries its own read price, labeled with the retailer and dated.",
+     "severity": "info"
+    },
+    {
+     "field": "availability",
+     "note": "Manufacturer mode: retailer-neutral, so no availability for any retailer.",
+     "severity": "dropped"
+    },
+    {
+     "field": "rule_r2",
+     "note": "rule r2 off: retailers are listed in feed order; on, alphabetically (1 variant(s) would reorder).",
+     "severity": "info"
+    },
+    {
+     "field": "checkout",
+     "note": "Manufacturer mode: catalog lookup only. The profile declares no checkout or cart service and payment_handlers is {}: the brand sells nothing here, and each variant's retailer page is where it is bought.",
+     "severity": "dropped"
+    },
+    {
+     "field": "loyalty",
+     "note": "Manufacturer mode: the loyalty extension (dev.ucp.common.loyalty) is neither declared nor populated; a retailer's program is the retailer's, not the brand's.",
+     "severity": "dropped"
+    },
+    {
+     "field": "member_price",
+     "note": "Manufacturer mode: a variant's price is the shelf price a retailer's page showed; member, subscription and loyalty prices are not compiled.",
+     "severity": "dropped"
+    },
+    {
+     "field": "seller_link",
+     "note": "seller.links[].type is \"product_page\", which is not one of link.json's well-known values (policy pages); the link's title names it.",
+     "severity": "info"
+    },
+    {
+     "field": "description_from_brand_page",
+     "note": "Pampers Zzz Size 4, 104 ct: the feed states no description; the line's brand page does.",
+     "severity": "info"
+    }
+   ],
+   "external_ref": null,
+   "held": true,
+   "id": 18,
+   "journal": [
+    {
+     "at": "2026-10-27T22:02:35+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-27T22:02:35+00:00",
+     "by": "parleo",
+     "cause": "rule_off",
+     "event": "blocked",
+     "note": "rule_off: rule r1 off (\"Never publish a retail price as Pampers 2R-1's: Retailer prices appear only as what a retailer charges, labeled with the retailer and dated. Every retailer read that day, never a chosen one.\"); rule r2 off (\"Retailers in the same order every time: Alphabetical, every retailer that carries the product, no favorites.\"). Manufacturer mode states no retailer price while either rule is off, and a UCP variant requires one: truesync/specs/ucp/ucp-2026-08-25/shopping/types/variant.json: \"required\": [\"id\", \"title\", \"description\", \"price\"]."
+    }
+   ],
+   "listing_id": null,
+   "mode": "manufacturer",
+   "payload": {
+    "product": {
+     "description": {
+      "plain": "Say goodnight to overnight wakeups and hello to Pampers ZZZ, the overnight diaper designed with extra absorbency for more peaceful nights."
+     },
+     "id": "00037000833970",
+     "media": [
+      {
+       "type": "image",
+       "url": "https://images.ctfassets.net/pfeg73t23esw/42JI7m5X9vpLZlpOmWxsk9/1474318b593a33988ab42d381d3187fc/37000833987_SwaddlersZZZs_CLEAN.jpg"
+      }
+     ],
+     "tags": [
+      "Pampers"
+     ],
+     "title": "Pampers Zzz Size 4, 104 ct",
+     "url": "https://www.pampers.com/en-us/products/pampers-zzz",
+     "variants": [
+      {
+       "barcodes": [
+        {
+         "type": "GTIN",
+         "value": "037000833970"
+        }
+       ],
+       "description": {
+        "plain": "Say goodnight to overnight wakeups and hello to Pampers ZZZ, the overnight diaper designed with extra absorbency for more peaceful nights."
+       },
+       "id": "00037000833970:amazon.com",
+       "metadata": {
+        "retailer_domain": "amazon.com"
+       },
+       "options": [
+        {
+         "label": "104",
+         "name": "count"
+        }
+       ],
+       "seller": {
+        "links": [
+         {
+          "title": "Amazon product page",
+          "type": "product_page",
+          "url": "https://www.amazon.com/dp/B08PX2V97T"
+         }
+        ],
+        "name": "Amazon"
+       },
+       "title": "Pampers Zzz Size 4, 104 ct at Amazon",
+       "url": "https://www.amazon.com/dp/B08PX2V97T"
+      },
+      {
+       "barcodes": [
+        {
+         "type": "GTIN",
+         "value": "037000833970"
+        }
+       ],
+       "description": {
+        "plain": "Say goodnight to overnight wakeups and hello to Pampers ZZZ, the overnight diaper designed with extra absorbency for more peaceful nights."
+       },
+       "id": "00037000833970:walmart.com",
+       "metadata": {
+        "retailer_domain": "walmart.com"
+       },
+       "options": [
+        {
+         "label": "104",
+         "name": "count"
+        }
+       ],
+       "seller": {
+        "links": [
+         {
+          "title": "Walmart product page",
+          "type": "product_page",
+          "url": "https://www.walmart.com/ip/Pampers-Swaddlers-Overnight-Diapers-Size-4-104-Count/989998624"
+         }
+        ],
+        "name": "Walmart"
+       },
+       "title": "Pampers Zzz Size 4, 104 ct at Walmart",
+       "url": "https://www.walmart.com/ip/Pampers-Swaddlers-Overnight-Diapers-Size-4-104-Count/989998624"
+      },
+      {
+       "barcodes": [
+        {
+         "type": "GTIN",
+         "value": "037000833970"
+        }
+       ],
+       "description": {
+        "plain": "Say goodnight to overnight wakeups and hello to Pampers ZZZ, the overnight diaper designed with extra absorbency for more peaceful nights."
+       },
+       "id": "00037000833970:target.com",
+       "metadata": {
+        "retailer_domain": "target.com"
+       },
+       "options": [
+        {
+         "label": "104",
+         "name": "count"
+        }
+       ],
+       "seller": {
+        "links": [
+         {
+          "title": "Target product page",
+          "type": "product_page",
+          "url": "https://www.target.com/p/-/-/A-81041953"
+         }
+        ],
+        "name": "Target"
+       },
+       "title": "Pampers Zzz Size 4, 104 ct at Target",
+       "url": "https://www.target.com/p/-/-/A-81041953"
+      }
+     ]
+    },
+    "ucp": {
+     "version": "2026-08-25"
+    }
+   },
+   "published_at": null,
+   "reason": "blocked",
+   "record_ref": "feed:pampers-2r1:00037000833970",
+   "spec_clause": "rule_off: rule r1 off (\"Never publish a retail price as Pampers 2R-1's: Retailer prices appear only as what a retailer charges, labeled with the retailer and dated. Every retailer read that day, never a chosen one.\"); rule r2 off (\"Retailers in the same order every time: Alphabetical, every retailer that carries the product, no favorites.\"). Manufacturer mode states no retailer price while either rule is off, and a UCP variant requires one: truesync/specs/ucp/ucp-2026-08-25/shopping/types/variant.json: \"required\": [\"id\", \"title\", \"description\", \"price\"].",
+   "spec_version": "ucp-2026-08-25",
+   "status": "compiled_not_published",
+   "validation": {
+    "errors": [
+     "blocked: rule_off: rule r1 off (\"Never publish a retail price as Pampers 2R-1's: Retailer prices appear only as what a retailer charges, labeled with the retailer and dated. Every retailer read that day, never a chosen one.\"); rule r2 off (\"Retailers in the same order every time: Alphabetical, every retailer that carries the product, no favorites.\"). Manufacturer mode states no retailer price while either rule is off, and a UCP variant requires one: truesync/specs/ucp/ucp-2026-08-25/shopping/types/variant.json: \"required\": [\"id\", \"title\", \"description\", \"price\"].",
+     "product: 'price_range' is a required property",
+     "product/variants/0: 'price' is a required property",
+     "product/variants/1: 'price' is a required property",
+     "product/variants/2: 'price' is a required property"
+    ],
+    "ok": false
+   }
+  },
+  {
+   "channel": "acp",
+   "channel_slug": "acp",
+   "compiled_at": "2026-10-27T22:02:35",
+   "error": "blocked: manufacturer mode publishes no price, and the ACP feed requires one on every item. docs/truesync/truesync-protocol-specs.md \u00a71 (acp-feed-stable-2026-08-18): \"Required for non-Ads feeds: `item_id`, `title`, `description`, `url`, `brand`, `image_url`, `price` (\"79.99 USD\"), `availability` (...), `target_countries`, `seller_name`, and OpenAI flags `is_eligible_search`, `is_eligible_checkout`.\"; 00037000833970:amazon.com: missing required field 'image_url' (specs \u00a71); 00037000833970:amazon.com: missing required field 'price' (specs \u00a71); 00037000833970:amazon.com: missing required field 'availability' (specs \u00a71); 00037000833970:walmart.com: missing required field 'image_url' (specs \u00a71); 00037000833970:walmart.com: missing required field 'price' (specs \u00a71); 00037000833970:walmart.com: missing required field 'availability' (specs \u00a71); 00037000833970:target.com: missing required field 'image_url' (specs \u00a71); 00037000833970:target.com: missing required field 'price' (specs \u00a71); 00037000833970:target.com: missing required field 'availability' (specs \u00a71)",
+   "expressiveness": [
+    {
+     "field": "channel",
+     "note": "docs/truesync/truesync-protocol-specs.md \u00a71 (acp-feed-stable-2026-08-18): \"Required for non-Ads feeds: `item_id`, `title`, `description`, `url`, `brand`, `image_url`, `price` (\"79.99 USD\"), `availability` (...), `target_countries`, `seller_name`, and OpenAI flags `is_eligible_search`, `is_eligible_checkout`.\"",
+     "severity": "blocked"
+    },
+    {
+     "field": "price",
+     "note": "Manufacturer mode: price-free while rule r1 or r2 is off, so this channel, which requires a price, is blocked.",
+     "severity": "dropped"
+    },
+    {
+     "field": "rule_r1",
+     "note": "rule r1 off: no retailer price, and the channel is blocked. With r1 and r2 both on, each retailer read on the read day (none yet) carries its own read price, labeled with the retailer and dated.",
+     "severity": "info"
+    },
+    {
+     "field": "rule_r2",
+     "note": "rule r2 off: no retailer price, and the channel is blocked. With r1 and r2 both on, each retailer read on the read day (none yet) carries its own read price, labeled with the retailer and dated.",
+     "severity": "info"
+    },
+    {
+     "field": "availability",
+     "note": "Manufacturer mode: retailer-neutral, so no availability for any retailer.",
+     "severity": "dropped"
+    },
+    {
+     "field": "rule_r2",
+     "note": "rule r2 off: retailers are listed in feed order; on, alphabetically (1 variant(s) would reorder).",
+     "severity": "info"
+    }
+   ],
+   "external_ref": null,
+   "held": true,
+   "id": 17,
+   "journal": [
+    {
+     "at": "2026-10-27T22:02:35+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-27T22:02:35+00:00",
+     "by": "parleo",
+     "cause": null,
+     "event": "blocked",
+     "note": "docs/truesync/truesync-protocol-specs.md \u00a71 (acp-feed-stable-2026-08-18): \"Required for non-Ads feeds: `item_id`, `title`, `description`, `url`, `brand`, `image_url`, `price` (\"79.99 USD\"), `availability` (...), `target_countries`, `seller_name`, and OpenAI flags `is_eligible_search`, `is_eligible_checkout`.\""
+    }
+   ],
+   "listing_id": null,
+   "mode": "manufacturer",
+   "payload": {
+    "items": [
+     {
+      "brand": "Pampers",
+      "description": "Pampers Zzz Size 4, 104 ct",
+      "gtin": "037000833970",
+      "image_url": null,
+      "is_eligible_checkout": false,
+      "is_eligible_search": true,
+      "item_id": "00037000833970:amazon.com",
+      "listing_has_variations": false,
+      "seller_name": "amazon.com",
+      "target_countries": [
+       "US"
+      ],
+      "title": "Pampers Zzz Size 4, 104 ct",
+      "url": "https://www.amazon.com/dp/B08PX2V97T",
+      "variant_dict": {
+       "count": "104"
+      }
+     },
+     {
+      "brand": "Pampers",
+      "description": "Pampers Zzz Size 4, 104 ct",
+      "gtin": "037000833970",
+      "image_url": null,
+      "is_eligible_checkout": false,
+      "is_eligible_search": true,
+      "item_id": "00037000833970:walmart.com",
+      "listing_has_variations": false,
+      "seller_name": "walmart.com",
+      "target_countries": [
+       "US"
+      ],
+      "title": "Pampers Zzz Size 4, 104 ct",
+      "url": "https://www.walmart.com/ip/Pampers-Swaddlers-Overnight-Diapers-Size-4-104-Count/989998624",
+      "variant_dict": {
+       "count": "104"
+      }
+     },
+     {
+      "brand": "Pampers",
+      "description": "Pampers Zzz Size 4, 104 ct",
+      "gtin": "037000833970",
+      "image_url": null,
+      "is_eligible_checkout": false,
+      "is_eligible_search": true,
+      "item_id": "00037000833970:target.com",
+      "listing_has_variations": false,
+      "seller_name": "target.com",
+      "target_countries": [
+       "US"
+      ],
+      "title": "Pampers Zzz Size 4, 104 ct",
+      "url": "https://www.target.com/p/-/-/A-81041953",
+      "variant_dict": {
+       "count": "104"
+      }
+     }
+    ]
+   },
+   "published_at": null,
+   "reason": "blocked",
+   "record_ref": "feed:pampers-2r1:00037000833970",
+   "spec_clause": "docs/truesync/truesync-protocol-specs.md \u00a71 (acp-feed-stable-2026-08-18): \"Required for non-Ads feeds: `item_id`, `title`, `description`, `url`, `brand`, `image_url`, `price` (\"79.99 USD\"), `availability` (...), `target_countries`, `seller_name`, and OpenAI flags `is_eligible_search`, `is_eligible_checkout`.\"",
+   "spec_version": "acp-feed-stable-2026-08-18",
+   "status": "compiled_not_published",
+   "validation": {
+    "errors": [
+     "blocked: manufacturer mode publishes no price, and the ACP feed requires one on every item. docs/truesync/truesync-protocol-specs.md \u00a71 (acp-feed-stable-2026-08-18): \"Required for non-Ads feeds: `item_id`, `title`, `description`, `url`, `brand`, `image_url`, `price` (\"79.99 USD\"), `availability` (...), `target_countries`, `seller_name`, and OpenAI flags `is_eligible_search`, `is_eligible_checkout`.\"",
+     "00037000833970:amazon.com: missing required field 'image_url' (specs \u00a71)",
+     "00037000833970:amazon.com: missing required field 'price' (specs \u00a71)",
+     "00037000833970:amazon.com: missing required field 'availability' (specs \u00a71)",
+     "00037000833970:walmart.com: missing required field 'image_url' (specs \u00a71)",
+     "00037000833970:walmart.com: missing required field 'price' (specs \u00a71)",
+     "00037000833970:walmart.com: missing required field 'availability' (specs \u00a71)",
+     "00037000833970:target.com: missing required field 'image_url' (specs \u00a71)",
+     "00037000833970:target.com: missing required field 'price' (specs \u00a71)",
+     "00037000833970:target.com: missing required field 'availability' (specs \u00a71)"
+    ],
+    "ok": false
+   }
+  },
+  {
+   "channel": "manufacturer_center",
+   "channel_slug": "manufacturer_center",
+   "compiled_at": "2026-10-27T22:02:35",
+   "error": null,
+   "expressiveness": [
+    {
+     "field": "percent_off",
+     "note": "Manufacturer Center: no sale-price or discount attribute; suggestedRetailPrice is MSRP and lowering it to encode a discount would misstate it (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "amount_off",
+     "note": "Manufacturer Center: no sale-price or discount attribute; suggestedRetailPrice is MSRP and lowering it to encode a discount would misstate it (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "member_price",
+     "note": "Manufacturer Center: no price attribute but MSRP and no membership concept (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "subscribe_and_save",
+     "note": "Manufacturer Center: no subscription attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "points_earn",
+     "note": "Manufacturer Center: no loyalty attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "free_shipping",
+     "note": "Manufacturer Center: no shipping attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "gift_with_purchase",
+     "note": "Manufacturer Center: no promotion attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "mfr_coupon",
+     "note": "Manufacturer Center: no promotion or code attribute, even for the manufacturer's own coupon (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "member",
+     "note": "Manufacturer Center: no eligibility attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "tier",
+     "note": "Manufacturer Center: no eligibility attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "subscription",
+     "note": "Manufacturer Center: no eligibility attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "new_customer",
+     "note": "Manufacturer Center: no eligibility attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "retailer_availability",
+     "note": "Manufacturer Center has no field for who sells the product or where; retailer URLs and the retailer list are not sent (MC-0 \u00a74b).",
+     "severity": "dropped"
+    },
+    {
+     "field": "availability",
+     "note": "No stock or availability attribute; 'availability' is n/a for Manufacturer Center (answer/7073012).",
+     "severity": "dropped"
+    },
+    {
+     "field": "shelf_price",
+     "note": "No price or sale_price attribute; only suggestedRetailPrice (MSRP) exists (answer/7073012, discovery Attributes).",
+     "severity": "dropped"
+    },
+    {
+     "field": "provenance",
+     "note": "No provenance attribute; the brand's verified account is itself the provenance claim (MC-0 \u00a74a).",
+     "severity": "dropped"
+    },
+    {
+     "field": "validity_dates",
+     "note": "No offer validity; disclosureDate and releaseDate are product-lifecycle dates, not offer windows (MC-0 \u00a74b).",
+     "severity": "dropped"
+    },
+    {
+     "field": "rule_r1",
+     "note": "rule r1 off: nothing in this compile (publish_msrp is off, so no MSRP is sent either way).",
+     "severity": "info"
+    },
+    {
+     "field": "price",
+     "note": "Manufacturer mode: no shelf price; MSRP only on Manufacturer Center with publish_msrp.",
+     "severity": "dropped"
+    },
+    {
+     "field": "rule_r5",
+     "note": "rule r5 off: no size chart rows; on, 1 weight-range row(s) from the brand page's chart.",
+     "severity": "info"
+    },
+    {
+     "field": "image_from_brand_page",
+     "note": "Pampers Zzz Size 4, 104 ct: no image_url in the feed; imageLink is the line's image on the brand's own page (https://images.ctfassets.net/pfeg73t23esw/42JI7m5X9vpLZlpOmWxsk9/1474318b593a33988ab42d381d3187fc/37000833987_SwaddlersZZZs_CLEAN.jpg).",
+     "severity": "info"
+    },
+    {
+     "field": "description_from_brand_page",
+     "note": "Pampers Zzz Size 4, 104 ct: no description in the feed; description is the line's on the brand's own page.",
+     "severity": "info"
+    }
+   ],
+   "external_ref": null,
+   "held": true,
+   "id": 16,
+   "journal": [
+    {
+     "at": "2026-10-27T22:02:35+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-27T22:02:35+00:00",
+     "by": "parleo",
+     "event": "held_for_merchant",
+     "note": "compiled; the brand's own team sends it"
+    }
+   ],
+   "listing_id": null,
+   "mode": "manufacturer",
+   "payload": {
+    "apiVersion": "manufacturers/v1",
+    "products": [
+     {
+      "attributes": {
+       "brand": "Pampers",
+       "count": {
+        "unit": "count",
+        "value": "104"
+       },
+       "description": "Say goodnight to overnight wakeups and hello to Pampers ZZZ, the overnight diaper designed with extra absorbency for more peaceful nights.",
+       "gtin": [
+        "037000833970"
+       ],
+       "imageLink": {
+        "imageUrl": "https://images.ctfassets.net/pfeg73t23esw/42JI7m5X9vpLZlpOmWxsk9/1474318b593a33988ab42d381d3187fc/37000833987_SwaddlersZZZs_CLEAN.jpg"
+       },
+       "productName": "Pampers Zzz",
+       "productPageUrl": "https://www.pampers.com/en-us/products/pampers-zzz",
+       "title": "Pampers Zzz Size 4, 104 ct"
+      },
+      "name": "US:en:00037000833970"
+     }
+    ]
+   },
+   "published_at": null,
+   "reason": "held_for_merchant",
+   "record_ref": "feed:pampers-2r1:00037000833970",
+   "spec_clause": null,
+   "spec_version": "manufacturers-v1-2026-10-05",
+   "status": "compiled_not_published",
+   "validation": {
+    "errors": [],
+    "ok": true
+   }
+  },
+  {
+   "channel": "schema_org",
+   "channel_slug": "schema_org",
+   "compiled_at": "2026-10-27T22:02:35",
+   "error": null,
+   "expressiveness": [
+    {
+     "field": "rule_r1",
+     "note": "rule r1 off: nothing on this channel: a shelf price is never published in manufacturer mode.",
+     "severity": "info"
+    },
+    {
+     "field": "price",
+     "note": "Manufacturer mode: no shelf price; MSRP only on Manufacturer Center with publish_msrp.",
+     "severity": "dropped"
+    },
+    {
+     "field": "availability",
+     "note": "Manufacturer mode: retailer-neutral, so no availability for any retailer.",
+     "severity": "dropped"
+    },
+    {
+     "field": "rule_r2",
+     "note": "rule r2 off: retailers are listed in feed order; on, alphabetically (1 variant(s) would reorder).",
+     "severity": "info"
+    },
+    {
+     "field": "rule_r5",
+     "note": "rule r5 off: no size chart rows; on, 1 weight-range row(s) from the brand page's chart.",
+     "severity": "info"
+    }
+   ],
+   "external_ref": null,
+   "held": true,
+   "id": 15,
+   "journal": [
+    {
+     "at": "2026-10-27T22:02:35+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-27T22:02:35+00:00",
+     "by": "parleo",
+     "event": "held_for_merchant",
+     "note": "compiled; the brand's own team sends it"
+    }
+   ],
+   "listing_id": null,
+   "mode": "manufacturer",
+   "payload": {
+    "@context": "https://schema.org",
+    "@type": "ProductGroup",
+    "brand": {
+     "@type": "Brand",
+     "name": "Pampers"
+    },
+    "hasVariant": [
+     {
+      "@type": "Product",
+      "additionalProperty": [
+       {
+        "@type": "PropertyValue",
+        "name": "Pack count",
+        "value": 104
+       }
+      ],
+      "brand": {
+       "@type": "Brand",
+       "name": "Pampers"
+      },
+      "gtin": "037000833970",
+      "gtin12": "037000833970",
+      "name": "Pampers Zzz Size 4, 104 ct",
+      "offers": [
+       {
+        "@type": "Offer",
+        "seller": {
+         "@type": "Organization",
+         "name": "amazon.com"
+        },
+        "url": "https://www.amazon.com/dp/B08PX2V97T"
+       },
+       {
+        "@type": "Offer",
+        "seller": {
+         "@type": "Organization",
+         "name": "walmart.com"
+        },
+        "url": "https://www.walmart.com/ip/Pampers-Swaddlers-Overnight-Diapers-Size-4-104-Count/989998624"
+       },
+       {
+        "@type": "Offer",
+        "seller": {
+         "@type": "Organization",
+         "name": "target.com"
+        },
+        "url": "https://www.target.com/p/-/-/A-81041953"
+       }
+      ],
+      "url": "https://www.pampers.com/en-us/products/pampers-zzz"
+     }
+    ],
+    "name": "Pampers Zzz",
+    "productGroupID": "feed:pampers-2r1:00037000833970",
+    "url": "https://www.pampers.com/en-us/products/pampers-zzz",
+    "variesBy": [
+     "size",
+     "count"
+    ]
+   },
+   "published_at": null,
+   "reason": "held_for_merchant",
+   "record_ref": "feed:pampers-2r1:00037000833970",
+   "spec_clause": null,
+   "spec_version": "schemaorg-merchant-listing-2026-08-18",
+   "status": "compiled_not_published",
+   "validation": {
+    "errors": [],
+    "ok": true
+   }
+  },
+  {
+   "channel": "ucp_uip",
+   "channel_slug": "ucp_uip",
+   "compiled_at": "2026-10-27T22:02:35",
+   "error": "blocked: rule_off: rule r1 off (\"Never publish a retail price as Pampers 2R-1's: Retailer prices appear only as what a retailer charges, labeled with the retailer and dated. Every retailer read that day, never a chosen one.\"); rule r2 off (\"Retailers in the same order every time: Alphabetical, every retailer that carries the product, no favorites.\"). Manufacturer mode states no retailer price while either rule is off, and a UCP variant requires one: truesync/specs/ucp/ucp-2026-08-25/shopping/types/variant.json: \"required\": [\"id\", \"title\", \"description\", \"price\"].; product: 'price_range' is a required property; product/variants: [] should be non-empty",
+   "expressiveness": [
+    {
+     "field": "channel",
+     "note": "rule_off: rule r1 off (\"Never publish a retail price as Pampers 2R-1's: Retailer prices appear only as what a retailer charges, labeled with the retailer and dated. Every retailer read that day, never a chosen one.\"); rule r2 off (\"Retailers in the same order every time: Alphabetical, every retailer that carries the product, no favorites.\"). Manufacturer mode states no retailer price while either rule is off, and a UCP variant requires one: truesync/specs/ucp/ucp-2026-08-25/shopping/types/variant.json: \"required\": [\"id\", \"title\", \"description\", \"price\"].",
+     "severity": "blocked"
+    },
+    {
+     "field": "price",
+     "note": "Manufacturer mode: price-free while rule r1 or r2 is off, so this channel, which requires a price, is blocked.",
+     "severity": "dropped"
+    },
+    {
+     "field": "rule_r1",
+     "note": "rule r1 off: no retailer price, and the channel is blocked. With r1 and r2 both on, each retailer read on the read day (none yet) carries its own read price, labeled with the retailer and dated.",
+     "severity": "info"
+    },
+    {
+     "field": "rule_r2",
+     "note": "rule r2 off: no retailer price, and the channel is blocked. With r1 and r2 both on, each retailer read on the read day (none yet) carries its own read price, labeled with the retailer and dated.",
+     "severity": "info"
+    },
+    {
+     "field": "availability",
+     "note": "Manufacturer mode: retailer-neutral, so no availability for any retailer.",
+     "severity": "dropped"
+    },
+    {
+     "field": "rule_r2",
+     "note": "rule r2 off: retailers are listed in feed order; on, alphabetically (no variant would reorder).",
+     "severity": "info"
+    },
+    {
+     "field": "checkout",
+     "note": "Manufacturer mode: catalog lookup only. The profile declares no checkout or cart service and payment_handlers is {}: the brand sells nothing here, and each variant's retailer page is where it is bought.",
+     "severity": "dropped"
+    },
+    {
+     "field": "loyalty",
+     "note": "Manufacturer mode: the loyalty extension (dev.ucp.common.loyalty) is neither declared nor populated; a retailer's program is the retailer's, not the brand's.",
+     "severity": "dropped"
+    },
+    {
+     "field": "member_price",
+     "note": "Manufacturer mode: a variant's price is the shelf price a retailer's page showed; member, subscription and loyalty prices are not compiled.",
+     "severity": "dropped"
+    }
+   ],
+   "external_ref": null,
+   "held": true,
+   "id": 14,
+   "journal": [
+    {
+     "at": "2026-10-27T22:02:35+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-27T22:02:35+00:00",
+     "by": "parleo",
+     "cause": "rule_off",
+     "event": "blocked",
+     "note": "rule_off: rule r1 off (\"Never publish a retail price as Pampers 2R-1's: Retailer prices appear only as what a retailer charges, labeled with the retailer and dated. Every retailer read that day, never a chosen one.\"); rule r2 off (\"Retailers in the same order every time: Alphabetical, every retailer that carries the product, no favorites.\"). Manufacturer mode states no retailer price while either rule is off, and a UCP variant requires one: truesync/specs/ucp/ucp-2026-08-25/shopping/types/variant.json: \"required\": [\"id\", \"title\", \"description\", \"price\"]."
+    }
+   ],
+   "listing_id": null,
+   "mode": "manufacturer",
+   "payload": {
+    "product": {
+     "description": {
+      "plain": ""
+     },
+     "id": "sku:sku_pg_amore_s1_132",
+     "tags": [
+      "Pampers"
+     ],
+     "title": "Pampers AMORE Size 1, 132 ct",
+     "url": "https://www.pampers.com/en-us/diapers-wipes/amore-diapers",
+     "variants": []
+    },
+    "ucp": {
+     "version": "2026-08-25"
+    }
+   },
+   "published_at": null,
+   "reason": "blocked",
+   "record_ref": "feed:pampers-2r1:sku:sku_pg_amore_s1_132",
+   "spec_clause": "rule_off: rule r1 off (\"Never publish a retail price as Pampers 2R-1's: Retailer prices appear only as what a retailer charges, labeled with the retailer and dated. Every retailer read that day, never a chosen one.\"); rule r2 off (\"Retailers in the same order every time: Alphabetical, every retailer that carries the product, no favorites.\"). Manufacturer mode states no retailer price while either rule is off, and a UCP variant requires one: truesync/specs/ucp/ucp-2026-08-25/shopping/types/variant.json: \"required\": [\"id\", \"title\", \"description\", \"price\"].",
+   "spec_version": "ucp-2026-08-25",
+   "status": "compiled_not_published",
+   "validation": {
+    "errors": [
+     "blocked: rule_off: rule r1 off (\"Never publish a retail price as Pampers 2R-1's: Retailer prices appear only as what a retailer charges, labeled with the retailer and dated. Every retailer read that day, never a chosen one.\"); rule r2 off (\"Retailers in the same order every time: Alphabetical, every retailer that carries the product, no favorites.\"). Manufacturer mode states no retailer price while either rule is off, and a UCP variant requires one: truesync/specs/ucp/ucp-2026-08-25/shopping/types/variant.json: \"required\": [\"id\", \"title\", \"description\", \"price\"].",
+     "product: 'price_range' is a required property",
+     "product/variants: [] should be non-empty"
+    ],
+    "ok": false
+   }
+  },
+  {
+   "channel": "acp",
+   "channel_slug": "acp",
+   "compiled_at": "2026-10-27T22:02:35",
+   "error": "blocked: manufacturer mode publishes no price, and the ACP feed requires one on every item. docs/truesync/truesync-protocol-specs.md \u00a71 (acp-feed-stable-2026-08-18): \"Required for non-Ads feeds: `item_id`, `title`, `description`, `url`, `brand`, `image_url`, `price` (\"79.99 USD\"), `availability` (...), `target_countries`, `seller_name`, and OpenAI flags `is_eligible_search`, `is_eligible_checkout`.\"; sku:sku_pg_amore_s1_132: missing required field 'image_url' (specs \u00a71); sku:sku_pg_amore_s1_132: missing required field 'price' (specs \u00a71); sku:sku_pg_amore_s1_132: missing required field 'availability' (specs \u00a71); sku:sku_pg_amore_s1_132: missing required field 'seller_name' (specs \u00a71)",
+   "expressiveness": [
+    {
+     "field": "channel",
+     "note": "docs/truesync/truesync-protocol-specs.md \u00a71 (acp-feed-stable-2026-08-18): \"Required for non-Ads feeds: `item_id`, `title`, `description`, `url`, `brand`, `image_url`, `price` (\"79.99 USD\"), `availability` (...), `target_countries`, `seller_name`, and OpenAI flags `is_eligible_search`, `is_eligible_checkout`.\"",
+     "severity": "blocked"
+    },
+    {
+     "field": "price",
+     "note": "Manufacturer mode: price-free while rule r1 or r2 is off, so this channel, which requires a price, is blocked.",
+     "severity": "dropped"
+    },
+    {
+     "field": "rule_r1",
+     "note": "rule r1 off: no retailer price, and the channel is blocked. With r1 and r2 both on, each retailer read on the read day (none yet) carries its own read price, labeled with the retailer and dated.",
+     "severity": "info"
+    },
+    {
+     "field": "rule_r2",
+     "note": "rule r2 off: no retailer price, and the channel is blocked. With r1 and r2 both on, each retailer read on the read day (none yet) carries its own read price, labeled with the retailer and dated.",
+     "severity": "info"
+    },
+    {
+     "field": "availability",
+     "note": "Manufacturer mode: retailer-neutral, so no availability for any retailer.",
+     "severity": "dropped"
+    },
+    {
+     "field": "rule_r2",
+     "note": "rule r2 off: retailers are listed in feed order; on, alphabetically (no variant would reorder).",
+     "severity": "info"
+    }
+   ],
+   "external_ref": null,
+   "held": true,
+   "id": 13,
+   "journal": [
+    {
+     "at": "2026-10-27T22:02:35+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-27T22:02:35+00:00",
+     "by": "parleo",
+     "cause": null,
+     "event": "blocked",
+     "note": "docs/truesync/truesync-protocol-specs.md \u00a71 (acp-feed-stable-2026-08-18): \"Required for non-Ads feeds: `item_id`, `title`, `description`, `url`, `brand`, `image_url`, `price` (\"79.99 USD\"), `availability` (...), `target_countries`, `seller_name`, and OpenAI flags `is_eligible_search`, `is_eligible_checkout`.\""
+    }
+   ],
+   "listing_id": null,
+   "mode": "manufacturer",
+   "payload": {
+    "items": [
+     {
+      "brand": "Pampers",
+      "description": "Pampers AMORE Size 1, 132 ct",
+      "image_url": null,
+      "is_eligible_checkout": false,
+      "is_eligible_search": true,
+      "item_id": "sku:sku_pg_amore_s1_132",
+      "listing_has_variations": false,
+      "target_countries": [
+       "US"
+      ],
+      "title": "Pampers AMORE Size 1, 132 ct",
+      "url": "https://www.pampers.com/en-us/diapers-wipes/amore-diapers",
+      "variant_dict": {
+       "count": "132"
+      }
+     }
+    ]
+   },
+   "published_at": null,
+   "reason": "blocked",
+   "record_ref": "feed:pampers-2r1:sku:sku_pg_amore_s1_132",
+   "spec_clause": "docs/truesync/truesync-protocol-specs.md \u00a71 (acp-feed-stable-2026-08-18): \"Required for non-Ads feeds: `item_id`, `title`, `description`, `url`, `brand`, `image_url`, `price` (\"79.99 USD\"), `availability` (...), `target_countries`, `seller_name`, and OpenAI flags `is_eligible_search`, `is_eligible_checkout`.\"",
+   "spec_version": "acp-feed-stable-2026-08-18",
+   "status": "compiled_not_published",
+   "validation": {
+    "errors": [
+     "blocked: manufacturer mode publishes no price, and the ACP feed requires one on every item. docs/truesync/truesync-protocol-specs.md \u00a71 (acp-feed-stable-2026-08-18): \"Required for non-Ads feeds: `item_id`, `title`, `description`, `url`, `brand`, `image_url`, `price` (\"79.99 USD\"), `availability` (...), `target_countries`, `seller_name`, and OpenAI flags `is_eligible_search`, `is_eligible_checkout`.\"",
+     "sku:sku_pg_amore_s1_132: missing required field 'image_url' (specs \u00a71)",
+     "sku:sku_pg_amore_s1_132: missing required field 'price' (specs \u00a71)",
+     "sku:sku_pg_amore_s1_132: missing required field 'availability' (specs \u00a71)",
+     "sku:sku_pg_amore_s1_132: missing required field 'seller_name' (specs \u00a71)"
+    ],
+    "ok": false
+   }
+  },
+  {
+   "channel": "manufacturer_center",
+   "channel_slug": "manufacturer_center",
+   "compiled_at": "2026-10-27T22:02:35",
+   "error": "no variant carries a GTIN; Manufacturer Center keys every product by GTIN",
+   "expressiveness": [
+    {
+     "field": "percent_off",
+     "note": "Manufacturer Center: no sale-price or discount attribute; suggestedRetailPrice is MSRP and lowering it to encode a discount would misstate it (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "amount_off",
+     "note": "Manufacturer Center: no sale-price or discount attribute; suggestedRetailPrice is MSRP and lowering it to encode a discount would misstate it (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "member_price",
+     "note": "Manufacturer Center: no price attribute but MSRP and no membership concept (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "subscribe_and_save",
+     "note": "Manufacturer Center: no subscription attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "points_earn",
+     "note": "Manufacturer Center: no loyalty attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "free_shipping",
+     "note": "Manufacturer Center: no shipping attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "gift_with_purchase",
+     "note": "Manufacturer Center: no promotion attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "mfr_coupon",
+     "note": "Manufacturer Center: no promotion or code attribute, even for the manufacturer's own coupon (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "member",
+     "note": "Manufacturer Center: no eligibility attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "tier",
+     "note": "Manufacturer Center: no eligibility attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "subscription",
+     "note": "Manufacturer Center: no eligibility attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "new_customer",
+     "note": "Manufacturer Center: no eligibility attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "retailer_availability",
+     "note": "Manufacturer Center has no field for who sells the product or where; retailer URLs and the retailer list are not sent (MC-0 \u00a74b).",
+     "severity": "dropped"
+    },
+    {
+     "field": "availability",
+     "note": "No stock or availability attribute; 'availability' is n/a for Manufacturer Center (answer/7073012).",
+     "severity": "dropped"
+    },
+    {
+     "field": "shelf_price",
+     "note": "No price or sale_price attribute; only suggestedRetailPrice (MSRP) exists (answer/7073012, discovery Attributes).",
+     "severity": "dropped"
+    },
+    {
+     "field": "provenance",
+     "note": "No provenance attribute; the brand's verified account is itself the provenance claim (MC-0 \u00a74a).",
+     "severity": "dropped"
+    },
+    {
+     "field": "validity_dates",
+     "note": "No offer validity; disclosureDate and releaseDate are product-lifecycle dates, not offer windows (MC-0 \u00a74b).",
+     "severity": "dropped"
+    },
+    {
+     "field": "gtin",
+     "note": "1 variant(s) without a GTIN not compiled (sku:sku_pg_amore_s1_132): Manufacturer Center keys every product by GTIN and has no identifier_exists=false (answer/6358237).",
+     "severity": "dropped"
+    },
+    {
+     "field": "rule_r1",
+     "note": "rule r1 off: nothing in this compile (publish_msrp is off, so no MSRP is sent either way).",
+     "severity": "info"
+    },
+    {
+     "field": "price",
+     "note": "Manufacturer mode: no shelf price; MSRP only on Manufacturer Center with publish_msrp.",
+     "severity": "dropped"
+    },
+    {
+     "field": "rule_r5",
+     "note": "rule r5 off: no size chart rows; on, 0 weight-range row(s) from the brand page's chart.",
+     "severity": "info"
+    }
+   ],
+   "external_ref": null,
+   "held": true,
+   "id": 12,
+   "journal": [
+    {
+     "at": "2026-10-27T22:02:35+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-27T22:02:35+00:00",
+     "by": "parleo",
+     "event": "held_for_merchant",
+     "note": "compiled; the brand's own team sends it"
+    }
+   ],
+   "listing_id": null,
+   "mode": "manufacturer",
+   "payload": {
+    "apiVersion": "manufacturers/v1",
+    "products": []
+   },
+   "published_at": null,
+   "reason": "held_for_merchant",
+   "record_ref": "feed:pampers-2r1:sku:sku_pg_amore_s1_132",
+   "spec_clause": null,
+   "spec_version": "manufacturers-v1-2026-10-05",
+   "status": "compiled_not_published",
+   "validation": {
+    "errors": [
+     "no variant carries a GTIN; Manufacturer Center keys every product by GTIN"
+    ],
+    "ok": false
+   }
+  },
+  {
+   "channel": "schema_org",
+   "channel_slug": "schema_org",
+   "compiled_at": "2026-10-27T22:02:35",
+   "error": null,
+   "expressiveness": [
+    {
+     "field": "rule_r1",
+     "note": "rule r1 off: nothing on this channel: a shelf price is never published in manufacturer mode.",
+     "severity": "info"
+    },
+    {
+     "field": "price",
+     "note": "Manufacturer mode: no shelf price; MSRP only on Manufacturer Center with publish_msrp.",
+     "severity": "dropped"
+    },
+    {
+     "field": "availability",
+     "note": "Manufacturer mode: retailer-neutral, so no availability for any retailer.",
+     "severity": "dropped"
+    },
+    {
+     "field": "rule_r2",
+     "note": "rule r2 off: retailers are listed in feed order; on, alphabetically (no variant would reorder).",
+     "severity": "info"
+    },
+    {
+     "field": "rule_r5",
+     "note": "rule r5 off: no size chart rows; on, 0 weight-range row(s) from the brand page's chart.",
+     "severity": "info"
+    }
+   ],
+   "external_ref": null,
+   "held": true,
+   "id": 11,
+   "journal": [
+    {
+     "at": "2026-10-27T22:02:35+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-27T22:02:35+00:00",
+     "by": "parleo",
+     "event": "held_for_merchant",
+     "note": "compiled; the brand's own team sends it"
+    }
+   ],
+   "listing_id": null,
+   "mode": "manufacturer",
+   "payload": {
+    "@context": "https://schema.org",
+    "@type": "ProductGroup",
+    "brand": {
+     "@type": "Brand",
+     "name": "Pampers"
+    },
+    "hasVariant": [
+     {
+      "@type": "Product",
+      "additionalProperty": [
+       {
+        "@type": "PropertyValue",
+        "name": "Pack count",
+        "value": 132
+       }
+      ],
+      "brand": {
+       "@type": "Brand",
+       "name": "Pampers"
+      },
+      "name": "Pampers AMORE Size 1, 132 ct",
+      "sku": "sku_pg_amore_s1_132",
+      "url": "https://www.pampers.com/en-us/diapers-wipes/amore-diapers"
+     }
+    ],
+    "name": "Pampers AMORE",
+    "productGroupID": "feed:pampers-2r1:sku:sku_pg_amore_s1_132",
+    "url": "https://www.pampers.com/en-us/diapers-wipes/amore-diapers",
+    "variesBy": [
+     "size",
+     "count"
+    ]
+   },
+   "published_at": null,
+   "reason": "held_for_merchant",
+   "record_ref": "feed:pampers-2r1:sku:sku_pg_amore_s1_132",
+   "spec_clause": null,
+   "spec_version": "schemaorg-merchant-listing-2026-08-18",
+   "status": "compiled_not_published",
+   "validation": {
+    "errors": [],
+    "ok": true
+   }
+  },
+  {
+   "channel": "ucp_uip",
+   "channel_slug": "ucp_uip",
+   "compiled_at": "2026-10-27T22:02:35",
+   "error": "blocked: rule_off: rule r1 off (\"Never publish a retail price as Pampers 2R-1's: Retailer prices appear only as what a retailer charges, labeled with the retailer and dated. Every retailer read that day, never a chosen one.\"); rule r2 off (\"Retailers in the same order every time: Alphabetical, every retailer that carries the product, no favorites.\"). Manufacturer mode states no retailer price while either rule is off, and a UCP variant requires one: truesync/specs/ucp/ucp-2026-08-25/shopping/types/variant.json: \"required\": [\"id\", \"title\", \"description\", \"price\"].; product: 'price_range' is a required property; product/variants/0: 'price' is a required property; product/variants/1: 'price' is a required property",
+   "expressiveness": [
+    {
+     "field": "channel",
+     "note": "rule_off: rule r1 off (\"Never publish a retail price as Pampers 2R-1's: Retailer prices appear only as what a retailer charges, labeled with the retailer and dated. Every retailer read that day, never a chosen one.\"); rule r2 off (\"Retailers in the same order every time: Alphabetical, every retailer that carries the product, no favorites.\"). Manufacturer mode states no retailer price while either rule is off, and a UCP variant requires one: truesync/specs/ucp/ucp-2026-08-25/shopping/types/variant.json: \"required\": [\"id\", \"title\", \"description\", \"price\"].",
+     "severity": "blocked"
+    },
+    {
+     "field": "price",
+     "note": "Manufacturer mode: price-free while rule r1 or r2 is off, so this channel, which requires a price, is blocked.",
+     "severity": "dropped"
+    },
+    {
+     "field": "rule_r1",
+     "note": "rule r1 off: no retailer price, and the channel is blocked. With r1 and r2 both on, each retailer read on the read day (none yet) carries its own read price, labeled with the retailer and dated.",
+     "severity": "info"
+    },
+    {
+     "field": "rule_r2",
+     "note": "rule r2 off: no retailer price, and the channel is blocked. With r1 and r2 both on, each retailer read on the read day (none yet) carries its own read price, labeled with the retailer and dated.",
+     "severity": "info"
+    },
+    {
+     "field": "availability",
+     "note": "Manufacturer mode: retailer-neutral, so no availability for any retailer.",
+     "severity": "dropped"
+    },
+    {
+     "field": "rule_r2",
+     "note": "rule r2 off: retailers are listed in feed order; on, alphabetically (no variant would reorder).",
+     "severity": "info"
+    },
+    {
+     "field": "rule_r6",
+     "note": "rule r6 off: the successor is not stated; on, the record names it (Pampers Pure Protection Size 1 -> Pampers AMORE Size 1, 132 ct).",
+     "severity": "info"
+    },
+    {
+     "field": "checkout",
+     "note": "Manufacturer mode: catalog lookup only. The profile declares no checkout or cart service and payment_handlers is {}: the brand sells nothing here, and each variant's retailer page is where it is bought.",
+     "severity": "dropped"
+    },
+    {
+     "field": "loyalty",
+     "note": "Manufacturer mode: the loyalty extension (dev.ucp.common.loyalty) is neither declared nor populated; a retailer's program is the retailer's, not the brand's.",
+     "severity": "dropped"
+    },
+    {
+     "field": "member_price",
+     "note": "Manufacturer mode: a variant's price is the shelf price a retailer's page showed; member, subscription and loyalty prices are not compiled.",
+     "severity": "dropped"
+    },
+    {
+     "field": "seller_link",
+     "note": "seller.links[].type is \"product_page\", which is not one of link.json's well-known values (policy pages); the link's title names it.",
+     "severity": "info"
+    }
+   ],
+   "external_ref": null,
+   "held": true,
+   "id": 10,
+   "journal": [
+    {
+     "at": "2026-10-27T22:02:35+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-27T22:02:35+00:00",
+     "by": "parleo",
+     "cause": "rule_off",
+     "event": "blocked",
+     "note": "rule_off: rule r1 off (\"Never publish a retail price as Pampers 2R-1's: Retailer prices appear only as what a retailer charges, labeled with the retailer and dated. Every retailer read that day, never a chosen one.\"); rule r2 off (\"Retailers in the same order every time: Alphabetical, every retailer that carries the product, no favorites.\"). Manufacturer mode states no retailer price while either rule is off, and a UCP variant requires one: truesync/specs/ucp/ucp-2026-08-25/shopping/types/variant.json: \"required\": [\"id\", \"title\", \"description\", \"price\"]."
+    }
+   ],
+   "listing_id": null,
+   "mode": "manufacturer",
+   "payload": {
+    "product": {
+     "description": {
+      "plain": ""
+     },
+     "id": "sku:sku_pg_pure_s1",
+     "tags": [
+      "Pampers"
+     ],
+     "title": "Pampers Pure Protection Size 1",
+     "url": "https://www.pampers.com/en-us/diapers-wipes/pure-protection-diapers",
+     "variants": [
+      {
+       "description": {
+        "plain": ""
+       },
+       "id": "sku:sku_pg_pure_s1:amazon.com",
+       "metadata": {
+        "retailer_domain": "amazon.com"
+       },
+       "seller": {
+        "links": [
+         {
+          "title": "Amazon product page",
+          "type": "product_page",
+          "url": "https://www.amazon.com/dp/PURE-S1-198"
+         }
+        ],
+        "name": "Amazon"
+       },
+       "sku": "sku_pg_pure_s1",
+       "title": "Pampers Pure Protection Size 1 at Amazon",
+       "url": "https://www.amazon.com/dp/PURE-S1-198"
+      },
+      {
+       "description": {
+        "plain": ""
+       },
+       "id": "sku:sku_pg_pure_s1:samsclub.com",
+       "metadata": {
+        "retailer_domain": "samsclub.com"
+       },
+       "seller": {
+        "links": [
+         {
+          "title": "Sam's Club product page",
+          "type": "product_page",
+          "url": "https://www.samsclub.com/p/pampers-pure-protection-size-1"
+         }
+        ],
+        "name": "Sam's Club"
+       },
+       "sku": "sku_pg_pure_s1",
+       "title": "Pampers Pure Protection Size 1 at Sam's Club",
+       "url": "https://www.samsclub.com/p/pampers-pure-protection-size-1"
+      }
+     ]
+    },
+    "ucp": {
+     "version": "2026-08-25"
+    }
+   },
+   "published_at": null,
+   "reason": "blocked",
+   "record_ref": "feed:pampers-2r1:sku:sku_pg_pure_s1",
+   "spec_clause": "rule_off: rule r1 off (\"Never publish a retail price as Pampers 2R-1's: Retailer prices appear only as what a retailer charges, labeled with the retailer and dated. Every retailer read that day, never a chosen one.\"); rule r2 off (\"Retailers in the same order every time: Alphabetical, every retailer that carries the product, no favorites.\"). Manufacturer mode states no retailer price while either rule is off, and a UCP variant requires one: truesync/specs/ucp/ucp-2026-08-25/shopping/types/variant.json: \"required\": [\"id\", \"title\", \"description\", \"price\"].",
+   "spec_version": "ucp-2026-08-25",
+   "status": "compiled_not_published",
+   "validation": {
+    "errors": [
+     "blocked: rule_off: rule r1 off (\"Never publish a retail price as Pampers 2R-1's: Retailer prices appear only as what a retailer charges, labeled with the retailer and dated. Every retailer read that day, never a chosen one.\"); rule r2 off (\"Retailers in the same order every time: Alphabetical, every retailer that carries the product, no favorites.\"). Manufacturer mode states no retailer price while either rule is off, and a UCP variant requires one: truesync/specs/ucp/ucp-2026-08-25/shopping/types/variant.json: \"required\": [\"id\", \"title\", \"description\", \"price\"].",
+     "product: 'price_range' is a required property",
+     "product/variants/0: 'price' is a required property",
+     "product/variants/1: 'price' is a required property"
+    ],
+    "ok": false
+   }
+  },
+  {
+   "channel": "acp",
+   "channel_slug": "acp",
+   "compiled_at": "2026-10-27T22:02:35",
+   "error": "blocked: manufacturer mode publishes no price, and the ACP feed requires one on every item. docs/truesync/truesync-protocol-specs.md \u00a71 (acp-feed-stable-2026-08-18): \"Required for non-Ads feeds: `item_id`, `title`, `description`, `url`, `brand`, `image_url`, `price` (\"79.99 USD\"), `availability` (...), `target_countries`, `seller_name`, and OpenAI flags `is_eligible_search`, `is_eligible_checkout`.\"; sku:sku_pg_pure_s1:amazon.com: missing required field 'image_url' (specs \u00a71); sku:sku_pg_pure_s1:amazon.com: missing required field 'price' (specs \u00a71); sku:sku_pg_pure_s1:amazon.com: missing required field 'availability' (specs \u00a71); sku:sku_pg_pure_s1:samsclub.com: missing required field 'image_url' (specs \u00a71); sku:sku_pg_pure_s1:samsclub.com: missing required field 'price' (specs \u00a71); sku:sku_pg_pure_s1:samsclub.com: missing required field 'availability' (specs \u00a71)",
+   "expressiveness": [
+    {
+     "field": "channel",
+     "note": "docs/truesync/truesync-protocol-specs.md \u00a71 (acp-feed-stable-2026-08-18): \"Required for non-Ads feeds: `item_id`, `title`, `description`, `url`, `brand`, `image_url`, `price` (\"79.99 USD\"), `availability` (...), `target_countries`, `seller_name`, and OpenAI flags `is_eligible_search`, `is_eligible_checkout`.\"",
+     "severity": "blocked"
+    },
+    {
+     "field": "price",
+     "note": "Manufacturer mode: price-free while rule r1 or r2 is off, so this channel, which requires a price, is blocked.",
+     "severity": "dropped"
+    },
+    {
+     "field": "rule_r1",
+     "note": "rule r1 off: no retailer price, and the channel is blocked. With r1 and r2 both on, each retailer read on the read day (none yet) carries its own read price, labeled with the retailer and dated.",
+     "severity": "info"
+    },
+    {
+     "field": "rule_r2",
+     "note": "rule r2 off: no retailer price, and the channel is blocked. With r1 and r2 both on, each retailer read on the read day (none yet) carries its own read price, labeled with the retailer and dated.",
+     "severity": "info"
+    },
+    {
+     "field": "availability",
+     "note": "Manufacturer mode: retailer-neutral, so no availability for any retailer.",
+     "severity": "dropped"
+    },
+    {
+     "field": "rule_r2",
+     "note": "rule r2 off: retailers are listed in feed order; on, alphabetically (no variant would reorder).",
+     "severity": "info"
+    },
+    {
+     "field": "rule_r6",
+     "note": "rule r6 off: the successor is not stated; on, the record names it (Pampers Pure Protection Size 1 -> Pampers AMORE Size 1, 132 ct).",
+     "severity": "info"
+    }
+   ],
+   "external_ref": null,
+   "held": true,
+   "id": 9,
+   "journal": [
+    {
+     "at": "2026-10-27T22:02:35+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-27T22:02:35+00:00",
+     "by": "parleo",
+     "cause": null,
+     "event": "blocked",
+     "note": "docs/truesync/truesync-protocol-specs.md \u00a71 (acp-feed-stable-2026-08-18): \"Required for non-Ads feeds: `item_id`, `title`, `description`, `url`, `brand`, `image_url`, `price` (\"79.99 USD\"), `availability` (...), `target_countries`, `seller_name`, and OpenAI flags `is_eligible_search`, `is_eligible_checkout`.\""
+    }
+   ],
+   "listing_id": null,
+   "mode": "manufacturer",
+   "payload": {
+    "items": [
+     {
+      "brand": "Pampers",
+      "description": "Pampers Pure Protection Size 1",
+      "image_url": null,
+      "is_eligible_checkout": false,
+      "is_eligible_search": true,
+      "item_id": "sku:sku_pg_pure_s1:amazon.com",
+      "listing_has_variations": false,
+      "seller_name": "amazon.com",
+      "target_countries": [
+       "US"
+      ],
+      "title": "Pampers Pure Protection Size 1",
+      "url": "https://www.amazon.com/dp/PURE-S1-198"
+     },
+     {
+      "brand": "Pampers",
+      "description": "Pampers Pure Protection Size 1",
+      "image_url": null,
+      "is_eligible_checkout": false,
+      "is_eligible_search": true,
+      "item_id": "sku:sku_pg_pure_s1:samsclub.com",
+      "listing_has_variations": false,
+      "seller_name": "samsclub.com",
+      "target_countries": [
+       "US"
+      ],
+      "title": "Pampers Pure Protection Size 1",
+      "url": "https://www.samsclub.com/p/pampers-pure-protection-size-1"
+     }
+    ]
+   },
+   "published_at": null,
+   "reason": "blocked",
+   "record_ref": "feed:pampers-2r1:sku:sku_pg_pure_s1",
+   "spec_clause": "docs/truesync/truesync-protocol-specs.md \u00a71 (acp-feed-stable-2026-08-18): \"Required for non-Ads feeds: `item_id`, `title`, `description`, `url`, `brand`, `image_url`, `price` (\"79.99 USD\"), `availability` (...), `target_countries`, `seller_name`, and OpenAI flags `is_eligible_search`, `is_eligible_checkout`.\"",
+   "spec_version": "acp-feed-stable-2026-08-18",
+   "status": "compiled_not_published",
+   "validation": {
+    "errors": [
+     "blocked: manufacturer mode publishes no price, and the ACP feed requires one on every item. docs/truesync/truesync-protocol-specs.md \u00a71 (acp-feed-stable-2026-08-18): \"Required for non-Ads feeds: `item_id`, `title`, `description`, `url`, `brand`, `image_url`, `price` (\"79.99 USD\"), `availability` (...), `target_countries`, `seller_name`, and OpenAI flags `is_eligible_search`, `is_eligible_checkout`.\"",
+     "sku:sku_pg_pure_s1:amazon.com: missing required field 'image_url' (specs \u00a71)",
+     "sku:sku_pg_pure_s1:amazon.com: missing required field 'price' (specs \u00a71)",
+     "sku:sku_pg_pure_s1:amazon.com: missing required field 'availability' (specs \u00a71)",
+     "sku:sku_pg_pure_s1:samsclub.com: missing required field 'image_url' (specs \u00a71)",
+     "sku:sku_pg_pure_s1:samsclub.com: missing required field 'price' (specs \u00a71)",
+     "sku:sku_pg_pure_s1:samsclub.com: missing required field 'availability' (specs \u00a71)"
+    ],
+    "ok": false
+   }
+  },
+  {
+   "channel": "manufacturer_center",
+   "channel_slug": "manufacturer_center",
+   "compiled_at": "2026-10-27T22:02:35",
+   "error": "no variant carries a GTIN; Manufacturer Center keys every product by GTIN",
+   "expressiveness": [
+    {
+     "field": "percent_off",
+     "note": "Manufacturer Center: no sale-price or discount attribute; suggestedRetailPrice is MSRP and lowering it to encode a discount would misstate it (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "amount_off",
+     "note": "Manufacturer Center: no sale-price or discount attribute; suggestedRetailPrice is MSRP and lowering it to encode a discount would misstate it (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "member_price",
+     "note": "Manufacturer Center: no price attribute but MSRP and no membership concept (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "subscribe_and_save",
+     "note": "Manufacturer Center: no subscription attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "points_earn",
+     "note": "Manufacturer Center: no loyalty attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "free_shipping",
+     "note": "Manufacturer Center: no shipping attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "gift_with_purchase",
+     "note": "Manufacturer Center: no promotion attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "mfr_coupon",
+     "note": "Manufacturer Center: no promotion or code attribute, even for the manufacturer's own coupon (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "member",
+     "note": "Manufacturer Center: no eligibility attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "tier",
+     "note": "Manufacturer Center: no eligibility attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "subscription",
+     "note": "Manufacturer Center: no eligibility attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "new_customer",
+     "note": "Manufacturer Center: no eligibility attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "retailer_availability",
+     "note": "Manufacturer Center has no field for who sells the product or where; retailer URLs and the retailer list are not sent (MC-0 \u00a74b).",
+     "severity": "dropped"
+    },
+    {
+     "field": "availability",
+     "note": "No stock or availability attribute; 'availability' is n/a for Manufacturer Center (answer/7073012).",
+     "severity": "dropped"
+    },
+    {
+     "field": "shelf_price",
+     "note": "No price or sale_price attribute; only suggestedRetailPrice (MSRP) exists (answer/7073012, discovery Attributes).",
+     "severity": "dropped"
+    },
+    {
+     "field": "provenance",
+     "note": "No provenance attribute; the brand's verified account is itself the provenance claim (MC-0 \u00a74a).",
+     "severity": "dropped"
+    },
+    {
+     "field": "validity_dates",
+     "note": "No offer validity; disclosureDate and releaseDate are product-lifecycle dates, not offer windows (MC-0 \u00a74b).",
+     "severity": "dropped"
+    },
+    {
+     "field": "gtin",
+     "note": "1 variant(s) without a GTIN not compiled (sku:sku_pg_pure_s1): Manufacturer Center keys every product by GTIN and has no identifier_exists=false (answer/6358237).",
+     "severity": "dropped"
+    },
+    {
+     "field": "rule_r1",
+     "note": "rule r1 off: nothing in this compile (publish_msrp is off, so no MSRP is sent either way).",
+     "severity": "info"
+    },
+    {
+     "field": "price",
+     "note": "Manufacturer mode: no shelf price; MSRP only on Manufacturer Center with publish_msrp.",
+     "severity": "dropped"
+    },
+    {
+     "field": "rule_r5",
+     "note": "rule r5 off: no size chart rows; on, 0 weight-range row(s) from the brand page's chart.",
+     "severity": "info"
+    },
+    {
+     "field": "rule_r6",
+     "note": "rule r6 off: the successor is not stated; on, the record names it (Pampers Pure Protection Size 1 -> Pampers AMORE Size 1, 132 ct).",
+     "severity": "info"
+    }
+   ],
+   "external_ref": null,
+   "held": true,
+   "id": 8,
+   "journal": [
+    {
+     "at": "2026-10-27T22:02:35+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-27T22:02:35+00:00",
+     "by": "parleo",
+     "event": "held_for_merchant",
+     "note": "compiled; the brand's own team sends it"
+    }
+   ],
+   "listing_id": null,
+   "mode": "manufacturer",
+   "payload": {
+    "apiVersion": "manufacturers/v1",
+    "products": []
+   },
+   "published_at": null,
+   "reason": "held_for_merchant",
+   "record_ref": "feed:pampers-2r1:sku:sku_pg_pure_s1",
+   "spec_clause": null,
+   "spec_version": "manufacturers-v1-2026-10-05",
+   "status": "compiled_not_published",
+   "validation": {
+    "errors": [
+     "no variant carries a GTIN; Manufacturer Center keys every product by GTIN"
+    ],
+    "ok": false
+   }
+  },
+  {
+   "channel": "schema_org",
+   "channel_slug": "schema_org",
+   "compiled_at": "2026-10-27T22:02:35",
+   "error": null,
+   "expressiveness": [
+    {
+     "field": "rule_r1",
+     "note": "rule r1 off: nothing on this channel: a shelf price is never published in manufacturer mode.",
+     "severity": "info"
+    },
+    {
+     "field": "price",
+     "note": "Manufacturer mode: no shelf price; MSRP only on Manufacturer Center with publish_msrp.",
+     "severity": "dropped"
+    },
+    {
+     "field": "availability",
+     "note": "Manufacturer mode: retailer-neutral, so no availability for any retailer.",
+     "severity": "dropped"
+    },
+    {
+     "field": "rule_r2",
+     "note": "rule r2 off: retailers are listed in feed order; on, alphabetically (no variant would reorder).",
+     "severity": "info"
+    },
+    {
+     "field": "rule_r5",
+     "note": "rule r5 off: no size chart rows; on, 0 weight-range row(s) from the brand page's chart.",
+     "severity": "info"
+    },
+    {
+     "field": "rule_r6",
+     "note": "rule r6 off: the successor is not stated; on, the record names it (Pampers Pure Protection Size 1 -> Pampers AMORE Size 1, 132 ct).",
+     "severity": "info"
+    }
+   ],
+   "external_ref": null,
+   "held": true,
+   "id": 7,
+   "journal": [
+    {
+     "at": "2026-10-27T22:02:35+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-27T22:02:35+00:00",
+     "by": "parleo",
+     "event": "held_for_merchant",
+     "note": "compiled; the brand's own team sends it"
+    }
+   ],
+   "listing_id": null,
+   "mode": "manufacturer",
+   "payload": {
+    "@context": "https://schema.org",
+    "@type": "ProductGroup",
+    "brand": {
+     "@type": "Brand",
+     "name": "Pampers"
+    },
+    "hasVariant": [
+     {
+      "@type": "Product",
+      "brand": {
+       "@type": "Brand",
+       "name": "Pampers"
+      },
+      "name": "Pampers Pure Protection Size 1",
+      "offers": [
+       {
+        "@type": "Offer",
+        "seller": {
+         "@type": "Organization",
+         "name": "amazon.com"
+        },
+        "url": "https://www.amazon.com/dp/PURE-S1-198"
+       },
+       {
+        "@type": "Offer",
+        "seller": {
+         "@type": "Organization",
+         "name": "samsclub.com"
+        },
+        "url": "https://www.samsclub.com/p/pampers-pure-protection-size-1"
+       }
+      ],
+      "sku": "sku_pg_pure_s1",
+      "url": "https://www.pampers.com/en-us/diapers-wipes/pure-protection-diapers"
+     }
+    ],
+    "name": "Pampers Pure Protection",
+    "productGroupID": "feed:pampers-2r1:sku:sku_pg_pure_s1",
+    "url": "https://www.pampers.com/en-us/diapers-wipes/pure-protection-diapers",
+    "variesBy": [
+     "size",
+     "count"
+    ]
+   },
+   "published_at": null,
+   "reason": "held_for_merchant",
+   "record_ref": "feed:pampers-2r1:sku:sku_pg_pure_s1",
+   "spec_clause": null,
+   "spec_version": "schemaorg-merchant-listing-2026-08-18",
+   "status": "compiled_not_published",
+   "validation": {
+    "errors": [],
+    "ok": true
+   }
+  },
+  {
+   "channel": "ucp_uip",
+   "channel_slug": "ucp_uip",
+   "compiled_at": "2026-10-27T22:02:35",
+   "error": "blocked: rule_off: rule r1 off (\"Never publish a retail price as Pampers 2R-1's: Retailer prices appear only as what a retailer charges, labeled with the retailer and dated. Every retailer read that day, never a chosen one.\"); rule r2 off (\"Retailers in the same order every time: Alphabetical, every retailer that carries the product, no favorites.\"). Manufacturer mode states no retailer price while either rule is off, and a UCP variant requires one: truesync/specs/ucp/ucp-2026-08-25/shopping/types/variant.json: \"required\": [\"id\", \"title\", \"description\", \"price\"].; product: 'price_range' is a required property; product/variants: [] should be non-empty",
+   "expressiveness": [
+    {
+     "field": "channel",
+     "note": "rule_off: rule r1 off (\"Never publish a retail price as Pampers 2R-1's: Retailer prices appear only as what a retailer charges, labeled with the retailer and dated. Every retailer read that day, never a chosen one.\"); rule r2 off (\"Retailers in the same order every time: Alphabetical, every retailer that carries the product, no favorites.\"). Manufacturer mode states no retailer price while either rule is off, and a UCP variant requires one: truesync/specs/ucp/ucp-2026-08-25/shopping/types/variant.json: \"required\": [\"id\", \"title\", \"description\", \"price\"].",
+     "severity": "blocked"
+    },
+    {
+     "field": "price",
+     "note": "Manufacturer mode: price-free while rule r1 or r2 is off, so this channel, which requires a price, is blocked.",
+     "severity": "dropped"
+    },
+    {
+     "field": "rule_r1",
+     "note": "rule r1 off: no retailer price, and the channel is blocked. With r1 and r2 both on, each retailer read on the read day (none yet) carries its own read price, labeled with the retailer and dated.",
+     "severity": "info"
+    },
+    {
+     "field": "rule_r2",
+     "note": "rule r2 off: no retailer price, and the channel is blocked. With r1 and r2 both on, each retailer read on the read day (none yet) carries its own read price, labeled with the retailer and dated.",
+     "severity": "info"
+    },
+    {
+     "field": "availability",
+     "note": "Manufacturer mode: retailer-neutral, so no availability for any retailer.",
+     "severity": "dropped"
+    },
+    {
+     "field": "rule_r2",
+     "note": "rule r2 off: retailers are listed in feed order; on, alphabetically (no variant would reorder).",
+     "severity": "info"
+    },
+    {
+     "field": "checkout",
+     "note": "Manufacturer mode: catalog lookup only. The profile declares no checkout or cart service and payment_handlers is {}: the brand sells nothing here, and each variant's retailer page is where it is bought.",
+     "severity": "dropped"
+    },
+    {
+     "field": "loyalty",
+     "note": "Manufacturer mode: the loyalty extension (dev.ucp.common.loyalty) is neither declared nor populated; a retailer's program is the retailer's, not the brand's.",
+     "severity": "dropped"
+    },
+    {
+     "field": "member_price",
+     "note": "Manufacturer mode: a variant's price is the shelf price a retailer's page showed; member, subscription and loyalty prices are not compiled.",
+     "severity": "dropped"
+    },
+    {
+     "field": "description_from_brand_page",
+     "note": "Pampers Swaddlers Size 4: the feed states no description; the line's brand page does.",
+     "severity": "info"
+    }
+   ],
+   "external_ref": null,
+   "held": true,
+   "id": 6,
+   "journal": [
+    {
+     "at": "2026-10-27T22:02:35+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-27T22:02:35+00:00",
+     "by": "parleo",
+     "cause": "rule_off",
+     "event": "blocked",
+     "note": "rule_off: rule r1 off (\"Never publish a retail price as Pampers 2R-1's: Retailer prices appear only as what a retailer charges, labeled with the retailer and dated. Every retailer read that day, never a chosen one.\"); rule r2 off (\"Retailers in the same order every time: Alphabetical, every retailer that carries the product, no favorites.\"). Manufacturer mode states no retailer price while either rule is off, and a UCP variant requires one: truesync/specs/ucp/ucp-2026-08-25/shopping/types/variant.json: \"required\": [\"id\", \"title\", \"description\", \"price\"]."
+    }
+   ],
+   "listing_id": null,
+   "mode": "manufacturer",
+   "payload": {
+    "product": {
+     "description": {
+      "plain": "Pampers Swaddlers\u2122 for babies and newborns offer gentle care for sensitive skin and stop blowouts with trusted leak protection. Find out and shop now!"
+     },
+     "id": "00037000799818",
+     "media": [
+      {
+       "type": "image",
+       "url": "https://images.ctfassets.net/pfeg73t23esw/1RKbw0c8rZttOQ1c7tCCOG/055e51318eafad9844bc07a4297a0be3/Swaddlers_New_Clean.png"
+      }
+     ],
+     "tags": [
+      "Pampers"
+     ],
+     "title": "Pampers Swaddlers Size 4",
+     "url": "https://www.pampers.com/en-us/products/pampers-swaddlers-diapers",
+     "variants": []
+    },
+    "ucp": {
+     "version": "2026-08-25"
+    }
+   },
+   "published_at": null,
+   "reason": "blocked",
+   "record_ref": "feed:pampers-2r1:00037000799818",
+   "spec_clause": "rule_off: rule r1 off (\"Never publish a retail price as Pampers 2R-1's: Retailer prices appear only as what a retailer charges, labeled with the retailer and dated. Every retailer read that day, never a chosen one.\"); rule r2 off (\"Retailers in the same order every time: Alphabetical, every retailer that carries the product, no favorites.\"). Manufacturer mode states no retailer price while either rule is off, and a UCP variant requires one: truesync/specs/ucp/ucp-2026-08-25/shopping/types/variant.json: \"required\": [\"id\", \"title\", \"description\", \"price\"].",
+   "spec_version": "ucp-2026-08-25",
+   "status": "compiled_not_published",
+   "validation": {
+    "errors": [
+     "blocked: rule_off: rule r1 off (\"Never publish a retail price as Pampers 2R-1's: Retailer prices appear only as what a retailer charges, labeled with the retailer and dated. Every retailer read that day, never a chosen one.\"); rule r2 off (\"Retailers in the same order every time: Alphabetical, every retailer that carries the product, no favorites.\"). Manufacturer mode states no retailer price while either rule is off, and a UCP variant requires one: truesync/specs/ucp/ucp-2026-08-25/shopping/types/variant.json: \"required\": [\"id\", \"title\", \"description\", \"price\"].",
+     "product: 'price_range' is a required property",
+     "product/variants: [] should be non-empty"
+    ],
+    "ok": false
+   }
+  },
+  {
+   "channel": "ucp_uip",
+   "channel_slug": "ucp_uip",
+   "compiled_at": "2026-10-27T22:02:35",
+   "error": "blocked: rule_off: rule r1 off (\"Never publish a retail price as Pampers 2R-1's: Retailer prices appear only as what a retailer charges, labeled with the retailer and dated. Every retailer read that day, never a chosen one.\"); rule r2 off (\"Retailers in the same order every time: Alphabetical, every retailer that carries the product, no favorites.\"). Manufacturer mode states no retailer price while either rule is off, and a UCP variant requires one: truesync/specs/ucp/ucp-2026-08-25/shopping/types/variant.json: \"required\": [\"id\", \"title\", \"description\", \"price\"].; product: 'price_range' is a required property; product/variants: [] should be non-empty",
+   "expressiveness": [
+    {
+     "field": "channel",
+     "note": "rule_off: rule r1 off (\"Never publish a retail price as Pampers 2R-1's: Retailer prices appear only as what a retailer charges, labeled with the retailer and dated. Every retailer read that day, never a chosen one.\"); rule r2 off (\"Retailers in the same order every time: Alphabetical, every retailer that carries the product, no favorites.\"). Manufacturer mode states no retailer price while either rule is off, and a UCP variant requires one: truesync/specs/ucp/ucp-2026-08-25/shopping/types/variant.json: \"required\": [\"id\", \"title\", \"description\", \"price\"].",
+     "severity": "blocked"
+    },
+    {
+     "field": "price",
+     "note": "Manufacturer mode: price-free while rule r1 or r2 is off, so this channel, which requires a price, is blocked.",
+     "severity": "dropped"
+    },
+    {
+     "field": "rule_r1",
+     "note": "rule r1 off: no retailer price, and the channel is blocked. With r1 and r2 both on, each retailer read on the read day (none yet) carries its own read price, labeled with the retailer and dated.",
+     "severity": "info"
+    },
+    {
+     "field": "rule_r2",
+     "note": "rule r2 off: no retailer price, and the channel is blocked. With r1 and r2 both on, each retailer read on the read day (none yet) carries its own read price, labeled with the retailer and dated.",
+     "severity": "info"
+    },
+    {
+     "field": "availability",
+     "note": "Manufacturer mode: retailer-neutral, so no availability for any retailer.",
+     "severity": "dropped"
+    },
+    {
+     "field": "rule_r2",
+     "note": "rule r2 off: retailers are listed in feed order; on, alphabetically (no variant would reorder).",
+     "severity": "info"
+    },
+    {
+     "field": "checkout",
+     "note": "Manufacturer mode: catalog lookup only. The profile declares no checkout or cart service and payment_handlers is {}: the brand sells nothing here, and each variant's retailer page is where it is bought.",
+     "severity": "dropped"
+    },
+    {
+     "field": "loyalty",
+     "note": "Manufacturer mode: the loyalty extension (dev.ucp.common.loyalty) is neither declared nor populated; a retailer's program is the retailer's, not the brand's.",
+     "severity": "dropped"
+    },
+    {
+     "field": "member_price",
+     "note": "Manufacturer mode: a variant's price is the shelf price a retailer's page showed; member, subscription and loyalty prices are not compiled.",
+     "severity": "dropped"
+    },
+    {
+     "field": "description_from_brand_page",
+     "note": "Pampers Swaddlers Size 1, 96 ct: the feed states no description; the line's brand page does.",
+     "severity": "info"
+    }
+   ],
+   "external_ref": null,
+   "held": true,
+   "id": 5,
+   "journal": [
+    {
+     "at": "2026-10-27T22:02:35+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-27T22:02:35+00:00",
+     "by": "parleo",
+     "cause": "rule_off",
+     "event": "blocked",
+     "note": "rule_off: rule r1 off (\"Never publish a retail price as Pampers 2R-1's: Retailer prices appear only as what a retailer charges, labeled with the retailer and dated. Every retailer read that day, never a chosen one.\"); rule r2 off (\"Retailers in the same order every time: Alphabetical, every retailer that carries the product, no favorites.\"). Manufacturer mode states no retailer price while either rule is off, and a UCP variant requires one: truesync/specs/ucp/ucp-2026-08-25/shopping/types/variant.json: \"required\": [\"id\", \"title\", \"description\", \"price\"]."
+    }
+   ],
+   "listing_id": null,
+   "mode": "manufacturer",
+   "payload": {
+    "product": {
+     "description": {
+      "plain": "Pampers Swaddlers\u2122 for babies and newborns offer gentle care for sensitive skin and stop blowouts with trusted leak protection. Find out and shop now!"
+     },
+     "id": "sku:sku_pg_swd_s1_96",
+     "media": [
+      {
+       "type": "image",
+       "url": "https://images.ctfassets.net/pfeg73t23esw/1RKbw0c8rZttOQ1c7tCCOG/055e51318eafad9844bc07a4297a0be3/Swaddlers_New_Clean.png"
+      }
+     ],
+     "tags": [
+      "Pampers"
+     ],
+     "title": "Pampers Swaddlers Size 1, 96 ct",
+     "url": "https://www.pampers.com/en-us/diapers-wipes/swaddlers-diapers-size-1",
+     "variants": []
+    },
+    "ucp": {
+     "version": "2026-08-25"
+    }
+   },
+   "published_at": null,
+   "reason": "blocked",
+   "record_ref": "feed:pampers-2r1:sku:sku_pg_swd_s1_96",
+   "spec_clause": "rule_off: rule r1 off (\"Never publish a retail price as Pampers 2R-1's: Retailer prices appear only as what a retailer charges, labeled with the retailer and dated. Every retailer read that day, never a chosen one.\"); rule r2 off (\"Retailers in the same order every time: Alphabetical, every retailer that carries the product, no favorites.\"). Manufacturer mode states no retailer price while either rule is off, and a UCP variant requires one: truesync/specs/ucp/ucp-2026-08-25/shopping/types/variant.json: \"required\": [\"id\", \"title\", \"description\", \"price\"].",
+   "spec_version": "ucp-2026-08-25",
+   "status": "compiled_not_published",
+   "validation": {
+    "errors": [
+     "blocked: rule_off: rule r1 off (\"Never publish a retail price as Pampers 2R-1's: Retailer prices appear only as what a retailer charges, labeled with the retailer and dated. Every retailer read that day, never a chosen one.\"); rule r2 off (\"Retailers in the same order every time: Alphabetical, every retailer that carries the product, no favorites.\"). Manufacturer mode states no retailer price while either rule is off, and a UCP variant requires one: truesync/specs/ucp/ucp-2026-08-25/shopping/types/variant.json: \"required\": [\"id\", \"title\", \"description\", \"price\"].",
+     "product: 'price_range' is a required property",
+     "product/variants: [] should be non-empty"
+    ],
+    "ok": false
+   }
+  },
+  {
+   "channel": "ucp_uip",
+   "channel_slug": "ucp_uip",
+   "compiled_at": "2026-10-27T22:02:35",
+   "error": "blocked: rule_off: rule r1 off (\"Never publish a retail price as Pampers 2R-1's: Retailer prices appear only as what a retailer charges, labeled with the retailer and dated. Every retailer read that day, never a chosen one.\"); rule r2 off (\"Retailers in the same order every time: Alphabetical, every retailer that carries the product, no favorites.\"). Manufacturer mode states no retailer price while either rule is off, and a UCP variant requires one: truesync/specs/ucp/ucp-2026-08-25/shopping/types/variant.json: \"required\": [\"id\", \"title\", \"description\", \"price\"].; product: 'price_range' is a required property; product/variants: [] should be non-empty",
+   "expressiveness": [
+    {
+     "field": "channel",
+     "note": "rule_off: rule r1 off (\"Never publish a retail price as Pampers 2R-1's: Retailer prices appear only as what a retailer charges, labeled with the retailer and dated. Every retailer read that day, never a chosen one.\"); rule r2 off (\"Retailers in the same order every time: Alphabetical, every retailer that carries the product, no favorites.\"). Manufacturer mode states no retailer price while either rule is off, and a UCP variant requires one: truesync/specs/ucp/ucp-2026-08-25/shopping/types/variant.json: \"required\": [\"id\", \"title\", \"description\", \"price\"].",
+     "severity": "blocked"
+    },
+    {
+     "field": "price",
+     "note": "Manufacturer mode: price-free while rule r1 or r2 is off, so this channel, which requires a price, is blocked.",
+     "severity": "dropped"
+    },
+    {
+     "field": "rule_r1",
+     "note": "rule r1 off: no retailer price, and the channel is blocked. With r1 and r2 both on, each retailer read on the read day (none yet) carries its own read price, labeled with the retailer and dated.",
+     "severity": "info"
+    },
+    {
+     "field": "rule_r2",
+     "note": "rule r2 off: no retailer price, and the channel is blocked. With r1 and r2 both on, each retailer read on the read day (none yet) carries its own read price, labeled with the retailer and dated.",
+     "severity": "info"
+    },
+    {
+     "field": "availability",
+     "note": "Manufacturer mode: retailer-neutral, so no availability for any retailer.",
+     "severity": "dropped"
+    },
+    {
+     "field": "rule_r2",
+     "note": "rule r2 off: retailers are listed in feed order; on, alphabetically (no variant would reorder).",
+     "severity": "info"
+    },
+    {
+     "field": "checkout",
+     "note": "Manufacturer mode: catalog lookup only. The profile declares no checkout or cart service and payment_handlers is {}: the brand sells nothing here, and each variant's retailer page is where it is bought.",
+     "severity": "dropped"
+    },
+    {
+     "field": "loyalty",
+     "note": "Manufacturer mode: the loyalty extension (dev.ucp.common.loyalty) is neither declared nor populated; a retailer's program is the retailer's, not the brand's.",
+     "severity": "dropped"
+    },
+    {
+     "field": "member_price",
+     "note": "Manufacturer mode: a variant's price is the shelf price a retailer's page showed; member, subscription and loyalty prices are not compiled.",
+     "severity": "dropped"
+    },
+    {
+     "field": "description_from_brand_page",
+     "note": "Pampers Swaddlers Newborn, 84 ct: the feed states no description; the line's brand page does.",
+     "severity": "info"
+    }
+   ],
+   "external_ref": null,
+   "held": true,
+   "id": 4,
+   "journal": [
+    {
+     "at": "2026-10-27T22:02:35+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-27T22:02:35+00:00",
+     "by": "parleo",
+     "cause": "rule_off",
+     "event": "blocked",
+     "note": "rule_off: rule r1 off (\"Never publish a retail price as Pampers 2R-1's: Retailer prices appear only as what a retailer charges, labeled with the retailer and dated. Every retailer read that day, never a chosen one.\"); rule r2 off (\"Retailers in the same order every time: Alphabetical, every retailer that carries the product, no favorites.\"). Manufacturer mode states no retailer price while either rule is off, and a UCP variant requires one: truesync/specs/ucp/ucp-2026-08-25/shopping/types/variant.json: \"required\": [\"id\", \"title\", \"description\", \"price\"]."
+    }
+   ],
+   "listing_id": null,
+   "mode": "manufacturer",
+   "payload": {
+    "product": {
+     "description": {
+      "plain": "Pampers Swaddlers\u2122 for babies and newborns offer gentle care for sensitive skin and stop blowouts with trusted leak protection. Find out and shop now!"
+     },
+     "id": "sku:sku_pg_swd_nb_84",
+     "media": [
+      {
+       "type": "image",
+       "url": "https://images.ctfassets.net/pfeg73t23esw/1RKbw0c8rZttOQ1c7tCCOG/055e51318eafad9844bc07a4297a0be3/Swaddlers_New_Clean.png"
+      }
+     ],
+     "tags": [
+      "Pampers"
+     ],
+     "title": "Pampers Swaddlers Newborn, 84 ct",
+     "url": "https://www.pampers.com/en-us/diapers-wipes/swaddlers-diapers",
+     "variants": []
+    },
+    "ucp": {
+     "version": "2026-08-25"
+    }
+   },
+   "published_at": null,
+   "reason": "blocked",
+   "record_ref": "feed:pampers-2r1:sku:sku_pg_swd_nb_84",
+   "spec_clause": "rule_off: rule r1 off (\"Never publish a retail price as Pampers 2R-1's: Retailer prices appear only as what a retailer charges, labeled with the retailer and dated. Every retailer read that day, never a chosen one.\"); rule r2 off (\"Retailers in the same order every time: Alphabetical, every retailer that carries the product, no favorites.\"). Manufacturer mode states no retailer price while either rule is off, and a UCP variant requires one: truesync/specs/ucp/ucp-2026-08-25/shopping/types/variant.json: \"required\": [\"id\", \"title\", \"description\", \"price\"].",
+   "spec_version": "ucp-2026-08-25",
+   "status": "compiled_not_published",
+   "validation": {
+    "errors": [
+     "blocked: rule_off: rule r1 off (\"Never publish a retail price as Pampers 2R-1's: Retailer prices appear only as what a retailer charges, labeled with the retailer and dated. Every retailer read that day, never a chosen one.\"); rule r2 off (\"Retailers in the same order every time: Alphabetical, every retailer that carries the product, no favorites.\"). Manufacturer mode states no retailer price while either rule is off, and a UCP variant requires one: truesync/specs/ucp/ucp-2026-08-25/shopping/types/variant.json: \"required\": [\"id\", \"title\", \"description\", \"price\"].",
+     "product: 'price_range' is a required property",
+     "product/variants: [] should be non-empty"
+    ],
+    "ok": false
+   }
+  },
+  {
+   "channel": "acp",
+   "channel_slug": "acp",
+   "compiled_at": "2026-10-27T22:02:35",
+   "error": "blocked: manufacturer mode publishes no price, and the ACP feed requires one on every item. docs/truesync/truesync-protocol-specs.md \u00a71 (acp-feed-stable-2026-08-18): \"Required for non-Ads feeds: `item_id`, `title`, `description`, `url`, `brand`, `image_url`, `price` (\"79.99 USD\"), `availability` (...), `target_countries`, `seller_name`, and OpenAI flags `is_eligible_search`, `is_eligible_checkout`.\"; sku:sku_pg_swd_nb_84: missing required field 'image_url' (specs \u00a71); sku:sku_pg_swd_nb_84: missing required field 'price' (specs \u00a71); sku:sku_pg_swd_nb_84: missing required field 'availability' (specs \u00a71); sku:sku_pg_swd_nb_84: missing required field 'seller_name' (specs \u00a71); sku:sku_pg_swd_s1_96: missing required field 'image_url' (specs \u00a71); sku:sku_pg_swd_s1_96: missing required field 'price' (specs \u00a71); sku:sku_pg_swd_s1_96: missing required field 'availability' (specs \u00a71); sku:sku_pg_swd_s1_96: missing required field 'seller_name' (specs \u00a71); 00037000799818: missing required field 'image_url' (specs \u00a71); 00037000799818: missing required field 'price' (specs \u00a71); 00037000799818: missing required field 'availability' (specs \u00a71); 00037000799818: missing required field 'seller_name' (specs \u00a71)",
+   "expressiveness": [
+    {
+     "field": "channel",
+     "note": "docs/truesync/truesync-protocol-specs.md \u00a71 (acp-feed-stable-2026-08-18): \"Required for non-Ads feeds: `item_id`, `title`, `description`, `url`, `brand`, `image_url`, `price` (\"79.99 USD\"), `availability` (...), `target_countries`, `seller_name`, and OpenAI flags `is_eligible_search`, `is_eligible_checkout`.\"",
+     "severity": "blocked"
+    },
+    {
+     "field": "price",
+     "note": "Manufacturer mode: price-free while rule r1 or r2 is off, so this channel, which requires a price, is blocked.",
+     "severity": "dropped"
+    },
+    {
+     "field": "rule_r1",
+     "note": "rule r1 off: no retailer price, and the channel is blocked. With r1 and r2 both on, each retailer read on the read day (none yet) carries its own read price, labeled with the retailer and dated.",
+     "severity": "info"
+    },
+    {
+     "field": "rule_r2",
+     "note": "rule r2 off: no retailer price, and the channel is blocked. With r1 and r2 both on, each retailer read on the read day (none yet) carries its own read price, labeled with the retailer and dated.",
+     "severity": "info"
+    },
+    {
+     "field": "availability",
+     "note": "Manufacturer mode: retailer-neutral, so no availability for any retailer.",
+     "severity": "dropped"
+    },
+    {
+     "field": "rule_r2",
+     "note": "rule r2 off: retailers are listed in feed order; on, alphabetically (no variant would reorder).",
+     "severity": "info"
+    }
+   ],
+   "external_ref": null,
+   "held": true,
+   "id": 3,
+   "journal": [
+    {
+     "at": "2026-10-27T22:02:35+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-27T22:02:35+00:00",
+     "by": "parleo",
+     "cause": null,
+     "event": "blocked",
+     "note": "docs/truesync/truesync-protocol-specs.md \u00a71 (acp-feed-stable-2026-08-18): \"Required for non-Ads feeds: `item_id`, `title`, `description`, `url`, `brand`, `image_url`, `price` (\"79.99 USD\"), `availability` (...), `target_countries`, `seller_name`, and OpenAI flags `is_eligible_search`, `is_eligible_checkout`.\""
+    }
+   ],
+   "listing_id": null,
+   "mode": "manufacturer",
+   "payload": {
+    "items": [
+     {
+      "brand": "Pampers",
+      "description": "Pampers Swaddlers Newborn, 84 ct",
+      "group_id": "feed:pampers-2r1:sku:sku_pg_swd_nb_84",
+      "image_url": null,
+      "is_eligible_checkout": false,
+      "is_eligible_search": true,
+      "item_group_title": "Pampers Swaddlers",
+      "item_id": "sku:sku_pg_swd_nb_84",
+      "listing_has_variations": true,
+      "target_countries": [
+       "US"
+      ],
+      "title": "Pampers Swaddlers Newborn, 84 ct",
+      "url": "https://www.pampers.com/en-us/diapers-wipes/swaddlers-diapers",
+      "variant_dict": {
+       "count": "84"
+      }
+     },
+     {
+      "brand": "Pampers",
+      "description": "Pampers Swaddlers Size 1, 96 ct",
+      "group_id": "feed:pampers-2r1:sku:sku_pg_swd_nb_84",
+      "image_url": null,
+      "is_eligible_checkout": false,
+      "is_eligible_search": true,
+      "item_group_title": "Pampers Swaddlers",
+      "item_id": "sku:sku_pg_swd_s1_96",
+      "listing_has_variations": true,
+      "target_countries": [
+       "US"
+      ],
+      "title": "Pampers Swaddlers Size 1, 96 ct",
+      "url": "https://www.pampers.com/en-us/diapers-wipes/swaddlers-diapers-size-1",
+      "variant_dict": {
+       "count": "96"
+      }
+     },
+     {
+      "brand": "Pampers",
+      "description": "Pampers Swaddlers Size 4",
+      "group_id": "feed:pampers-2r1:sku:sku_pg_swd_nb_84",
+      "gtin": "037000799818",
+      "image_url": null,
+      "is_eligible_checkout": false,
+      "is_eligible_search": true,
+      "item_group_title": "Pampers Swaddlers",
+      "item_id": "00037000799818",
+      "listing_has_variations": true,
+      "target_countries": [
+       "US"
+      ],
+      "title": "Pampers Swaddlers Size 4",
+      "url": "https://www.pampers.com/en-us/products/pampers-swaddlers-diapers"
+     }
+    ]
+   },
+   "published_at": null,
+   "reason": "blocked",
+   "record_ref": "feed:pampers-2r1:sku:sku_pg_swd_nb_84",
+   "spec_clause": "docs/truesync/truesync-protocol-specs.md \u00a71 (acp-feed-stable-2026-08-18): \"Required for non-Ads feeds: `item_id`, `title`, `description`, `url`, `brand`, `image_url`, `price` (\"79.99 USD\"), `availability` (...), `target_countries`, `seller_name`, and OpenAI flags `is_eligible_search`, `is_eligible_checkout`.\"",
+   "spec_version": "acp-feed-stable-2026-08-18",
+   "status": "compiled_not_published",
+   "validation": {
+    "errors": [
+     "blocked: manufacturer mode publishes no price, and the ACP feed requires one on every item. docs/truesync/truesync-protocol-specs.md \u00a71 (acp-feed-stable-2026-08-18): \"Required for non-Ads feeds: `item_id`, `title`, `description`, `url`, `brand`, `image_url`, `price` (\"79.99 USD\"), `availability` (...), `target_countries`, `seller_name`, and OpenAI flags `is_eligible_search`, `is_eligible_checkout`.\"",
+     "sku:sku_pg_swd_nb_84: missing required field 'image_url' (specs \u00a71)",
+     "sku:sku_pg_swd_nb_84: missing required field 'price' (specs \u00a71)",
+     "sku:sku_pg_swd_nb_84: missing required field 'availability' (specs \u00a71)",
+     "sku:sku_pg_swd_nb_84: missing required field 'seller_name' (specs \u00a71)",
+     "sku:sku_pg_swd_s1_96: missing required field 'image_url' (specs \u00a71)",
+     "sku:sku_pg_swd_s1_96: missing required field 'price' (specs \u00a71)",
+     "sku:sku_pg_swd_s1_96: missing required field 'availability' (specs \u00a71)",
+     "sku:sku_pg_swd_s1_96: missing required field 'seller_name' (specs \u00a71)",
+     "00037000799818: missing required field 'image_url' (specs \u00a71)",
+     "00037000799818: missing required field 'price' (specs \u00a71)",
+     "00037000799818: missing required field 'availability' (specs \u00a71)",
+     "00037000799818: missing required field 'seller_name' (specs \u00a71)"
+    ],
+    "ok": false
+   }
+  },
+  {
+   "channel": "manufacturer_center",
+   "channel_slug": "manufacturer_center",
+   "compiled_at": "2026-10-27T22:02:35",
+   "error": null,
+   "expressiveness": [
+    {
+     "field": "percent_off",
+     "note": "Manufacturer Center: no sale-price or discount attribute; suggestedRetailPrice is MSRP and lowering it to encode a discount would misstate it (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "amount_off",
+     "note": "Manufacturer Center: no sale-price or discount attribute; suggestedRetailPrice is MSRP and lowering it to encode a discount would misstate it (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "member_price",
+     "note": "Manufacturer Center: no price attribute but MSRP and no membership concept (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "subscribe_and_save",
+     "note": "Manufacturer Center: no subscription attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "points_earn",
+     "note": "Manufacturer Center: no loyalty attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "free_shipping",
+     "note": "Manufacturer Center: no shipping attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "gift_with_purchase",
+     "note": "Manufacturer Center: no promotion attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "mfr_coupon",
+     "note": "Manufacturer Center: no promotion or code attribute, even for the manufacturer's own coupon (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "member",
+     "note": "Manufacturer Center: no eligibility attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "tier",
+     "note": "Manufacturer Center: no eligibility attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "subscription",
+     "note": "Manufacturer Center: no eligibility attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "new_customer",
+     "note": "Manufacturer Center: no eligibility attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "retailer_availability",
+     "note": "Manufacturer Center has no field for who sells the product or where; retailer URLs and the retailer list are not sent (MC-0 \u00a74b).",
+     "severity": "dropped"
+    },
+    {
+     "field": "availability",
+     "note": "No stock or availability attribute; 'availability' is n/a for Manufacturer Center (answer/7073012).",
+     "severity": "dropped"
+    },
+    {
+     "field": "shelf_price",
+     "note": "No price or sale_price attribute; only suggestedRetailPrice (MSRP) exists (answer/7073012, discovery Attributes).",
+     "severity": "dropped"
+    },
+    {
+     "field": "provenance",
+     "note": "No provenance attribute; the brand's verified account is itself the provenance claim (MC-0 \u00a74a).",
+     "severity": "dropped"
+    },
+    {
+     "field": "validity_dates",
+     "note": "No offer validity; disclosureDate and releaseDate are product-lifecycle dates, not offer windows (MC-0 \u00a74b).",
+     "severity": "dropped"
+    },
+    {
+     "field": "gtin",
+     "note": "2 variant(s) without a GTIN not compiled (sku:sku_pg_swd_nb_84, sku:sku_pg_swd_s1_96): Manufacturer Center keys every product by GTIN and has no identifier_exists=false (answer/6358237).",
+     "severity": "dropped"
+    },
+    {
+     "field": "rule_r1",
+     "note": "rule r1 off: nothing in this compile (publish_msrp is off, so no MSRP is sent either way).",
+     "severity": "info"
+    },
+    {
+     "field": "price",
+     "note": "Manufacturer mode: no shelf price; MSRP only on Manufacturer Center with publish_msrp.",
+     "severity": "dropped"
+    },
+    {
+     "field": "rule_r5",
+     "note": "rule r5 off: no size chart rows; on, 3 weight-range row(s) from the brand page's chart.",
+     "severity": "info"
+    },
+    {
+     "field": "image_from_brand_page",
+     "note": "Pampers Swaddlers Size 4: no image_url in the feed; imageLink is the line's image on the brand's own page (https://images.ctfassets.net/pfeg73t23esw/1RKbw0c8rZttOQ1c7tCCOG/055e51318eafad9844bc07a4297a0be3/Swaddlers_New_Clean.png).",
+     "severity": "info"
+    },
+    {
+     "field": "description_from_brand_page",
+     "note": "Pampers Swaddlers Size 4: no description in the feed; description is the line's on the brand's own page.",
+     "severity": "info"
+    },
+    {
+     "field": "lint",
+     "note": "US:en:00037000799818: description is not ASCII; the spec asks for ASCII only",
+     "severity": "info"
+    }
+   ],
+   "external_ref": null,
+   "held": true,
+   "id": 2,
+   "journal": [
+    {
+     "at": "2026-10-27T22:02:35+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-27T22:02:35+00:00",
+     "by": "parleo",
+     "event": "held_for_merchant",
+     "note": "compiled; the brand's own team sends it"
+    }
+   ],
+   "listing_id": null,
+   "mode": "manufacturer",
+   "payload": {
+    "apiVersion": "manufacturers/v1",
+    "products": [
+     {
+      "attributes": {
+       "brand": "Pampers",
+       "description": "Pampers Swaddlers\u2122 for babies and newborns offer gentle care for sensitive skin and stop blowouts with trusted leak protection. Find out and shop now!",
+       "gtin": [
+        "037000799818"
+       ],
+       "imageLink": {
+        "imageUrl": "https://images.ctfassets.net/pfeg73t23esw/1RKbw0c8rZttOQ1c7tCCOG/055e51318eafad9844bc07a4297a0be3/Swaddlers_New_Clean.png"
+       },
+       "itemGroupId": "feed:pampers-2r1:sku:sku_pg_swd_nb_84",
+       "productName": "Pampers Swaddlers",
+       "productPageUrl": "https://www.pampers.com/en-us/products/pampers-swaddlers-diapers",
+       "title": "Pampers Swaddlers Size 4"
+      },
+      "name": "US:en:00037000799818"
+     }
+    ]
+   },
+   "published_at": null,
+   "reason": "held_for_merchant",
+   "record_ref": "feed:pampers-2r1:sku:sku_pg_swd_nb_84",
+   "spec_clause": null,
+   "spec_version": "manufacturers-v1-2026-10-05",
+   "status": "compiled_not_published",
+   "validation": {
+    "errors": [],
+    "ok": true
+   }
+  },
+  {
+   "channel": "schema_org",
+   "channel_slug": "schema_org",
+   "compiled_at": "2026-10-27T22:02:35",
+   "error": null,
+   "expressiveness": [
+    {
+     "field": "rule_r1",
+     "note": "rule r1 off: nothing on this channel: a shelf price is never published in manufacturer mode.",
+     "severity": "info"
+    },
+    {
+     "field": "price",
+     "note": "Manufacturer mode: no shelf price; MSRP only on Manufacturer Center with publish_msrp.",
+     "severity": "dropped"
+    },
+    {
+     "field": "availability",
+     "note": "Manufacturer mode: retailer-neutral, so no availability for any retailer.",
+     "severity": "dropped"
+    },
+    {
+     "field": "rule_r2",
+     "note": "rule r2 off: retailers are listed in feed order; on, alphabetically (no variant would reorder).",
+     "severity": "info"
+    },
+    {
+     "field": "rule_r5",
+     "note": "rule r5 off: no size chart rows; on, 3 weight-range row(s) from the brand page's chart.",
+     "severity": "info"
+    }
+   ],
+   "external_ref": null,
+   "held": true,
+   "id": 1,
+   "journal": [
+    {
+     "at": "2026-10-27T22:02:35+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-27T22:02:35+00:00",
+     "by": "parleo",
+     "event": "held_for_merchant",
+     "note": "compiled; the brand's own team sends it"
+    }
+   ],
+   "listing_id": null,
+   "mode": "manufacturer",
+   "payload": {
+    "@context": "https://schema.org",
+    "@type": "ProductGroup",
+    "brand": {
+     "@type": "Brand",
+     "name": "Pampers"
+    },
+    "hasVariant": [
+     {
+      "@type": "Product",
+      "additionalProperty": [
+       {
+        "@type": "PropertyValue",
+        "name": "Pack count",
+        "value": 84
+       }
+      ],
+      "brand": {
+       "@type": "Brand",
+       "name": "Pampers"
+      },
+      "name": "Pampers Swaddlers Newborn, 84 ct",
+      "sku": "sku_pg_swd_nb_84",
+      "url": "https://www.pampers.com/en-us/diapers-wipes/swaddlers-diapers"
+     },
+     {
+      "@type": "Product",
+      "additionalProperty": [
+       {
+        "@type": "PropertyValue",
+        "name": "Pack count",
+        "value": 96
+       }
+      ],
+      "brand": {
+       "@type": "Brand",
+       "name": "Pampers"
+      },
+      "name": "Pampers Swaddlers Size 1, 96 ct",
+      "sku": "sku_pg_swd_s1_96",
+      "url": "https://www.pampers.com/en-us/diapers-wipes/swaddlers-diapers-size-1"
+     },
+     {
+      "@type": "Product",
+      "brand": {
+       "@type": "Brand",
+       "name": "Pampers"
+      },
+      "gtin": "037000799818",
+      "gtin12": "037000799818",
+      "name": "Pampers Swaddlers Size 4",
+      "url": "https://www.pampers.com/en-us/products/pampers-swaddlers-diapers"
+     }
+    ],
+    "name": "Pampers Swaddlers",
+    "productGroupID": "feed:pampers-2r1:sku:sku_pg_swd_nb_84",
+    "url": "https://www.pampers.com/en-us/diapers-wipes/swaddlers-diapers",
+    "variesBy": [
+     "size",
+     "count"
+    ]
+   },
+   "published_at": null,
+   "reason": "held_for_merchant",
+   "record_ref": "feed:pampers-2r1:sku:sku_pg_swd_nb_84",
+   "spec_clause": null,
+   "spec_version": "schemaorg-merchant-listing-2026-08-18",
+   "status": "compiled_not_published",
+   "validation": {
+    "errors": [],
+    "ok": true
+   }
+  }
+ ],
+ "headers": {
+  "content-type": "application/json"
+ },
+ "status": 200
+}
