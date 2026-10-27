@@ -393,11 +393,14 @@ def _fl15_visibility(vis: dict) -> dict:
     rows = body['ranking']['brand_choice']['rows']
     for r in rows:
         if r.get('you'):
-            r.update(named=103, first=80)
+            counts = {'named': 103, 'first': 80}
         elif r['name'] == f2t5.RIVAL:
-            r.update(named=64, first=26)
+            counts = {'named': 64, 'first': 26}
         else:   # the harness's third brand stays behind Huggies, as every other brand was on FL15
-            r.update(first=min(r['first'], 12), named=min(r['named'], 40))
+            counts = {'first': min(r['first'], 12), 'named': min(r['named'], 40)}
+        # the row and its every-agent count (the bars read it), not its per-agent split
+        r.update(counts)
+        r.setdefault('surfaces', {}).setdefault('all', {}).update(counts)
     body.update(measure.visibility_lead(body, f2t5.BRAND, {'dollars': None,
                                                            'reason': 'enter sales in scope on Impact'}))
     return body
