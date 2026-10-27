@@ -8801,3 +8801,36 @@ such channel.
 * `POST /publishing/compile` passes supply's `readback`; `by_channel.mcp` counts `published`.
 
 Fixture: `tests/fixtures/console/supply_2u2/` (PROVENANCE.md). Tests: `tests/test_console_2u2_channels.py`.
+
+## 2U-4: the MCP cell reads the public server; counts in SKUs; Approvals names r1 and r2
+
+supply 2U-4 (parleo-supply-app #37) makes the readback a client of the public MCP server
+(`PARLEO_MCP_PUBLIC_URL`) and puts its verdict on `/tenant`'s `held.published.mcp`: `acceptance` approved /
+disapproved / unavailable, `reason` when not approved ("tool not served at <url>", "server not reachable at
+<url>: …"), `server`, and `records` counted in SKUs (`lines` beside it). `held.by_channel` and `total` count
+SKUs, `held.lines` the lines, and the publish response carries `counts {records, lines}`. A blocked row's
+journal entry carries `rules`: every rule keeping it blocked.
+
+* **The MCP cell** (`channel_list`): still `state: live` (the rows are published), plus `check`
+  (`console_release.mcp_check`: `verified`, `disagrees`, `not_reachable`, `not_served`, `unverified`) and
+  `check_reason` (supply's words). The label and line follow the check:
+
+  | check | label · line | release card |
+  |---|---|---|
+  | verified | Live · "6 records served · verified Oct 27 at mcp.parleo.example" (no host from a supply before 2U-4) | "Live · …" |
+  | not_served | Tool not served · "6 records published · mcp.parleo.example does not serve get_product_facts (Oct 27)" | "Tool not served · …" |
+  | not_reachable | Not reachable · "6 records published · <host> did not answer the check (Oct 27)" | "Not reachable · …" |
+  | disagrees | Live · "6 records served · 5 of 6 resolve (Oct 27)" | "Live · …" |
+  | unverified | Live · "6 records served · not verified yet" | "Live · …" |
+
+  `/publishing`'s `mcp` surface carries `check` and `check_reason` too.
+* **Counts**: with a supply that counts in SKUs (its `held` carries `lines`), a line-held channel's cell reads
+  "6 of 6 SKUs held · Oct 27", as UCP's does. `POST /publishing/compile` passes supply's `counts`.
+* **Approvals**: after the rules that gate a fix, one request per rule a held or blocked channel's journal
+  names (`console_fixes.blocked_rule_channels`: the entry's `rules`, else a `rule_off` clause's), with no
+  fix, `gates` (["ucp_uip", "acp"]) and `gates_text` ("gates UCP and ACP prices"). Approve and return work as
+  for any rule (`POST /approvals/{code}`).
+* **Where to buy**: supply's `where_to_buy[].retailer` and ACP `seller_name` are display names now. soa shows
+  retailers only through `_retailer_name(domain)`, which already gives display names, so nothing here changes.
+
+Fixture: `tests/fixtures/console/supply_2u4/` (PROVENANCE.md). Tests: `tests/test_console_2u4_mcp.py`.

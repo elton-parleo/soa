@@ -13,6 +13,7 @@ One fix per source, ranked by what it wins back (the pool's modeled value
 the Overview ranks its signals by, then the signal's count), numbered in
 rank order. States: needs_decision, in_flight, queued, shipped.
 """
+import re
 from typing import Dict, Iterable, List, Optional
 
 from app.services import console_manufacturer as manu
@@ -61,6 +62,9 @@ FIX_TEMPLATES = {
     'approvals.release.text': ("The held file: {n} records compiled in manufacturer mode, no price, every retailer shown "
                                "the same way. {brand_s} own team sends it. Its send is stated on Publishing."),
     'approvals.requested.rule': 'Rule seeded',
+    'approvals.gates': 'gates {channels} prices',
+    'approvals.gates.text': ('{detail} While it is off, {channels} stay blocked: manufacturer mode states a retailer '
+                             'price only with rules r1 and r2 on.'),
     'approvals.requested.release': 'Hold compiled',
     'approvals.hero': '{k} of {n} requests waiting.',
     'approvals.hero.first': ' {title} waits on approval.',
@@ -299,10 +303,39 @@ def fix_summary(fixes: List[dict]) -> dict:
 APPROVAL_STATE = {'needs_approval': 'pending', 'approved': 'approved', 'declined': 'returned'}
 
 
+#: 2U-4: the channels a rule-blocked row can name, as Approvals words them ("gates UCP and ACP prices").
+GATED_NAMES = {'ucp_uip': 'UCP', 'acp': 'ACP'}
+#: supply 2U-1's clause on a row a rule that is off blocked ("rule_off: rule r1 off (...); rule r2 off (...)")
+_RULE_OFF = re.compile(r'\brule (r\d+) off\b')
+
+
+def blocked_rule_channels(pubs: List[dict]) -> Dict[str, List[str]]:
+    """
+    2U-4 (supply S7): {rule: [channels it keeps blocked]} from the newest held
+    rows' journals: each `blocked` entry's `rules` (supply 2U-4), else the
+    rules its `rule_off` clause names (a supply before it). Channels in
+    GATED_NAMES order (UCP, then ACP).
+    """
+    out: Dict[str, List[str]] = {}
+    for channel in GATED_NAMES:
+        for row in manu.latest_by_record(pubs or [], channel):
+            for entry in row.get('journal') or []:
+                if entry.get('event') != 'blocked':
+                    continue
+                codes = entry.get('rules')
+                if codes is None and str(entry.get('cause') or entry.get('note') or '').startswith('rule_off'):
+                    codes = _RULE_OFF.findall(str(entry.get('note') or '').split(' Manufacturer mode states', 1)[0])
+                for code in codes or []:
+                    if channel not in out.setdefault(code, []):
+                        out[code].append(channel)
+    return dict(sorted(out.items()))
+
+
 def build_approvals(*, fixes: List[dict], rules: Optional[List[dict]], pubs: List[dict], records: int,
                     skus: Optional[int], brand: str) -> dict:
     """B5: {requests, summary, chains}. One request per rule that gates a fix (r5, r6, r4, r2, in the fixes'
-    order), then the release. Each {code, kind, title, text, requested {what, at, by}, scope, state (pending |
+    order); 2U-4, then one per rule a held or blocked channel names (r1, r2 gate the priced UCP and ACP compile:
+    `gates` the channels, `gates_text` "gates UCP and ACP prices", no fix); then the release. Each {code, kind, title, text, requested {what, at, by}, scope, state (pending |
     approved | returned | held | sent), approval, pool, condition: None, chain [TrueSync, the team or
     "Approver"], team: None, writable, fix}."""
     out = []
@@ -321,6 +354,25 @@ def build_approvals(*, fixes: List[dict], rules: Optional[List[dict]], pubs: Lis
                     'approval': rule.get('approval'), 'on': bool(rule.get('on')), 'pool': f['pool'],
                     'condition': None, 'chain': ['TrueSync', T['approvals.approver']], 'team': None, 'writable': True,
                     'fix': f['id'], 'fix_title': f['title'], 'first_change': first.get('at')})
+    listed = {r['code'] for r in out}
+    for code, channels in blocked_rule_channels(pubs).items():
+        rule = _rule(rules, code)
+        if rule is None or code in listed:
+            continue
+        names = manu._and([GATED_NAMES[c] for c in channels])
+        history = sorted(rule.get('history') or [], key=lambda h: str(h.get('at') or ''))
+        first = history[0] if history else {}
+        out.append({'code': code, 'kind': 'rule', 'title': rule.get('name') or code,
+                    'text': T['approvals.gates.text'].format(detail=rule.get('detail') or '', channels=names).strip(),
+                    'requested': {'what': T['approvals.requested.rule'], 'at': None, 'by': 'TrueSync'},
+                    'decided': {'at': rule.get('approved_at'), 'by': rule.get('approved_by'), 'note': rule.get('note')}
+                    if rule.get('approval') != 'needs_approval' else None,
+                    'scope': skus, 'state': APPROVAL_STATE.get(rule.get('approval'), 'pending'),
+                    'approval': rule.get('approval'), 'on': bool(rule.get('on')), 'pool': 'both',
+                    'condition': None, 'chain': ['TrueSync', T['approvals.approver']], 'team': None, 'writable': True,
+                    'fix': None, 'fix_title': None, 'first_change': first.get('at'),
+                    'gates': channels, 'gates_text': T['approvals.gates'].format(channels=names)})
+        listed.add(code)
     rows = [p for p in pubs or [] if manu.is_held(p) or p.get('status') == manu.LIVE_STATUS]
     if rows:
         compiled = [e for p in rows for e in p.get('journal') or [] if e.get('event') == 'compiled']

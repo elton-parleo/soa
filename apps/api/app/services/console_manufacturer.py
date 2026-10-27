@@ -597,7 +597,9 @@ def with_channel_states(surfaces: List[dict], channel_states: List[dict]) -> Lis
         if s is None and slug == 'mcp':
             s = {'name': T['mcp.name'], 'fields': T['mcp.fields'] if state == 'live' else '',
                  'note': T['mcp.note'] if state != 'blocked' else (c.get('note') or c['line']),
-                 'external_ref': c.get('note') if state == 'live' else None}
+                 'external_ref': c.get('note') if state == 'live' else None,
+                 # 2U-4: what the readback against the public server found (console_release.mcp_check)
+                 'check': c.get('check'), 'check_reason': c.get('check_reason')}
         elif s is None and state == 'not_for_brand':
             s = {'name': T['gmc.name'] if slug == 'merchant_center' else T['directory.name'] if
                  slug == 'deal_directory' else c['name'], 'fields': '',

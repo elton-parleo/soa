@@ -18,6 +18,7 @@ date (supply has no plan record). The copy is RELEASE_TEMPLATES; the router
 Shapes: docs/console-read-models.md, "2T-1". Deterministic; no model.
 """
 import re
+from collections import Counter
 from typing import Dict, Iterable, List, Optional
 
 from app.services import console_manufacturer as manu
@@ -75,6 +76,31 @@ RULE_IN_NOTE = re.compile(r'\brule (r\d+)\b')
 #: supply 2U-1's clause on a row a rule that is off blocked: "rule_off: rule r1 off (...)"
 RULE_OFF_CLAUSE = re.compile(r'^rule_off: rule (r\d+) off\b')
 
+#: 2U-4: supply's mcp readback (held.published.mcp) -> the cell's check. `acceptance` approved / disapproved /
+#: unavailable; a disapproval whose reason is "tool not served at <url>" is the server's, not the record's.
+CHECKS = ('verified', 'disagrees', 'not_reachable', 'not_served', 'unverified')
+TOOL_NOT_SERVED = 'tool not served at '
+
+
+def _host(url: Optional[str]) -> Optional[str]:
+    """'https://mcp.parleo.io/#get_product_facts' -> 'mcp.parleo.io'."""
+    text = str(url or '').split('#', 1)[0].split('//', 1)[-1].split('/', 1)[0].strip()
+    return text or None
+
+
+def mcp_check(served: dict) -> str:
+    """2U-4: what supply's readback against the public server said: one of CHECKS."""
+    acceptance = served.get('acceptance')
+    if not served.get('verified_at') or acceptance is None:
+        return 'unverified'
+    if acceptance == 'approved':
+        return 'verified'
+    if acceptance == 'unavailable':
+        return 'not_reachable'
+    if str(served.get('reason') or '').startswith(TOOL_NOT_SERVED):
+        return 'not_served'
+    return 'disagrees'
+
 #: supply's expressiveness severity -> the compiler line's mark.
 MARKS = {'info': 'info', 'dropped': 'dropped', 'approximated': 'approximated', 'blocked': 'conflict'}
 
@@ -100,12 +126,16 @@ RELEASE_TEMPLATES = {
     'release.surface.published': 'Published · {day}',
     'release.surface.out': 'Not in this pass',
     'release.surface.live': 'Live · {line}',
+    'release.surface.not_reachable': 'Not reachable · {line}',
+    'release.surface.not_served': 'Tool not served · {line}',
     'release.surface.next': 'Next release · {line}',
     'release.surface.not_for_brand': 'Not for a brand · {line}',
     'release.surface.blocked.rule': 'Blocked · rule {rule} · {day}',
     'channel.held': 'Held',
     'channel.blocked': 'Blocked',
     'channel.live': 'Live',
+    'channel.check.not_reachable': 'Not reachable',
+    'channel.check.not_served': 'Tool not served',
     'channel.next': 'Next release',
     'channel.not_for_brand': 'Not for a brand',
     'channel.not_compiled': 'Not in this pass',
@@ -116,6 +146,9 @@ RELEASE_TEMPLATES = {
     'channel.line.blocked': 'rule {rule}',
     'channel.line.blocked.none': 'its spec refuses the record',
     'channel.line.live': '{n} records served · verified {day}',
+    'channel.line.live.at': '{n} records served · verified {day} at {host}',
+    'channel.line.not_reachable': '{n} records published · {host} did not answer the check ({day})',
+    'channel.line.not_served': '{n} records published · {host} does not serve get_product_facts ({day})',
     'channel.line.live.unverified': '{n} records served · not verified yet',
     'channel.line.live.short': '{n} records served · {k} of {total} resolve ({day})',
     'channel.line.failed': 'Not published: {error}',
@@ -298,7 +331,11 @@ def channel_list(*, pubs: List[dict], channels: List[dict], plan: Optional[List[
       held / blocked   from the hold's newest rows per record (blocked names
                        its rule: supply's, else the one its lines state)
       live             a channel Parleo publishes itself with published rows:
-                       "<N> records served · verified <day>" (the readback)
+                       "<N> records served · verified <day> at <host>" (the
+                       readback against the public server; 2U-4: N is SKUs).
+                       `check` says what the readback found (mcp_check): a
+                       server that did not answer is labelled "Not reachable",
+                       one without the tool "Tool not served", never "Live"
       next             supply's reason after_rule: "after rule r4"
       not_for_brand    supply's reason not_for_brand: "a seller's channel (rule r3)"
       not_compiled     anything else: supply's note
@@ -310,6 +347,10 @@ def channel_list(*, pubs: List[dict], channels: List[dict], plan: Optional[List[
     published = (held or {}).get('published') or {}
     folded = hold(pubs)
     records = len(folded)
+    # 2U-4: a supply that counts in SKUs (its held carries `lines`): every channel's cell counts SKUs, a line's
+    # row as its SKUs, so a line-held channel and UCP (held per SKU) read alike ("10 of 10 SKUs held")
+    in_skus = 'lines' in (held or {})
+    line_skus = Counter(sku_records(pubs).values()) if in_skus else Counter()
     out = []
     for slug in order:
         entry = plan_by.get(slug) or FALLBACK_PLAN.get(slug) or {'compiled': False, 'reason': 'not_compiled'}
@@ -331,19 +372,31 @@ def channel_list(*, pubs: List[dict], channels: List[dict], plan: Optional[List[
         elif live:
             state = 'live'
             served = published.get(slug) or {}
-            n = served.get('records') or len(live)
+            # 2U-4: supply counts records in SKUs (`records`); a supply before it counted lines there
+            n = served.get('records') or served.get('skus') or len(live)
             verified = served.get('verified_at')
-            if verified and served.get('acceptance') == 'approved':
-                line = T['channel.line.live'].format(n=n, day=manu.short_day(verified))
-            elif verified:
+            check = mcp_check(served)
+            host = _host(served.get('server') or served.get('external_ref'))
+            day_v = manu.short_day(verified) if verified else None
+            if check == 'verified':
+                line = (T['channel.line.live.at'].format(n=n, day=day_v, host=host) if served.get('server')
+                        else T['channel.line.live'].format(n=n, day=day_v))
+            elif check in ('not_reachable', 'not_served'):
+                line = T[f'channel.line.{check}'].format(n=n, host=host or 'the server', day=day_v)
+            elif check == 'disagrees':
                 k, _, total = str(served.get('verified_skus') or '0/0').partition('/')
-                line = T['channel.line.live.short'].format(n=n, k=k, total=total, day=manu.short_day(verified))
+                line = T['channel.line.live.short'].format(n=n, k=k, total=total, day=day_v)
             else:
                 line = T['channel.line.live.unverified'].format(n=n)
             note = served.get('external_ref') or note
         elif valid and slug in PER_SKU:
             state = 'held'
             line = T['channel.line.held.skus'].format(n=sum(1 for x in skus if manu.is_held(x)), of=len(skus), day=day)
+        elif valid and in_skus:
+            state = 'held'
+            n = sum(line_skus.get(r.get('record_ref'), 1) for r in held_rows)
+            of = ((held or {}).get('by_channel') or {}).get(slug) or sum(line_skus.get(r.get('record_ref'), 1) for r in rows)
+            line = T['channel.line.held.skus'].format(n=n, of=of, day=day)
         elif valid:
             state, line = 'held', T['channel.line.held'].format(n=len(held_rows), of=records, day=day)
         elif blocked_rows:
@@ -366,11 +419,15 @@ def channel_list(*, pubs: List[dict], channels: List[dict], plan: Optional[List[
             else:
                 line = note or manu.T['not_compiled']
         c = by_slug.get(slug) or {}
+        check = mcp_check(published.get(slug) or {}) if state == 'live' and slug in PARLEO_PUBLISHED else None
+        label = T[f'channel.check.{check}'] if check in ('not_reachable', 'not_served') else T[f'channel.{state}']
         out.append({
             'id': slug, 'channel': slug, 'name': SURFACE_SHORT.get(slug) or c.get('name') or slug,
             'short': SURFACE_SHORT.get(slug) or c.get('name') or slug, 'spec': c.get('spec_version') or '',
-            'state': state, 'label': T[f'channel.{state}'], 'line': line,
+            'state': state, 'label': label, 'line': line, 'check': check,
             'reason': entry.get('reason'), 'rule': rule, 'note': note,
+            # 2U-4: why supply's readback did not approve (its words), for the cell's detail
+            'check_reason': (published.get(slug) or {}).get('reason') if check else None,
             'in_pass': state in ('held', 'blocked', 'live'),
             'compiled': sum(1 for x in states if x in ('held', 'published', 'live')) if rows else 0,
             'of': records, 'blocked': sum(1 for x in states if x == 'blocked'),
@@ -1157,6 +1214,8 @@ def release_status(channel: dict, day: Optional[str]) -> str:
         return T['release.surface.blocked.rule'].format(rule=channel['rule'], day=day)
     if state == 'blocked':
         return T['release.surface.blocked'].format(day=day)
+    if state == 'live' and channel.get('check') in ('not_reachable', 'not_served'):
+        return T[f"release.surface.{channel['check']}"].format(line=channel['line'])
     if state in ('live', 'next', 'not_for_brand'):
         return T[f'release.surface.{state}'].format(line=channel['line'])
     return T['release.surface.out']

@@ -1,0 +1,275 @@
+{
+ "body": {
+  "counts": {
+   "lines": {
+    "mcp": 4
+   },
+   "records": {
+    "mcp": 6
+   }
+  },
+  "kind": "brand",
+  "merchant": "pampers-2r1",
+  "mode": "manufacturer",
+  "readback": {
+   "acceptance": "disapproved",
+   "approved": false,
+   "mismatches": [],
+   "reason": "tool not served at https://mcp.parleo.example",
+   "resolved": 0,
+   "server": "https://mcp.parleo.example",
+   "total": 6,
+   "unresolved": []
+  },
+  "rows": [
+   {
+    "channel": "mcp",
+    "channel_slug": "mcp",
+    "compiled_at": "2026-10-27T23:46:09",
+    "error": null,
+    "expressiveness": [],
+    "external_ref": "https://mcp.parleo.example#get_product_facts",
+    "held": false,
+    "id": 23,
+    "journal": [
+     {
+      "at": "2026-10-27T23:46:09+00:00",
+      "by": "parleo",
+      "event": "compiled",
+      "note": null
+     },
+     {
+      "at": "2026-10-27T23:46:09.165637+00:00",
+      "by": "parleo",
+      "event": "published",
+      "note": "https://mcp.parleo.example#get_product_facts"
+     }
+    ],
+    "listing_id": null,
+    "mode": null,
+    "payload": {
+     "held_publication_id": 1,
+     "line": "Pampers Swaddlers",
+     "merchant": "pampers-2r1",
+     "record_ref": "feed:pampers-2r1:sku:sku_pg_swd_nb_84",
+     "served": 3,
+     "server": "https://mcp.parleo.example",
+     "skus": [
+      {
+       "gtin": null,
+       "product": "Pampers Swaddlers Newborn, 84 ct",
+       "query": "Pampers Swaddlers Newborn, 84 ct",
+       "resolved": true
+      },
+      {
+       "gtin": null,
+       "product": "Pampers Swaddlers Size 1, 96 ct",
+       "query": "Pampers Swaddlers Size 1, 96 ct",
+       "resolved": true
+      },
+      {
+       "gtin": "037000799818",
+       "product": "Pampers Swaddlers Size 4",
+       "query": "037000799818",
+       "resolved": true
+      }
+     ],
+     "tool": "get_product_facts"
+    },
+    "published_at": "2026-10-27T23:46:09.165637Z",
+    "reason": null,
+    "record_ref": "feed:pampers-2r1:sku:sku_pg_swd_nb_84",
+    "spec_clause": null,
+    "spec_version": "parleo-internal",
+    "status": "published",
+    "validation": {
+     "errors": [],
+     "ok": true
+    }
+   },
+   {
+    "channel": "mcp",
+    "channel_slug": "mcp",
+    "compiled_at": "2026-10-27T23:46:09",
+    "error": null,
+    "expressiveness": [],
+    "external_ref": "https://mcp.parleo.example#get_product_facts",
+    "held": false,
+    "id": 24,
+    "journal": [
+     {
+      "at": "2026-10-27T23:46:09+00:00",
+      "by": "parleo",
+      "event": "compiled",
+      "note": null
+     },
+     {
+      "at": "2026-10-27T23:46:09.166027+00:00",
+      "by": "parleo",
+      "event": "published",
+      "note": "https://mcp.parleo.example#get_product_facts"
+     }
+    ],
+    "listing_id": null,
+    "mode": null,
+    "payload": {
+     "held_publication_id": 7,
+     "line": "Pampers Pure Protection",
+     "merchant": "pampers-2r1",
+     "record_ref": "feed:pampers-2r1:sku:sku_pg_pure_s1",
+     "served": 1,
+     "server": "https://mcp.parleo.example",
+     "skus": [
+      {
+       "gtin": null,
+       "product": "Pampers Pure Protection Size 1",
+       "query": "Pampers Pure Protection Size 1",
+       "resolved": true
+      }
+     ],
+     "tool": "get_product_facts"
+    },
+    "published_at": "2026-10-27T23:46:09.166027Z",
+    "reason": null,
+    "record_ref": "feed:pampers-2r1:sku:sku_pg_pure_s1",
+    "spec_clause": null,
+    "spec_version": "parleo-internal",
+    "status": "published",
+    "validation": {
+     "errors": [],
+     "ok": true
+    }
+   },
+   {
+    "channel": "mcp",
+    "channel_slug": "mcp",
+    "compiled_at": "2026-10-27T23:46:09",
+    "error": null,
+    "expressiveness": [],
+    "external_ref": "https://mcp.parleo.example#get_product_facts",
+    "held": false,
+    "id": 25,
+    "journal": [
+     {
+      "at": "2026-10-27T23:46:09+00:00",
+      "by": "parleo",
+      "event": "compiled",
+      "note": null
+     },
+     {
+      "at": "2026-10-27T23:46:09.166276+00:00",
+      "by": "parleo",
+      "event": "published",
+      "note": "https://mcp.parleo.example#get_product_facts"
+     }
+    ],
+    "listing_id": null,
+    "mode": null,
+    "payload": {
+     "held_publication_id": 11,
+     "line": "Pampers AMORE",
+     "merchant": "pampers-2r1",
+     "record_ref": "feed:pampers-2r1:sku:sku_pg_amore_s1_132",
+     "served": 1,
+     "server": "https://mcp.parleo.example",
+     "skus": [
+      {
+       "gtin": null,
+       "product": "Pampers AMORE Size 1, 132 ct",
+       "query": "Pampers AMORE Size 1, 132 ct",
+       "resolved": true
+      }
+     ],
+     "tool": "get_product_facts"
+    },
+    "published_at": "2026-10-27T23:46:09.166276Z",
+    "reason": null,
+    "record_ref": "feed:pampers-2r1:sku:sku_pg_amore_s1_132",
+    "spec_clause": null,
+    "spec_version": "parleo-internal",
+    "status": "published",
+    "validation": {
+     "errors": [],
+     "ok": true
+    }
+   },
+   {
+    "channel": "mcp",
+    "channel_slug": "mcp",
+    "compiled_at": "2026-10-27T23:46:09",
+    "error": null,
+    "expressiveness": [],
+    "external_ref": "https://mcp.parleo.example#get_product_facts",
+    "held": false,
+    "id": 26,
+    "journal": [
+     {
+      "at": "2026-10-27T23:46:09+00:00",
+      "by": "parleo",
+      "event": "compiled",
+      "note": null
+     },
+     {
+      "at": "2026-10-27T23:46:09.166498+00:00",
+      "by": "parleo",
+      "event": "published",
+      "note": "https://mcp.parleo.example#get_product_facts"
+     }
+    ],
+    "listing_id": null,
+    "mode": null,
+    "payload": {
+     "held_publication_id": 15,
+     "line": "Pampers Zzz",
+     "merchant": "pampers-2r1",
+     "record_ref": "feed:pampers-2r1:00037000833970",
+     "served": 1,
+     "server": "https://mcp.parleo.example",
+     "skus": [
+      {
+       "gtin": "037000833970",
+       "product": "Pampers Zzz Size 4, 104 ct",
+       "query": "037000833970",
+       "resolved": true
+      }
+     ],
+     "tool": "get_product_facts"
+    },
+    "published_at": "2026-10-27T23:46:09.166498Z",
+    "reason": null,
+    "record_ref": "feed:pampers-2r1:00037000833970",
+    "spec_clause": null,
+    "spec_version": "parleo-internal",
+    "status": "published",
+    "validation": {
+     "errors": [],
+     "ok": true
+    }
+   }
+  ],
+  "skipped": [
+   {
+    "channel": "merchant_center",
+    "note": "rule r3: a brand publishes product identity to Manufacturer Center, never to Merchant Center (a seller's channel)",
+    "reason": "not_for_brand",
+    "rule": "r3"
+   },
+   {
+    "channel": "deals_api",
+    "note": "not compiled in manufacturer mode (first pass)",
+    "reason": "after_rule",
+    "rule": "r4"
+   },
+   {
+    "channel": "deal_directory",
+    "note": "not compiled in manufacturer mode (first pass)",
+    "reason": "not_for_brand",
+    "rule": "r3"
+   }
+  ]
+ },
+ "headers": {
+  "content-type": "application/json"
+ },
+ "status": 200
+}
