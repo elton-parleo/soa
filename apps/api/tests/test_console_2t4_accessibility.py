@@ -68,8 +68,9 @@ def test_a_gtin_that_drops_its_leading_zero():
     amore['json_ld'] = {**amore['json_ld'], 'name': 'Pampers® AMORE Diapers',
                         'hasVariant': [{**amore['json_ld']['hasVariant'][0], 'gtin13': '30772244425', 'size': '1'}]}
     checks = _by_key(_build(prices=prices + [amore]))
-    assert (checks['gtin']['value'], checks['gtin']['status']) == ('14 of 15', 'partial')
-    assert checks['gtin']['basis'] == 'AMORE drop the leading zero'
+    # 2T-7 (3): the value names the line that drops a digit, the note counts them
+    assert (checks['gtin']['value'], checks['gtin']['status']) == ('AMORE drops the leading zero', 'partial')
+    assert checks['gtin']['basis'] == '1 of 15 GTINs in the markup drop the leading zero: AMORE'
 
 
 def test_a_markup_weight_the_chart_contradicts():

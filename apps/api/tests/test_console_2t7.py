@@ -90,3 +90,46 @@ def test_the_previous_block_and_the_copy_read_the_label(http, db, upstream):
     score = _read(http, 'score', cycle=f2p1.CYCLE_2)
     assert (score['previous']['cycle'], score['previous']['vs']) == (f2p1.CYCLE_1, 'vs Oct 14')
 
+
+
+# ── 3: Accessibility's weight and GTIN checks, as the demo words them ─────
+
+def test_the_weight_check_counts_the_pages_that_contradict_the_size_selector():
+    """FL15: 3 of the 4 pages whose markup states a range state one their own chart does not. DERIVED on
+    /reference's attributes (2M-1's markup and chart ranges)."""
+    import copy
+    from tests.test_console_2t4_accessibility import _build, _by_key
+    reference = copy.deepcopy(f2r2.body('reference'))
+    for a in reference['attributes']:
+        if a['variant_ref'] == 'feed_sku:6':   # Zzz Size 4: markup 15 to 34, chart 22 to 37
+            a.update(markup={'min': 15, 'max': 34}, chart={'min': 22, 'max': 37})
+        if a['variant_ref'] == 'feed_sku:5':   # Swaddlers Size 4: agreeing
+            a.update(markup={'min': 15, 'max': 34}, chart={'min': 15, 'max': 34})
+    weight = _by_key(_build(reference=reference))['weight']
+    assert weight['name'] == 'Weight in markup contradicts the size selector'
+    assert (weight['value'], weight['got'], weight['of'], weight['status']) == ('1 of 2 pages: Zzz', 1, 2, 'partial')
+    assert weight['basis'] == "pages whose markup states a weight range pampers.com's size selector does not: Zzz"
+    for a in reference['attributes']:
+        if a['variant_ref'] == 'feed_sku:6':
+            a.update(chart={'min': 15, 'max': 34})
+    weight = _by_key(_build(reference=reference))['weight']
+    assert (weight['value'], weight['status']) == ('0 of 2 pages', 'ok')
+
+
+def test_the_gtin_check_names_the_lines_that_drop_a_digit():
+    from tests.test_console_2t4_accessibility import _build, _by_key
+    import copy
+    prices = f2r2.retailer_prices()['prices']
+    zzz = next(r for r in prices if r.get('role') == 'own' and 'zzz' in (r.get('url') or ''))
+    extra = []
+    # each page's one gtin13 written with 11 digits (its leading zero dropped), on two of the feed's pages
+    for line, url, gtin in (('AMORE', 'amore-diapers', '30772244425'),
+                            ('Ultra', 'pure-protection-diapers', '37000833970')):
+        page = copy.deepcopy(zzz)
+        page.update(url=f'https://www.pampers.com/en-us/diapers-wipes/{url}', observed_at='2026-10-24T04:00:00+00:00')
+        page['json_ld'] = {**page['json_ld'], 'name': f'Pampers® {line} Diapers',
+                           'hasVariant': [{**page['json_ld']['hasVariant'][0], 'gtin13': gtin, 'size': '1'}]}
+        extra.append(page)
+    gtin = _by_key(_build(prices=prices + extra))['gtin']
+    assert gtin['value'] == 'AMORE and Ultra drop the leading zero'
+    assert gtin['basis'] == '2 of 16 GTINs in the markup drop the leading zero: AMORE and Ultra'
