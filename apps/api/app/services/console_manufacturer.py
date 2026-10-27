@@ -584,8 +584,9 @@ def with_channel_states(surfaces: List[dict], channel_states: List[dict]) -> Lis
     """
     The surfaces in the list's order, one per channel. The demo's five keep
     their own reading (the markup's is the live site's, not the compile's)
-    and gain the list's state; Manufacturer Center, the ACP feed and UCP take
-    their status from it, so the two cannot disagree. The MCP server, Merchant
+    and gain the list's state; Manufacturer Center, the ACP feed and UCP (held
+    per SKU since supply 2U-1) take their status from it, so the two cannot
+    disagree. The MCP server, Merchant
     Center and the deal directory are the list's entry with their words.
     """
     by_channel = {s.get('channel'): s for s in surfaces}
@@ -606,6 +607,9 @@ def with_channel_states(surfaces: List[dict], channel_states: List[dict]) -> Lis
         s = dict(s)
         if slug in ('manufacturer_center', 'acp'):
             s['status'] = state
+        elif slug == 'ucp_uip' and state in ('held', 'blocked'):
+            # supply 2U-1 compiles UCP per SKU for a brand: the list's state, line and clause
+            s.update(status=state, last=c['line'], note=c.get('note') or s.get('note'))
         elif slug == 'ucp_uip':
             s['status'] = 'live' if state == 'live' else 'none'
         elif 'status' not in s:

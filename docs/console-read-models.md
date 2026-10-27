@@ -8771,11 +8771,11 @@ in_pass, compiled, of, blocked}`.
 | channel | state | label · line | from |
 |---|---|---|---|
 | schema_org, manufacturer_center | `held` | Held · "4 of 4 compiled · Oct 27" | the hold's newest rows |
-| acp (and ucp_uip once supply compiles it) | `held`, else `blocked` | Blocked · "rule r1" (the rule supply's plan or the row's own lines name), else "its spec refuses the record"; `note` the spec clause | the rows |
+| acp, ucp_uip | `held`, else `blocked` | Blocked · "rule r1" (supply's plan, else 2U-1's clause "rule_off: rule r1 off (…)", else the row's own lines), else "its spec refuses the record"; `note` the clause. UCP held reads "3 of 6 SKUs held · Oct 27" | the rows; UCP's per-SKU rows (supply 2U-1, `feed:<merchant>:<variant_key>`) fold into their record by the schema_org payload's GTIN / SKU (`sku_records`), the cell noting "k of n SKUs held" |
 | mcp | `live` | Live · "4 records served · verified Oct 27" ("5 of 6 resolve" when the readback disagrees; "not verified yet") | published rows + `held.published.mcp`; a `failed` publish is `blocked` · "Not published: <error>" |
 | deals_api | `next` | Next release · "after rule r4" | supply reason `after_rule` |
 | merchant_center, deal_directory | `not_for_brand` | Not for a brand · "a seller's channel (rule r3)" | supply reason `not_for_brand` |
-| ucp_uip (supply main) | `not_compiled` | Not in this pass · supply's note | supply reason `not_compiled` |
+| a channel supply skips with `next_pass` / `not_compiled` | `not_compiled` | Not in this pass · supply's note | supply's skipped reason |
 
 A supply that serves no plan (before 2U-2) reads `FALLBACK_PLAN`, the same reasons. WebMCP is absent: supply has no
 such channel.

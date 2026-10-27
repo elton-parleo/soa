@@ -34,15 +34,15 @@
      },
      {
       "channel": "ucp_uip",
-      "compiled": false,
-      "note": "not compiled in manufacturer mode (first pass)",
-      "reason": "not_compiled",
+      "compiled": true,
+      "note": "compiled; the brand's own team sends it",
+      "reason": "held_for_merchant",
       "rule": null
      },
      {
       "channel": "deals_api",
       "compiled": false,
-      "note": "after rule r4: the Deals API serves deals, and a brand's own (brand-funded, rule r4) are stored with the rules, not compiled, in this release",
+      "note": "not compiled in manufacturer mode (first pass)",
       "reason": "after_rule",
       "rule": "r4"
      },
@@ -56,7 +56,7 @@
      {
       "channel": "deal_directory",
       "compiled": false,
-      "note": "rule r3: the Deal Directory lists a seller's own deals; a brand's product identity goes to Manufacturer Center (a seller's channel)",
+      "note": "not compiled in manufacturer mode (first pass)",
       "reason": "not_for_brand",
       "rule": "r3"
      }
@@ -64,22 +64,23 @@
     "domain": "www.pampers.com",
     "has_record": true,
     "held": {
-     "blocked": 4,
+     "blocked": 10,
      "by_channel": {
       "acp": 4,
       "manufacturer_center": 4,
-      "schema_org": 4
+      "schema_org": 4,
+      "ucp_uip": 6
      },
-     "compiled_at": "2026-10-27T20:48:00",
+     "compiled_at": "2026-10-27T22:02:35",
      "published": {
       "mcp": {
        "acceptance": "approved",
        "external_ref": "https://mcp.parleo.example#get_product_facts",
        "failed": 0,
-       "published_at": "2026-10-27T20:48:00.418385+00:00",
+       "published_at": "2026-10-27T22:02:35.444024+00:00",
        "records": 4,
        "skus": 6,
-       "verified_at": "2026-10-27T20:48:00+00:00",
+       "verified_at": "2026-10-27T22:02:35+00:00",
        "verified_skus": "6/6"
       }
      },
@@ -87,9 +88,10 @@
      "sent": {
       "acp": null,
       "manufacturer_center": null,
-      "schema_org": null
+      "schema_org": null,
+      "ucp_uip": null
      },
-     "total": 12
+     "total": 18
     },
     "hosting": "external",
     "kind": "brand",

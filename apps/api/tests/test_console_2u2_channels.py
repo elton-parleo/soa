@@ -70,9 +70,8 @@ EIGHT = [
     ('schema_org', 'held', 'Held', '4 of 4 compiled · Oct 27', 'held_for_merchant', None),
     ('merchant_center', 'not_for_brand', 'Not for a brand', "a seller's channel (rule r3)", 'not_for_brand', 'r3'),
     ('manufacturer_center', 'held', 'Held', '4 of 4 compiled · Oct 27', 'held_for_merchant', None),
-    ('acp', 'blocked', 'Blocked', 'its spec refuses the record', 'held_for_merchant', None),
-    ('ucp_uip', 'not_compiled', 'Not in this pass', 'not compiled in manufacturer mode (first pass)', 'not_compiled',
-     None),
+    ('acp', 'blocked', 'Blocked', 'rule r1', 'held_for_merchant', 'r1'),
+    ('ucp_uip', 'blocked', 'Blocked', 'rule r1', 'held_for_merchant', 'r1'),
     ('deals_api', 'next', 'Next release', 'after rule r4', 'after_rule', 'r4'),
     ('mcp', 'live', 'Live', '4 records served · verified Oct 27', 'published_by_parleo', None),
     ('deal_directory', 'not_for_brand', 'Not for a brand', "a seller's channel (rule r3)", 'not_for_brand', 'r3'),
@@ -90,12 +89,12 @@ def test_the_matrix_lists_all_eight_channels_with_their_states(http, db, upstrea
     acp = next(c for c in ts['channels'] if c['id'] == 'acp')
     assert acp['note'] == next(r['spec_clause'] for r in _mine() if r['channel_slug'] == 'acp')
     assert ts['cell_states'] == ['held', 'published', 'live', 'blocked', 'next', 'not_for_brand', 'na']
-    # cells per record follow the channel's state
+    # cells per record follow the channel's state; UCP's per-SKU rows (supply 2U-1) fold into their record
     cells = {p['name']: {k: c['s'] for k, c in p['cells'].items()} for p in ts['products']}
     assert list(cells) == ['Pampers Swaddlers', 'Pampers Pure Protection', 'Pampers AMORE', 'Pampers Zzz']
     assert {tuple(c.items()) for c in cells.values()} == {(
         ('schema_org', 'held'), ('merchant_center', 'not_for_brand'), ('manufacturer_center', 'held'),
-        ('acp', 'blocked'), ('ucp_uip', 'na'), ('deals_api', 'next'), ('mcp', 'live'),
+        ('acp', 'blocked'), ('ucp_uip', 'blocked'), ('deals_api', 'next'), ('mcp', 'live'),
         ('deal_directory', 'not_for_brand'))}
     zzz = next(p for p in ts['products'] if p['name'] == 'Pampers Zzz')
     assert zzz['cells']['deals_api']['note'] == 'after rule r4'
@@ -103,7 +102,7 @@ def test_the_matrix_lists_all_eight_channels_with_their_states(http, db, upstrea
     # the MCP server's row is a serve check: no compiler panel; the timeline says it is live
     assert 'mcp' not in {c['channel'] for c in zzz['compiler']}
     assert zzz['timeline'][-1]['what'] == ('Compiled in manufacturer mode. Held on Site markup and Manufacturer '
-                                           'Center, blocked on ACP feed. Live on MCP server, which Parleo serves')
+                                           'Center, blocked on ACP feed and UCP. Live on MCP server, which Parleo serves')
     # WebMCP is not a channel supply has, so it is not a column
     assert 'webmcp' not in {c['id'] for c in ts['channels']}
 
@@ -118,15 +117,15 @@ def test_workspace_release_card_and_overview_read_the_same_list(http, db, upstre
         pubs=_mine(), channels=recorded('channels'), plan=next(
             m for m in recorded('tenant-held')['merchants'] if m['slug'] == SLUG)['channels'],
         held=next(m for m in recorded('tenant-held')['merchants'] if m['slug'] == SLUG)['held'])]
-    assert ws['channels'] == {'held': 2, 'blocked': 1, 'live': 1, 'next': 1, 'not_for_brand': 2, 'not_compiled': 1}
+    assert ws['channels'] == {'held': 2, 'blocked': 2, 'live': 1, 'next': 1, 'not_for_brand': 2, 'not_compiled': 0}
     assert (ws['published'], ws['live']) == (4, 4)
     release = ts['release']
     assert [(s['channel'], s['state'], s['status']) for s in release['surfaces']] == [
         ('schema_org', 'held', 'Compiled, held · Oct 27'),
         ('merchant_center', 'not_for_brand', "Not for a brand · a seller's channel (rule r3)"),
         ('manufacturer_center', 'held', 'Compiled, held · Oct 27'),
-        ('acp', 'blocked', 'Blocked · Oct 27'),
-        ('ucp_uip', 'not_compiled', 'Not in this pass'),
+        ('acp', 'blocked', 'Blocked · rule r1 · Oct 27'),
+        ('ucp_uip', 'blocked', 'Blocked · rule r1 · Oct 27'),
         ('deals_api', 'next', 'Next release · after rule r4'),
         ('mcp', 'live', 'Live · 4 records served · verified Oct 27'),
         ('deal_directory', 'not_for_brand', "Not for a brand · a seller's channel (rule r3)")]
@@ -147,11 +146,12 @@ def test_publishing_lists_the_same_channels(http, db, upstream):
     assert (mcp['name'], mcp['status'], mcp['last'], mcp['external_ref']) == (
         'Parleo MCP server', 'live', '4 records served · verified Oct 27', MCP_REF)
     assert mcp['note'] == "Served by get_product_facts on Parleo's own server. Nothing is sent to anyone's account"
-    assert (surfaces['mfc']['status'], surfaces['oai']['status'], surfaces['coupons']['status']) == \
-        ('held', 'blocked', 'next')
+    assert (surfaces['mfc']['status'], surfaces['oai']['status'], surfaces['ucp']['status'],
+            surfaces['coupons']['status']) == ('held', 'blocked', 'blocked', 'next')
+    assert surfaces['ucp']['last'] == 'rule r1' and surfaces['ucp']['note'].startswith('rule_off: rule r1 off')
     assert surfaces['directory']['label'] == 'Not for a brand'
     # nothing is held for the MCP server, so there is no file to download
-    assert [a['channel'] for a in pub['artifacts']] == ['manufacturer_center', 'schema_org', 'acp']
+    assert [a['channel'] for a in pub['artifacts']] == ['manufacturer_center', 'schema_org', 'acp', 'ucp_uip']
 
 
 def test_the_compile_passes_supply_s_readback_and_reasons(http, db, upstream):
@@ -160,11 +160,12 @@ def test_the_compile_passes_supply_s_readback_and_reasons(http, db, upstream):
     r = http.post('/api/console/publishing/compile', params={'merchant': SLUG, 'org': 10})
     assert r.status_code == 200, r.text
     compiled = r.json()['compile']
-    assert compiled['rows'] == 16 and compiled['by_channel']['mcp'] == {'published': 4}
+    assert compiled['rows'] == 22 and compiled['by_channel']['mcp'] == {'published': 4}
+    assert compiled['by_channel']['ucp_uip'] == {'blocked': 6}
     assert compiled['readback'] == recorded('publish')['readback'] and compiled['readback']['acceptance'] == 'approved'
-    assert {s['channel']: s['reason'] for s in compiled['not_compiled']} == {
-        'merchant_center': 'not_for_brand', 'ucp_uip': 'not_compiled', 'deals_api': 'after_rule',
-        'deal_directory': 'not_for_brand'}
+    assert {s['channel']: (s['reason'], s.get('rule')) for s in compiled['not_compiled']} == {
+        'merchant_center': ('not_for_brand', 'r3'), 'deals_api': ('after_rule', 'r4'),
+        'deal_directory': ('not_for_brand', 'r3')}
 
 
 def test_the_record_lists_the_pass_and_mcp_live(http, db, upstream):
@@ -172,7 +173,7 @@ def test_the_record_lists_the_pass_and_mcp_live(http, db, upstream):
     body = _read(http, 'record', product='sku_pg_swd_nb_84')
     assert [(s['channel'], s['word']) for s in body['surfaces']] == [
         ('schema_org', 'Held in preview'), ('manufacturer_center', 'Held in preview'), ('acp', 'Blocked'),
-        ('mcp', 'Live')]
+        ('ucp_uip', 'Blocked'), ('mcp', 'Live')]
 
 
 # ── derived from the recorded rows ───────────────────────────────────────
@@ -182,11 +183,12 @@ def _plan():
 
 
 def test_a_blocked_channel_names_its_rule():
-    """Derived: the recording's rules are off, so the ACP row names no rule; with r1 on supply's compile writes
-    "Manufacturer mode, rule r1: no price on any channel" on its price line (manufacturer_mode.rule_flags)."""
+    """The recording names r1 from supply 2U-1's clause ("rule_off: rule r1 off ..."). Derived: a row with no such
+    clause names the rule its price line states (manufacturer_mode.rule_flags)."""
     rows = copy.deepcopy(_mine())
     for r in rows:
         if r['channel_slug'] == 'acp':
+            r['spec_clause'] = 'docs/truesync/truesync-protocol-specs.md §1: price required'
             r['expressiveness'] = [{'field': 'price', 'severity': 'dropped',
                                     'note': 'Manufacturer mode, rule r1: no price on any channel (no shelf price, no MSRP).'}]
     acp = next(c for c in rel.channel_list(pubs=rows, channels=recorded('channels'), plan=_plan()['channels'],

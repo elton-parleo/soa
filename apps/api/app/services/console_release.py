@@ -55,22 +55,25 @@ SURFACE_SHORT = {'schema_org': 'Site markup', 'manufacturer_center': 'Manufactur
 CHANNEL_STATES = ('held', 'blocked', 'live', 'next', 'not_for_brand', 'not_compiled')
 #: supply's reason codes (parleo-supply-app truesync/channels/manufacturer_mode.py
 #: CHANNEL_REASONS, /tenant `channels[]`): the state a channel with no row is in.
-REASON_STATE = {'not_for_brand': 'not_for_brand', 'after_rule': 'next', 'not_compiled': 'not_compiled'}
+REASON_STATE = {'not_for_brand': 'not_for_brand', 'after_rule': 'next', 'not_compiled': 'not_compiled',
+                'next_pass': 'not_compiled'}
 #: What supply's plan says, for a supply that serves none (before 2U-2): its
 #: compiled channels and its reasons, as 2U-2's CHANNEL_REASONS has them.
 FALLBACK_PLAN = {
     'schema_org': {'compiled': True, 'reason': 'held_for_merchant', 'rule': None},
     'manufacturer_center': {'compiled': True, 'reason': 'held_for_merchant', 'rule': None},
     'acp': {'compiled': True, 'reason': 'held_for_merchant', 'rule': None},
+    'ucp_uip': {'compiled': True, 'reason': 'held_for_merchant', 'rule': None},
     'mcp': {'compiled': True, 'reason': 'published_by_parleo', 'rule': None},
     'merchant_center': {'compiled': False, 'reason': 'not_for_brand', 'rule': 'r3'},
     'deal_directory': {'compiled': False, 'reason': 'not_for_brand', 'rule': 'r3'},
     'deals_api': {'compiled': False, 'reason': 'after_rule', 'rule': 'r4'},
-    'ucp_uip': {'compiled': False, 'reason': 'not_compiled', 'rule': None},
 }
 #: The channels Parleo publishes itself for a brand: a published row is `live`.
 PARLEO_PUBLISHED = ('mcp',)
 RULE_IN_NOTE = re.compile(r'\brule (r\d+)\b')
+#: supply 2U-1's clause on a row a rule that is off blocked: "rule_off: rule r1 off (...)"
+RULE_OFF_CLAUSE = re.compile(r'^rule_off: rule (r\d+) off\b')
 
 #: supply's expressiveness severity -> the compiler line's mark.
 MARKS = {'info': 'info', 'dropped': 'dropped', 'approximated': 'approximated', 'blocked': 'conflict'}
@@ -108,6 +111,8 @@ RELEASE_TEMPLATES = {
     'channel.not_compiled': 'Not in this pass',
     'channel.line.held': '{n} of {of} compiled · {day}',
     'channel.line.published': '{n} of {of} published · {day}',
+    'channel.line.held.skus': '{n} of {of} SKUs held · {day}',
+    'cell.skus': '{n} of {of} SKUs held',
     'channel.line.blocked': 'rule {rule}',
     'channel.line.blocked.none': 'its spec refuses the record',
     'channel.line.live': '{n} records served · verified {day}',
@@ -195,13 +200,54 @@ def pass_channels(pubs: List[dict]) -> List[str]:
                   key=lambda s: (SURFACE_ORDER.index(s) if s in SURFACE_ORDER else len(SURFACE_ORDER), s))
 
 
+#: supply 2U-1: channels held one row per feed SKU (`feed:<merchant>:<variant_key>`), not per record.
+PER_SKU = ('ucp_uip',)
+
+
+def sku_records(pubs: List[dict]) -> Dict[str, str]:
+    """{SKU ref: its record's ref}, from each record's schema_org payload: a
+    variant's GTIN-14, else `sku:<sku>`, is supply's variant_key."""
+    out: Dict[str, str] = {}
+    for row in manu.latest_by_record(pubs, 'schema_org'):
+        ref = str(row.get('record_ref') or '')
+        if not ref.startswith('feed:'):
+            continue
+        prefix = ':'.join(ref.split(':')[:2])
+        payload = row.get('payload') if isinstance(row.get('payload'), dict) else {}
+        for node in payload.get('hasVariant') or []:
+            gtin = next((node[k] for k in ('gtin14', 'gtin13', 'gtin12', 'gtin8', 'gtin') if node.get(k)), None)
+            key = _gtin14(gtin) if gtin else (f"sku:{node['sku']}" if node.get('sku') else None)
+            if key:
+                out[f'{prefix}:{key}'] = ref
+    return out
+
+
+def _fold(rows: List[dict]) -> dict:
+    """A record's cell on a per-SKU channel: its held row when any SKU is held (else its first), carrying
+    every SKU's row as `sku_rows`, so the cell can say how many are held."""
+    rows = sorted(rows, key=lambda r: r.get('id') or 0)
+    lead = next((r for r in rows if manu.is_held(r)), rows[0])
+    return {**lead, 'sku_rows': rows}
+
+
 def hold(pubs: List[dict]) -> Dict[str, Dict[str, dict]]:
     """{record_ref: {channel: its newest row}} over the merchant's rows,
-    records in the order supply first compiled them."""
+    records in the order supply first compiled them. 2U-2 (supply 2U-1): a
+    per-SKU channel's rows (ucp_uip) fold into their record (sku_records),
+    one cell per record with `sku_rows` beside it."""
     out: Dict[str, Dict[str, dict]] = {}
+    skus = sku_records(pubs)
+    per_sku: Dict[str, Dict[str, List[dict]]] = {}
     for channel in pass_channels(pubs):
         for row in manu.latest_by_record(pubs, channel):
-            out.setdefault(row.get('record_ref') or str(row.get('listing_id')), {})[channel] = row
+            ref = row.get('record_ref') or str(row.get('listing_id'))
+            if channel in PER_SKU and ref in skus:
+                per_sku.setdefault(skus[ref], {}).setdefault(channel, []).append(row)
+                continue
+            out.setdefault(ref, {})[channel] = row
+    for ref, channels in per_sku.items():
+        for channel, rows in channels.items():
+            out.setdefault(ref, {})[channel] = _fold(rows)
     return dict(sorted(out.items(), key=lambda kv: min(r.get('id') or 0 for r in kv[1].values())))
 
 
@@ -228,6 +274,10 @@ def _blocked_rule(rows: List[dict], planned: Optional[str]) -> Optional[str]:
     """The rule a blocked channel names: supply's plan's, else the first "rule rN" its rows' lines state."""
     if planned:
         return planned
+    for r in rows:
+        found = RULE_OFF_CLAUSE.match(str(r.get('spec_clause') or ''))
+        if found:
+            return found.group(1)
     for r in rows:
         for e in r.get('expressiveness') or []:
             found = RULE_IN_NOTE.search(str(e.get('note') or ''))
@@ -258,11 +308,14 @@ def channel_list(*, pubs: List[dict], channels: List[dict], plan: Optional[List[
     order = [p['channel'] for p in plan or [] if p.get('channel')] or \
         [c['slug'] for c in channels or [] if c.get('slug') and c.get('is_active', True)] or list(CHANNEL_ORDER)
     published = (held or {}).get('published') or {}
-    records = len(hold(pubs))
+    folded = hold(pubs)
+    records = len(folded)
     out = []
     for slug in order:
         entry = plan_by.get(slug) or FALLBACK_PLAN.get(slug) or {'compiled': False, 'reason': 'not_compiled'}
-        rows = manu.latest_by_record(pubs, slug)
+        # one row per record (a per-SKU channel's folded, its SKUs' rows beside it)
+        rows = [per[slug] for per in folded.values() if slug in per]
+        skus = [x for r in rows for x in r.get('sku_rows') or [r]]
         states = [cell_state(r) for r in rows]
         live = [r for r in rows if r.get('status') == manu.LIVE_STATUS]
         held_rows = [r for r in rows if manu.is_held(r)]
@@ -288,11 +341,14 @@ def channel_list(*, pubs: List[dict], channels: List[dict], plan: Optional[List[
             else:
                 line = T['channel.line.live.unverified'].format(n=n)
             note = served.get('external_ref') or note
+        elif valid and slug in PER_SKU:
+            state = 'held'
+            line = T['channel.line.held.skus'].format(n=sum(1 for x in skus if manu.is_held(x)), of=len(skus), day=day)
         elif valid:
             state, line = 'held', T['channel.line.held'].format(n=len(held_rows), of=records, day=day)
         elif blocked_rows:
             state = 'blocked'
-            rule = _blocked_rule(blocked_rows, rule)
+            rule = _blocked_rule([x for x in skus if manu.is_blocked(x)] or blocked_rows, rule)
             line = T['channel.line.blocked'].format(rule=rule) if rule else T['channel.line.blocked.none']
             note = next((r.get('spec_clause') for r in blocked_rows if r.get('spec_clause')), None) or \
                 next((e for r in blocked_rows for e in (r.get('validation') or {}).get('errors') or []), note)
@@ -933,6 +989,9 @@ def build_records(*, pubs: List[dict], catalog: Optional[dict], feed_rows: Optio
                            'at': (row or {}).get('compiled_at'), 'publication_id': (row or {}).get('id'),
                            'note': (row or {}).get('spec_clause') if state == 'blocked' else
                            next(iter((row or {}).get('validation', {}).get('errors') or []), None)}
+            if state == 'held' and (row or {}).get('sku_rows'):
+                every = row['sku_rows']
+                cells[slug]['note'] = T['cell.skus'].format(n=sum(1 for x in every if manu.is_held(x)), of=len(every))
         out.append({
             'record_ref': ref, 'sku': ref, 'name': listing.get('title') or (variants[0]['product_name'] if variants else ref),
             'brand': listing.get('brand') or brand, 'sub': subtitle(variants, chart),
