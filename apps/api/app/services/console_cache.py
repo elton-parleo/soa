@@ -214,6 +214,27 @@ def cycle_read(conn, cycle: dict, name: str, compute: Callable[[], Any], *parts)
     return value
 
 
+def lookup(key: tuple) -> Any:
+    """A copy of what keep() kept under `key`, or None."""
+    hit = _get(('value',) + key) if enabled() else None
+    return None if hit is None else copy.deepcopy(hit[1])
+
+
+def keep(key: tuple, value: Any, ttl: float = CYCLE_TTL) -> None:
+    """`value` under `key` (a read that answered in full: the caller keeps nothing a failed read made)."""
+    if enabled() and value is not None:
+        _put(('value',) + key, copy.deepcopy(value), ttl)
+
+
+async def cycle_value(conn, cycle: dict, name: str, compute: Callable, *parts) -> Any:
+    """cycle_read for an awaited read (2T-11, B1: a cycle's charter tiles,
+    its baseline rows): kept under the cycle's stamp and `parts`, None never
+    kept. The stamp is read on `conn` before `compute` runs."""
+    if not enabled():
+        return await compute()
+    return await cached(('cycle', name, cycle_stamp(conn, cycle), digest(parts)), compute, ttl=CYCLE_TTL)
+
+
 def size() -> int:
     with _lock:
         return len(_entries)
