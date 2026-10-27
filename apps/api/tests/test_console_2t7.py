@@ -182,3 +182,32 @@ def test_no_count_listed_only_where_the_markup_lists_other_counts():
     assert body['brand_column_note'] is None and body['columns'][0]['note'] is None
     assert [r['cells']['pampers.com']['note'] for r in body['rows']] == ['No 150 ct listed',
                                                                          'Markup lists no pack count']
+
+
+# ── 5: the variant-clash clause on every cell whose shown run has one ─────
+
+def _q(agent, stated, outcome='wrong', clash=None):
+    return {'agent': agent, 'stated': stated, 'outcome': outcome, **({'clash': clash} if clash else {})}
+
+
+def test_the_clash_shows_whenever_the_shown_run_has_one():
+    """FL15's Zzz row, DERIVED in True Value's served shape: on Amazon the shown quote, $44.99, equals the live
+    price, and the worst run is ChatGPT's "$44.99 for Size 3, 116-count" (variant_clash), the other wrong quotes
+    carrying none, so most wrong quotes named no clash (2T-5's rule showed none); on Walmart the clash is most of
+    them, as before."""
+    amazon = {'quoted': '$44.99', 'live': '$44.99', 'status': 'wrong', 'outcome': 'wrong', 'runs': 5, 'quotes': [
+        _q('chatgpt', '44.99', clash='Pampers Zzz Size 3, 116-count'), _q('perplexity', '44.99'),
+        _q('copilot', '47.99'), _q('claude', '41.99'), _q('gemini', '44.99', 'exact')]}
+    walmart = {'quoted': '$22.97', 'live': '$38.97', 'status': 'wrong', 'outcome': 'wrong', 'runs': 2, 'quotes': [
+        _q('chatgpt', '22.97', clash='Pampers Zzz Size 5, 56 ct'), _q('gemini', '22.97', clash='Pampers Zzz Size 5, 56 ct')]}
+    row = {'product': 'Size 4, 104 ct', 'sku': '6', 'feed_sku': '6', 'variant_id': 'feed_sku:6', 'gtin': None,
+           'cells': {'pampers.com': {'status': 'none', 'quotes': []}, 'amazon.com': amazon, 'walmart.com': walmart}}
+    body = measure.true_value_brand(_tv_body([row]), reads=[], deals=None, promo=None, attribute_answers=[],
+                                    feed_rows=None, own_domains=['pampers.com'], brand='Pampers')
+    cells = body['rows'][0]['cells']
+    assert cells['amazon.com']['clash'] == '$44.99 for Size 3, 116 ct'
+    assert cells['walmart.com']['clash'] == '$22.97 for Size 5, 56 ct'
+    # the shown run carries no clash: none, though another run's does
+    amazon['quotes'][0].pop('clash')
+    amazon['quotes'][2]['clash'] = 'Pampers Zzz Size 3, 116-count'
+    assert measure.clash_text(amazon) is None

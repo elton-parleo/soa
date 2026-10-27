@@ -482,13 +482,20 @@ def rel_key(url) -> str:
     return rel._url_key(url)
 
 
+def shown_runs(cell: dict) -> List[dict]:
+    """The runs whose quote the cell shows (rm.TV_CELL_RULE: the deciding outcome, its most common quote)."""
+    return [q for q in cell.get('quotes') or [] if q.get('stated') and q.get('outcome') == cell.get('outcome')
+            and (_money(q['stated']) or q['stated']) == cell.get('quoted')]
+
+
 def clash_text(cell: dict) -> Optional[str]:
-    """TV8: a cell whose wrong quotes mostly named a variant the record does not have shows it, as the
-    Overview's signal does (console_parity.variant_clash): "$44.99 for Size 3, 116 ct"."""
+    """TV8: a cell whose shown run named a variant the record does not have shows it, as the Overview's signal
+    does (console_parity.variant_clash): "$44.99 for Size 3, 116 ct". 2T-7 (5): whenever the shown run has a
+    clash reason, whether or not its amount differs from the live price (FL15's Zzz on Amazon quoted $44.99
+    against a live $44.99, for a Size 3, 116-count)."""
     from app.services import console_parity as parity
-    wrong = [q for q in cell.get('quotes') or [] if q.get('outcome') in ('wrong', 'stale') and q.get('stated')]
-    clashed = [q for q in wrong if q.get('clash')]
-    if not clashed or len(clashed) * 2 <= len(wrong):
+    clashed = [q for q in shown_runs(cell) if q.get('clash')]
+    if not clashed:
         return None
     (stated, named), _n = Counter((q['stated'], q['clash']) for q in clashed).most_common(1)[0]
     return f"{_money(stated) or stated} for {parity.variant_words(named) or named}"
