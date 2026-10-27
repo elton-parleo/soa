@@ -382,9 +382,40 @@ def cell_deals(row: dict, domain: str, deals: Optional[dict]) -> List[str]:
     return out
 
 
-def brand_note(row: dict, reads: Optional[List[dict]], own_domains: Iterable[str], brand: Optional[str]) -> Optional[str]:
+def _words(node: dict) -> str:
+    return ' '.join(str(node.get(k) or '') for k in ('name', 'size', 'sku'))
+
+
+def _own_nodes(reads: Optional[List[dict]], own_domains: Iterable[str]) -> List[dict]:
+    """Every Product node in the markup of the brand's own pages read."""
+    from app.services import console_manufacturer as manu
+    own = {_domain(d) for d in own_domains or () if d}
+    return [n for r in reads or [] if _domain(r.get('retailer_domain')) in own or r.get('role') == 'own'
+            for n in manu._products((manu.row_brand_page(r) or {}).get('json_ld'))]
+
+
+def markup_lists(reads: Optional[List[dict]], own_domains: Iterable[str]) -> Optional[dict]:
+    """2T-7 (4): whether the brand's markup lists a pack count, and a price, on any variant ({counts, prices}),
+    None with no markup read."""
+    nodes = _own_nodes(reads, own_domains)
+    if not nodes:
+        return None
+    return {'counts': any(_COUNT.search(_words(n)) for n in nodes),
+            'prices': any(_money(o.get('price')) for n in nodes for o in _offers(n))}
+
+
+#: 2T-7 (4): said once, on the brand's column, when no variant in its markup lists a pack count
+NO_COUNT_ANYWHERE = 'Markup lists no pack count'
+
+
+def brand_note(row: dict, reads: Optional[List[dict]], own_domains: Iterable[str], brand: Optional[str],
+               lists: Optional[dict] = None) -> Optional[str]:
     """TV4: the brand column's note from the brand page's read: "Retired. Redirects to AMORE", "No 84 ct listed.
-    Markup prices the 140 ct at $44.94", "No price in markup. GTIN has 11 digits". None with no read of it."""
+    Markup prices the 140 ct at $44.94", "No price in markup. GTIN has 11 digits". None with no read of it.
+    2T-7 (4): "No <N> ct listed" only when the line's markup lists other counts, "Markup lists no pack count"
+    when it lists none and other lines do; when no variant anywhere lists one (`lists`, markup_lists), the
+    column says it once (NO_COUNT_ANYWHERE) and the cell says nothing of counts. "No price in markup" likewise
+    only when some variant in the brand's markup carries a price."""
     retired = row.get('retired')
     own = [_domain(d) for d in own_domains or () if d]
     page = next((r for d in own for r in _reads_for(reads, row, d)), None)
@@ -406,8 +437,8 @@ def brand_note(row: dict, reads: Optional[List[dict]], own_domains: Iterable[str
     label = row.get('product') or ''
     size, count = attribute_accuracy.size_of(label), (_COUNT.search(label) or [None, None])[1]
 
-    def words(node):
-        return ' '.join(str(node.get(k) or '') for k in ('name', 'size', 'sku'))
+    words = _words
+    lists = lists if lists is not None else markup_lists(reads, own) or {'counts': True, 'prices': True}
 
     def node_size(node):   # the markup's size is "1" as often as "Size 1" (manu.markup_gtins)
         raw = str(node.get('size') or '')
@@ -415,7 +446,12 @@ def brand_note(row: dict, reads: Optional[List[dict]], own_domains: Iterable[str
 
     same_size = [n for n in nodes if not size or node_size(n) == size]
     match = next((n for n in same_size if count and (_COUNT.search(words(n)) or [None, None])[1] == count), None)
+    line_counts = any(_COUNT.search(words(n)) for n in nodes)
     parts = []
+    if count and not line_counts:
+        if lists.get('counts'):   # other lines list counts, this one none
+            parts.append(NO_COUNT_ANYWHERE)
+        match = same_size[0] if same_size else None
     if match is None and count and same_size:
         parts.append(f"No {count} ct listed")
         priced = next(((n, o) for n in same_size for o in _offers(n) if _money(o.get('price'))), None)
@@ -425,7 +461,7 @@ def brand_note(row: dict, reads: Optional[List[dict]], own_domains: Iterable[str
                          f"{_money(priced[1].get('price'))}")
     else:
         node = match or (same_size[0] if same_size else None)
-        if node is not None and not any(_money(o.get('price')) for o in _offers(node)):
+        if node is not None and lists.get('prices') and not any(_money(o.get('price')) for o in _offers(node)):
             parts.append('No price in markup')
         if node is not None:
             gtin = next((node.get(k) for k in ('gtin13', 'gtin12', 'gtin14', 'gtin') if node.get(k)), None)
@@ -564,12 +600,19 @@ def true_value_brand(body: dict, *, reads: Optional[List[dict]], deals: Optional
                                                if isinstance(x, dict) and x.get('domain'))
     day = rm._short_day((deals or {}).get('read_date') or body.get('as_of')) if \
         ((deals or {}).get('read_date') or body.get('as_of')) else None
+    # 2T-7 (4): what the brand's markup lists on no variant is said once, on its column
+    lists = markup_lists(reads, own)
+    body['brand_column_note'] = NO_COUNT_ANYWHERE if lists is not None and not lists['counts'] else None
+    for col in [c for cols in [body.get('columns') or [], body.get('retailer_columns') or [],
+                               *(body.get('columns_by_surface') or {}).values()] for c in cols]:
+        if _domain(col.get('id')) in own:
+            col['note'] = body['brand_column_note']
     for row in body.get('rows') or []:
         listed = sold_at.get(str(row.get('feed_sku') or '')) if feed_rows is not None else None
         for domain, cell in (row.get('retailer_cells') or row.get('cells') or {}).items():
             d = _domain(domain)
             if d in own:
-                cell['note'] = brand_note(row, reads, own, brand)
+                cell['note'] = brand_note(row, reads, own, brand, lists or {'counts': True, 'prices': True})
                 continue
             found = cell_deals(row, d, deals)
             cell['live_deal'] = '. '.join(found) if found else None

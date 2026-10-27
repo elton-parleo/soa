@@ -106,7 +106,8 @@ def _row(sku, product, **kw):
     (_row('s4', 'Size 4, 150 ct'), [], None),   # no read of the brand's page: no note
 ])
 def test_the_brand_columns_note(row, reads, note):
-    assert measure.brand_note(row, reads, OWN, 'Pampers') == note
+    # 2T-7 (4): the demo's markup lists counts and prices on other lines (pg.ts "Markup prices the 140 ct")
+    assert measure.brand_note(row, reads, OWN, 'Pampers', {'counts': True, 'prices': True}) == note
 
 
 def _cell(**kw):

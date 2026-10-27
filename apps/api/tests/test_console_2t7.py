@@ -19,6 +19,7 @@ import re
 
 import pytest
 
+from app.services import console_measure as measure
 from app.services import console_read_models as rm
 from tests import console_fixture_2p1 as f2p1
 from tests import console_fixture_2r2 as f2r2
@@ -133,3 +134,51 @@ def test_the_gtin_check_names_the_lines_that_drop_a_digit():
     gtin = _by_key(_build(prices=prices + extra))['gtin']
     assert gtin['value'] == 'AMORE and Ultra drop the leading zero'
     assert gtin['basis'] == '2 of 16 GTINs in the markup drop the leading zero: AMORE and Ultra'
+
+
+# ── 4: the brand column's note ────────────────────────────────────────────
+
+def _tv_row(sku, product):
+    return {'product': product, 'sku': sku, 'feed_sku': sku, 'variant_id': f'feed_sku:{sku}', 'gtin': None,
+            'cells': {'pampers.com': {'status': 'none', 'quotes': []}}}
+
+
+def _tv_body(rows):
+    cols = [{'id': 'pampers.com', 'name': 'pampers.com', 'you': True}, {'id': 'amazon.com', 'name': 'Amazon'}]
+    return {'column_kind': 'retailer', 'columns': cols, 'retailer_columns': [dict(c) for c in cols],
+            'columns_by_surface': {'all': [dict(c) for c in cols]}, 'rows': rows, 'programs': [], 'as_of': None}
+
+
+def _own_reads():
+    """#33's pampers.com reads as recorded: the Swaddlers and Zzz ProductGroups, gtin13 per size, no count."""
+    return [r for r in f2r2.retailer_prices()['prices'] if r.get('role') == 'own' and r.get('json_ld')]
+
+
+def test_the_recorded_markup_lists_no_pack_count_and_says_it_once():
+    reads = _own_reads()
+    nodes = [v for r in reads for v in r['json_ld']['hasVariant']]
+    assert nodes and not any(measure._COUNT.search(measure._words(n)) for n in nodes)
+    assert measure.markup_lists(reads, ['pampers.com']) == {'counts': False, 'prices': False}
+    rows = [_tv_row('5', 'Size 4, 150 ct'), _tv_row('6', 'Size 4, 104 ct')]
+    body = measure.true_value_brand(_tv_body(rows), reads=reads, deals=None, promo=None, attribute_answers=[],
+                                    feed_rows=None, own_domains=['pampers.com'], brand='Pampers')
+    # once, on the brand's column in every column list
+    assert body['brand_column_note'] == 'Markup lists no pack count'
+    assert [c.get('note') for c in body['columns']] == ['Markup lists no pack count', None]
+    assert body['columns_by_surface']['all'][0]['note'] == 'Markup lists no pack count'
+    # and no cell repeats it (was "No 150 ct listed", "No 104 ct listed"); no price anywhere is not a cell's note
+    assert [r['cells']['pampers.com']['note'] for r in body['rows']] == [None, None]
+
+
+def test_no_count_listed_only_where_the_markup_lists_other_counts():
+    """DERIVED: the Zzz page as recorded, the Swaddlers page with its sizes' counts in the variant names."""
+    reads = _own_reads()
+    swaddlers = next(r for r in reads if 'swaddlers' in r['url'])
+    for v in swaddlers['json_ld']['hasVariant']:
+        v['name'] = f"Size {v['size']}, 100 ct"
+    rows = [_tv_row('5', 'Size 4, 150 ct'), _tv_row('6', 'Size 4, 104 ct')]
+    body = measure.true_value_brand(_tv_body(rows), reads=reads, deals=None, promo=None, attribute_answers=[],
+                                    feed_rows=None, own_domains=['pampers.com'], brand='Pampers')
+    assert body['brand_column_note'] is None and body['columns'][0]['note'] is None
+    assert [r['cells']['pampers.com']['note'] for r in body['rows']] == ['No 150 ct listed',
+                                                                         'Markup lists no pack count']
