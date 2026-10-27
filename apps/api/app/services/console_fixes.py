@@ -66,6 +66,7 @@ FIX_TEMPLATES = {
     'approvals.hero.first': ' {title} waits on approval.',
     'approvals.hero.none': 'Every request is decided.',
     'approvals.approver': 'Approver',
+    'approvals.why': '{n} {approvals} between the record and what it can win back.',
 }
 
 T = FIX_TEMPLATES
@@ -145,13 +146,16 @@ def _scope_lines(feed_rows, brand) -> str:
                                    skus_w=_plural(skus, 'SKU', 'SKUs'))
 
 
-def size_chart_text(signal: dict, drift: List[dict], domain: str) -> str:
-    """From the chart facts (2T-3 (4): the size's ranges, every line on each) and the markup lines."""
+def size_chart_text(signal: dict, drift: List[dict], domain: str, asked: Optional[List[str]] = None) -> tuple:
+    """From the chart facts (2T-3 (4): the size's ranges, every line on each) and the markup lines. 2T-11 (B2):
+    (text, more): the text names the sizes the study asked about (`asked`, its attribute answers' sizes) and
+    `more` the other sizes with two charts, behind "More"; with no size asked, every size is named."""
     facts = signal.get('facts') or {}
-    parts = []
-    for two in facts.get('two') or []:
-        for g in two.get('groups') or []:
-            parts.append(T['size_chart.group'].format(lines=manu._and(g['lines']), size=two['size'], range=g['range']))
+    named = [two for two in facts.get('two') or [] if not asked or two['size'] in asked] or facts.get('two') or []
+    group = lambda two: [T['size_chart.group'].format(lines=manu._and(g['lines']), size=two['size'], range=g['range'])  # noqa: E731
+                         for g in two.get('groups') or []]
+    parts = [p for two in named for p in group(two)]
+    more = [p for two in facts.get('two') or [] if two not in named for p in group(two)]
     markup = [r for r in drift or [] if r.get('kind') == 'markup']
     where = []
     for r in markup[:2]:
@@ -164,7 +168,7 @@ def size_chart_text(signal: dict, drift: List[dict], domain: str) -> str:
         text += (' ' if text else '') + T['size_chart.markup'].format(domain_s=_possessive(domain), where=' and '.join(where))
     elif not parts:
         text = signal.get('detail') or ''
-    return text.strip()
+    return text.strip(), [f'{m}.' for m in more]
 
 
 def gtin_text(gtin_rows: List[dict], twice: List[dict], *, brand: str, domain: str) -> str:
@@ -202,26 +206,29 @@ def gtin_twice(pages: List[dict]) -> List[dict]:
 
 def build_fixes(*, signals: List[dict], rules: Optional[List[dict]], pubs: List[dict], feed_rows: Optional[List[dict]],
                 drift: List[dict], gtin_rows: List[dict], twice: List[dict], values: Dict[str, float],
-                brand: str, domain: str, records: int, skus: Optional[int]) -> dict:
+                brand: str, domain: str, records: int, skus: Optional[int], asked: Optional[List[str]] = None) -> dict:
     """B4: {fixes, summary}. Each fix {id, n, kind, title, text, pool, severity, state, state_label, scope,
-    surfaces, owner: None, due: None, gate (the rule code), signal (its id), count, value}."""
+    surfaces, owner: None, due: None, gate (the rule code), signal (its id), count, value, more (2T-11: the
+    text's rest, behind "More"; [] when none)}. 2T-11 (B2): the release counts SKUs, as the Publishing preview."""
     by_kind = {}
     for s in signals or []:
         by_kind.setdefault(s.get('kind'), s)
     made = []
 
-    def add(kind, title, text, pool, severity, state, scope, tags, signal=None, gate=None, label=None):
+    def add(kind, title, text, pool, severity, state, scope, tags, signal=None, gate=None, label=None, more=()):
         value = values.get('lost', 0.0) + values.get('missed', 0.0) if pool == 'both' else values.get(pool, 0.0)
         made.append({'id': kind, 'kind': kind, 'title': title, 'text': text, 'pool': pool, 'severity': severity,
                      'state': state, 'state_label': label or T[f'state.{state}'], 'scope': scope,
                      'surfaces': [t for t in SURFACE_TAGS if t in tags], 'owner': None, 'due': None, 'gate': gate,
-                     'signal': (signal or {}).get('id'), 'count': (signal or {}).get('count') or 0, 'value': value})
+                     'signal': (signal or {}).get('id'), 'count': (signal or {}).get('count') or 0, 'value': value,
+                     'more': list(more)})
 
     size = by_kind.get('size_chart')
     if size:
-        add('size_chart', T['size_chart.title'], size_chart_text(size, drift, domain), size.get('pool') or 'missed',
+        text, more = size_chart_text(size, drift, domain, asked)
+        add('size_chart', T['size_chart.title'], text, size.get('pool') or 'missed',
             SEVERITY.get(size.get('tone'), 'Medium'), gated_state(_rule(rules, 'r5'), pubs), _scope_lines(feed_rows, brand),
-            ('Product record', 'Site markup'), signal=size, gate='r5')
+            ('Product record', 'Site markup'), signal=size, gate='r5', more=more)
     if gtin_rows or twice:
         pages = {f.get('line') for f in gtin_rows if f.get('where') == 'markup'}
         n = len(pages) + len(twice)
@@ -251,7 +258,8 @@ def build_fixes(*, signals: List[dict], rules: Optional[List[dict]], pubs: List[
     if rows:
         sent = manu.first_sent(pubs)
         state = 'shipped' if sent else 'in_flight'
-        add('release', T['release.title'], T['release.text'].format(n=records, brand_s=_possessive(brand)), 'both', 'High',
+        add('release', T['release.title'], T['release.text'].format(n=skus if skus is not None else records,
+                                                                    brand_s=_possessive(brand)), 'both', 'High',
             state, T['scope.skus'].format(n=skus if skus is not None else records,
                                           skus=_plural(skus if skus is not None else records, 'SKU', 'SKUs')),
             ('Manufacturer Center',), label=None if sent else T['state.in_flight.held'])
@@ -320,8 +328,9 @@ def build_approvals(*, fixes: List[dict], rules: Optional[List[dict]], pubs: Lis
         sent = manu.first_sent(pubs)
         release_fix = next((f for f in fixes if f['id'] == 'release'), None)
         out.append({'code': 'release', 'kind': 'release',
-                    'title': T['approvals.release.title'].format(n=records),
-                    'text': T['approvals.release.text'].format(n=records, brand_s=_possessive(brand)),
+                    'title': T['approvals.release.title'].format(n=skus if skus is not None else records),
+                    'text': T['approvals.release.text'].format(n=skus if skus is not None else records,
+                                                               brand_s=_possessive(brand)),
                     'requested': {'what': T['approvals.requested.release'], 'at': newest.get('at') or newest_hold(pubs),
                                   'by': newest.get('by') or 'TrueSync'},
                     'decided': {'at': sent.get('sent_at'), 'by': sent.get('stated_by'), 'note': None} if sent else None,
@@ -337,7 +346,12 @@ def build_approvals(*, fixes: List[dict], rules: Optional[List[dict]], pubs: Lis
         pending = next((r for r in out if r['state'] == 'pending'), None)
         hero += T['approvals.hero.first'].format(title=pending['title']) if pending else ''
     return {'requests': out,
+            # 2T-11 (B2): the waiting requests that gate a fix, the screen's why-line count ("0 approvals stand
+            # between ..." read the demo's list beside "3 of 4 requests waiting")
             'summary': {'hero': hero, 'waiting': len(waiting), 'total': len(out),
+                        'gating': sum(1 for r in waiting if r.get('fix')),
+                        'why': T['approvals.why'].format(n=sum(1 for r in waiting if r.get('fix')), approvals=_plural(
+                            sum(1 for r in waiting if r.get('fix')), 'approval stands', 'approvals stand')),
                         'by_state': {s: sum(1 for r in out if r['state'] == s)
                                      for s in ('pending', 'approved', 'returned', 'held', 'sent')}},
             'chains': [{'change': c, 'team': None} for c in CHAINS], 'teams': None}

@@ -34,8 +34,8 @@ from app.console_merchants import MerchantScope, check_merchant, merchant_cycles
 from app.console_scope import console_scope
 from app.customer_context import CustomerScope
 from app.routers import full_loop
-from app.routers.console import (_baseline_rows, _compared, _json, _merchant_meta, _promo_inputs, _reads,
-                                 _routing_inputs, _rows, _true_value_inputs, _visibility)
+from app.routers.console import (_attribute_inputs, _baseline_rows, _compared, _json, _merchant_meta, _promo_inputs,
+                                 _reads, _routing_inputs, _rows, _true_value_inputs, _visibility)
 from app.routers.console_ops import operator_scope
 from app.routers.truesync import _unwrap
 from app.services import console_cache
@@ -779,6 +779,9 @@ async def _fix_inputs(scope: CustomerScope, ms: MerchantScope, merchant: str) ->
         errors['reference'], reference = r_err, None
     overview = await get_overview(cycle=cycle['cycle_code'], merchant=merchant, scope=scope) if cycle else {}
     errors.update(overview.get('read_errors') or {})
+    # 2T-11 (B2): the sizes the study asked about (its attribute answers'), the ones the size chart fix names
+    answers = (await _attribute_inputs(scope, cycle, merchant))[0] if cycle else []
+    asked = list(dict.fromkeys(a['size'] for a in answers or [] if a.get('size')))
     brand = _brand(catalog)
     own = _own_domain(reads['retailers'], record)
     feed_rows = (reads['feed'] or {}).get('rows')
@@ -792,14 +795,15 @@ async def _fix_inputs(scope: CustomerScope, ms: MerchantScope, merchant: str) ->
             'drift': rm.build_weight_drift(reference, brand=brand),
             'gtin_rows': manu.gtin_flags(pages, feed_rows, brand=brand), 'twice': fx.gtin_twice(pages),
             'records': len(rel.hold(pubs)), 'skus': len(feed_rows) if feed_rows is not None else None,
-            'errors': errors}
+            'asked': asked, 'errors': errors}
 
 
 def _fixes_of(got: dict) -> dict:
     from app.services import console_fixes as fx
     return fx.build_fixes(signals=got['signals'], rules=got['rules'], pubs=got['pubs'], feed_rows=got['feed_rows'],
                           drift=got['drift'], gtin_rows=got['gtin_rows'], twice=got['twice'], values=got['values'],
-                          brand=got['brand'], domain=got['domain'], records=got['records'], skus=got['skus'])
+                          brand=got['brand'], domain=got['domain'], records=got['records'], skus=got['skus'],
+                          asked=got['asked'])
 
 
 @router.get("/fixes")

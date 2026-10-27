@@ -136,3 +136,31 @@ def test_a_markup_gtin_mismatch_is_an_issue():
                              attribute_answers=[], drift=[], shelf_rows=[], flags=[], chart_weight=None, markup=markup)
     assert [(i['kind'], i['fix_kind'], i['text']) for i in issues] == [
         ('gtin_mapping', 'gtin', "Markup names another GTIN for Newborn: 037000772552 against the feed's 037000749622.")]
+
+
+def test_the_size_chart_fix_names_the_sizes_asked():
+    """Live: fix 02 listed every size with two charts. Size 4 is the study's; the others are behind More."""
+    from app.services import console_fixes as fx
+    two = lambda size, a, b: {'size': size, 'groups': [{'range': a, 'lines': ['Swaddlers']},  # noqa: E731
+                                                       {'range': b, 'lines': ['Zzz']}]}
+    signal = {'facts': {'two': [two('Size 3', '16 to 28 lb', '13 to 26 lb'), two('Size 4', '15 to 34 lb', '22 to 37 lb')]}}
+    text, more = fx.size_chart_text(signal, [], 'pampers.com', ['Size 4'])
+    assert text == 'Swaddlers Size 4: 15 to 34 lb. Zzz Size 4: 22 to 37 lb.'
+    assert more == ['Swaddlers Size 3: 16 to 28 lb.', 'Zzz Size 3: 13 to 26 lb.']
+    # no size asked: every size, nothing behind More
+    text, more = fx.size_chart_text(signal, [], 'pampers.com', [])
+    assert text.startswith('Swaddlers Size 3') and more == []
+
+
+def test_the_release_counts_skus_and_the_why_line_counts_gating_requests(http, db, upstream):
+    """Live: "Send the Manufacturer Center file · 7 records" beside Publishing's 10; Approvals' why-line "0
+    approvals stand between …" under "3 of 4 requests waiting"."""
+    _shape(db, http, upstream)
+    fixes = {f['kind']: f for f in _read(http, 'fixes')['fixes']}
+    approvals = _read(http, 'approvals')
+    release = next(r for r in approvals['requests'] if r['code'] == 'release')
+    assert fixes['release']['text'].startswith('6 records ') and fixes['release']['scope'] == '6 SKUs'
+    assert release['title'] == '6 records, Manufacturer Center first' and release['text'].startswith('The held file: 6 ')
+    s = approvals['summary']
+    assert (s['waiting'], s['gating']) == (3, 3)
+    assert s['why'] == '3 approvals stand between the record and what it can win back.'
