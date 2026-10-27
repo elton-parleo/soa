@@ -164,3 +164,17 @@ def test_the_release_counts_skus_and_the_why_line_counts_gating_requests(http, d
     s = approvals['summary']
     assert (s['waiting'], s['gating']) == (3, 3)
     assert s['why'] == '3 approvals stand between the record and what it can win back.'
+
+
+def test_the_receipt_leaves_out_per_unit_quotes():
+    """Live: "What agents quoted" listed $0.38, a per-diaper figure the scorer judged per_unit."""
+    from app.services import console_measure as measure
+    quotes = [{'agent': 'chatgpt', 'stated': '49.77', 'outcome': 'exact'},
+              {'agent': 'perplexity', 'stated': '0.38', 'outcome': 'per_unit'}]
+    rows = [{'product': 'Size 4, 150 ct', 'sku': 's4', 'feed_sku': 's4', 'variant_id': 'feed_sku:s4', 'gtin': None,
+             'cells': {'walmart.com': {'quoted': '—', 'live': '—', 'status': 'exact', 'runs': 2, 'quotes': quotes}}}]
+    reads = [{'retailer_domain': 'walmart.com', 'sku': 's4', 'variant_ref': 'feed_sku:s4', 'price': '49.77',
+              'observed_at': '2026-10-24T14:00:00+00:00'}]
+    a = measure.anatomy(rows, reads=reads, deals=None, promo=None, brand='Pampers', day='Oct 24')
+    quoted = next(r for r in a['rows'] if r['k'] == 'What agents quoted')
+    assert (quoted['v'], quoted['tag']) == ('$49.77', 'ChatGPT')
