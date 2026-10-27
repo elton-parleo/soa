@@ -117,3 +117,22 @@ def test_the_trade_promotions_chip_carries_the_label(http, db, upstream):
     _shape(db, http, upstream)
     delta = _read(http, 'prove', cycle=f2p1.CYCLE_2)['aside']['delta']
     assert delta['vs'] == 'vs Oct 14'
+
+
+def test_the_record_title_names_the_variant_once():
+    """Live: "Pampers Swaddlers, Pampers Swaddlers, Newborn, 84 ct…": the feed's label led with the product name."""
+    from app.services import console_product_record as pr
+    v = {'product_name': 'Pampers Swaddlers', 'label': 'Pampers Swaddlers, Newborn, 84 ct', 'count': 84}
+    assert pr.record_sub(v, None) == 'Newborn, 84 ct'
+    assert pr.record_sub({**v, 'label': 'Newborn, 84 ct'}, None) == 'Newborn, 84 ct'
+
+
+def test_a_markup_gtin_mismatch_is_an_issue():
+    """Live: the GTIN row read "Markup shows 037000772552 for Newborn" while Issues said "None found"."""
+    from app.services import console_product_record as pr
+    v = {'product_name': 'Pampers Swaddlers', 'label': 'Newborn, 84 ct', 'gtin': '037000749622'}
+    markup = {'differences': [{'field': 'gtin', 'record': '037000749622', 'page': '037000772552'}]}
+    issues = pr.build_issues(v, page=None, charts=None, feed_rows=None, brand='Pampers', domain='pampers.com',
+                             attribute_answers=[], drift=[], shelf_rows=[], flags=[], chart_weight=None, markup=markup)
+    assert [(i['kind'], i['fix_kind'], i['text']) for i in issues] == [
+        ('gtin_mapping', 'gtin', "Markup names another GTIN for Newborn: 037000772552 against the feed's 037000749622.")]
