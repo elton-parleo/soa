@@ -24,7 +24,8 @@ from tests.test_console_read_models import _encode, as_, http, upstream  # noqa:
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 OTHER_STUDY = 'pampers-fl12'
-DIFFERENT = f'Not comparable: {f229.PREVIOUS} ran a different study ({OTHER_STUDY}).'
+#: 2T-7 (2): the earlier cycle by its day (rm.cycle_label)
+DIFFERENT = f'Not comparable: the Sep 15 cycle ran a different study ({OTHER_STUDY}).'
 
 
 def test_the_two_copies_are_identical():
@@ -111,4 +112,4 @@ def test_the_same_study_reads_the_agents_next(http, db, upstream):
     _supply(upstream)
     as_('op')
     over = http.get('/api/console/overview', params={'cycle': cycle, 'org': 10}).json()
-    assert over['by_surface']['all']['changes_note'] == f'Not comparable: {f229.PREVIOUS} ran ChatGPT only.'
+    assert over['by_surface']['all']['changes_note'] == 'Not comparable: the Sep 15 cycle ran ChatGPT only.'

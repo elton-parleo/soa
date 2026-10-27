@@ -20,6 +20,7 @@ from app.routers import console as console_router
 from app.services import console_parity as parity
 from app.services import console_read_models as rm
 from soa_shared import surfaces
+from tests.cycle_label_2t7 import before_2t7, cycle_names
 from tests.score_2l4 import before_2l4
 from tests import console_fixture_2i8 as f2i8
 from tests import console_fixture_229 as f229
@@ -244,7 +245,8 @@ def test_every_per_surface_value_is_what_main_served(name, http, db, upstream):
     _supply(upstream)
     got = {}
     for endpoint in ENDPOINTS:
-        view = per_surface_view(endpoint, _read(http, cycle, endpoint))
+        # 2T-7 (2): copy names cycles by their day now; the pin is of the body before it
+        view = per_surface_view(endpoint, before_2t7(_read(http, cycle, endpoint), cycle_names(db)))
         got[endpoint] = _digest(view)
         if DUMP:
             os.makedirs(DUMP, exist_ok=True)
@@ -495,9 +497,9 @@ def test_changes_on_all_are_not_comparable_when_an_agent_is_missing_from_one(htt
 def test_fl12_against_its_chatgpt_only_previous_cycle_says_so_on_all(fl12):
     every = fl12['overview']['by_surface']['all']
     assert every['changes_status'] == 'not_comparable'
-    assert every['changes_note'] == f'Not comparable: {f229.PREVIOUS} ran ChatGPT only.'
+    assert every['changes_note'] == 'Not comparable: the Sep 15 cycle ran ChatGPT only.'  # 2T-7 (2)
     assert fl12['overview']['by_surface']['grounded_api']['changes_note'] == \
-        f'Not comparable: {f229.PREVIOUS} ran ChatGPT only on this surface.'
+        'Not comparable: the Sep 15 cycle ran ChatGPT only on this surface.'
 
 
 # ═══ `all` is never a run's surface ═════════════════════════════════════

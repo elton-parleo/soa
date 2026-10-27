@@ -16,6 +16,7 @@ import os
 import pytest
 
 from app.services import console_score as score_svc
+from tests.cycle_label_2t7 import before_2t7, cycle_names
 from tests.score_2l4 import before_2l4
 from tests.test_console_2c3a import _cycle_229, _get, _supply, db  # noqa: F401
 from tests.test_console_2i8 import _fl12 as _fl12_2i8
@@ -57,7 +58,9 @@ def test_the_whole_score_body_is_scorer_10_s_but_for_the_version(name, http, db,
     assert r.status_code == 200, r.text
     body = r.json()
     assert body['scorer_version'] == score_svc.SCORER_VERSION
-    got = hashlib.sha256(json.dumps(body_view(before_2l4(body)), sort_keys=True).encode()).hexdigest()
+    # 2T-7 (2): copy names cycles by their day now; the pin is of the body before it
+    got = hashlib.sha256(json.dumps(body_view(before_2l4(before_2t7(body, cycle_names(db)))),
+                                    sort_keys=True).encode()).hexdigest()
     if DUMP and os.path.isdir(DUMP):
         with open(os.path.join(DUMP, f'{name}.json'), 'w') as fh:
             json.dump(body_view(body), fh, indent=1, sort_keys=True)

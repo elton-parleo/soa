@@ -70,10 +70,13 @@ def _pair(db, http, upstream, changes=True):
 
 
 PREV = f2p1.CYCLE_1
+#: 2T-7 (2): copy names the earlier cycle by its day (rm.cycle_label), the code stays its id
+PREV_NAME = 'the Oct 14 cycle'
+PREV_LABEL = {'day': 'Oct 14', 'name': PREV_NAME, 'since': 'Since Oct 14', 'vs': 'vs Oct 14'}
 
 
 def _detail(a, n, b, m):
-    return f'{a} of {n} this cycle against {b} of {m} in {PREV}.'
+    return f'{a} of {n} this cycle against {b} of {m} in {PREV_NAME}.'
 
 
 def test_the_score_and_the_tiles(http, db, upstream):
@@ -125,11 +128,11 @@ def test_visibility_moved(http, db, upstream):
     vis = _get(http, 'visibility', merchant=WS)
     _dump('visibility-2p1.json', vis)
     _dump('visibility-2p1-c1.json', _get(http, 'visibility', cycle=PREV, merchant=WS))
-    assert vis['previous'] == {'cycle': PREV, 'status': 'compared', 'note': None}
+    assert vis['previous'] == {'cycle': PREV, 'status': 'compared', 'note': None, **PREV_LABEL}
     every = vis['moved']['all']
     assert [(b['name'], b['prev_first'], b['first'], b['delta']) for b in every['brands']] == [
         ('Pampers', 27, 30, '+3'), ('Huggies', 30, 28, '-2'), ('Wiggle & Snug', 33, 33, '0')]
-    assert every['brands'][0]['detail'] == f'Pampers first in 30 of 102 brand-choice answers, 27 in {PREV}.'
+    assert every['brands'][0]['detail'] == f'Pampers first in 30 of 102 brand-choice answers, 27 in {PREV_NAME}.'
     assert {k: every['coverage'][k] for k in ('prev', 'now', 'of_now', 'delta')} == \
         {'prev': 38, 'now': 40, 'of_now': 49, 'delta': '+2'}
     assert {k: every['retired'][k] for k in ('prev', 'now', 'delta')} == {'prev': 10, 'now': 7, 'delta': '-3'}
@@ -145,12 +148,12 @@ def test_true_value_drift_and_the_stale_cell(http, db, upstream):
     _pair(db, http, upstream)
     tv = _get(http, 'true-value', merchant=WS)
     _dump('true-value-2p1.json', tv)
-    assert tv['previous'] == {'cycle': PREV, 'status': 'compared', 'note': None}
+    assert tv['previous'] == {'cycle': PREV, 'status': 'compared', 'note': None, **PREV_LABEL}
     assert [(d['product'], d['column'], d['was'], d['now'], d['dir']) for d in tv['drift']] == [
         ('Newborn, 84 ct', 'amazon.com', 'wrong', 'exact', 'better'),
         ('Size 1, 96 ct', 'walmart.com', 'exact', 'wrong', 'worse'),
         ('Size 4, 120 ct', 'walmart.com', 'exact', 'stale', 'worse')]
-    assert tv['drift'][2]['detail'] == f'Size 4, 120 ct at Walmart: exact in {PREV}, stale this cycle.'
+    assert tv['drift'][2]['detail'] == f'Size 4, 120 ct at Walmart: exact in {PREV_NAME}, stale this cycle.'
     cell = next(r for r in tv['rows'] if r['product'] == 'Size 4, 120 ct')['cells']['walmart.com']
     # Walmart's price moved $39.97 -> $37.97 and Perplexity quoted last week's
     assert (cell['live'], cell['quoted'], cell['status'], cell['outcome']) == ('$37.97', '$39.97', 'wrong', 'stale')
@@ -164,9 +167,9 @@ def test_trade_promotions_moved(http, db, upstream):
         ('Amazon: save 40% on 1 when you buy 2', 'kept'), ('Amazon: $3 off coupon on Swaddlers v9', 'new')]
     assert [(e['title'], e['change'], e['note']) for e in prove['ended']] == [
         ("Sam's Club: $15 Sam's Cash on $100 of P&G", 'not_read',
-         f"Not read on Oct 21: Sam's Club walled every read. Live in {PREV}."),
+         f"Not read on Oct 21: Sam's Club walled every read. Live in {PREV_NAME}."),
         ('Walmart: Rollback, 17% off', 'ended',
-         f'Ended since {PREV}. Walmart was read on Oct 21 and no longer ran it.')]
+         f'Ended since {PREV_NAME}. Walmart was read on Oct 21 and no longer ran it.')]
     assert prove['aside']['value'] == '3 of 100'
     assert prove['aside']['delta'] == {'delta': '-2', 'dir': 'down', 'prev': 5, 'of_prev': 100,
                                        'detail': _detail(3, 100, 5, 100)}
