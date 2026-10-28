@@ -187,8 +187,9 @@ def _day(value) -> Optional[date]:
 
 
 def _short_day(value) -> str:
-    d = _day(value)
-    return f"{d.strftime('%b')} {d.day}" if d else 'date not recorded'
+    """2U-5 (B3): the workspace-local day (console_days)."""
+    from app.services import console_days
+    return console_days.short_day(value) or 'date not recorded'
 
 
 # ─── Visibility extras ─────────────────────────────────────────────────────

@@ -1,0 +1,429 @@
+{
+ "body": {
+  "merchant": "pampers-2u1",
+  "rows": [
+   {
+    "brand_name": "Pampers",
+    "currency": null,
+    "description": "Swaddlers diapers for newborns under 10 lb, with wetness indicator and umbilical cord notch.",
+    "gtin": "037000749622",
+    "gtin14": "00037000749622",
+    "image_url": null,
+    "messages": [],
+    "multipack": null,
+    "pack_count": 84,
+    "price": null,
+    "product_name": "Pampers Swaddlers",
+    "provenance": null,
+    "retailers": [
+     {
+      "domain": "amazon.com",
+      "url": "https://www.amazon.com/dp/B07CVBTN3N"
+     },
+     {
+      "domain": "pampers.com",
+      "url": "https://www.pampers.com/en-us/products/pampers-swaddlers-diapers"
+     },
+     {
+      "domain": "target.com",
+      "url": "https://www.target.com/p/-/-/A-14723178"
+     },
+     {
+      "domain": "walmart.com",
+      "url": "https://www.walmart.com/ip/Pampers-Swaddlers-Baby-Diapers-Size-Newborn-84-Count/454558491"
+     }
+    ],
+    "row_number": 2,
+    "size_unit": null,
+    "size_value": null,
+    "sku": "sku_pg_swd_nb_84",
+    "status": "ready",
+    "variant_key": "00037000749622",
+    "variant_label": "Pampers Swaddlers, Newborn, 84 ct"
+   },
+   {
+    "brand_name": "Pampers",
+    "currency": null,
+    "description": "Swaddlers diapers, size 1 (8-14 lb), with wetness indicator.",
+    "gtin": "037000828761",
+    "gtin14": "00037000828761",
+    "image_url": null,
+    "messages": [],
+    "multipack": null,
+    "pack_count": 96,
+    "price": null,
+    "product_name": "Pampers Swaddlers",
+    "provenance": null,
+    "retailers": [
+     {
+      "domain": "amazon.com",
+      "url": "https://www.amazon.com/dp/B08VLCSTPC"
+     },
+     {
+      "domain": "pampers.com",
+      "url": "https://www.pampers.com/en-us/products/pampers-swaddlers-diapers"
+     },
+     {
+      "domain": "target.com",
+      "url": "https://www.target.com/p/-/-/A-14723176"
+     },
+     {
+      "domain": "walmart.com",
+      "url": "https://www.walmart.com/ip/Pampers-Swaddlers-Baby-Diapers-Size-1-96-Count/606480268"
+     }
+    ],
+    "row_number": 3,
+    "size_unit": null,
+    "size_value": null,
+    "sku": "sku_pg_swd_s1_96",
+    "status": "ready",
+    "variant_key": "00037000828761",
+    "variant_label": "Pampers Swaddlers, Size 1, 96 ct"
+   },
+   {
+    "brand_name": "Pampers",
+    "currency": null,
+    "description": "Swaddlers diapers, size 4 (15-34 lb), with wetness indicator.",
+    "gtin": "037000799818",
+    "gtin14": "00037000799818",
+    "image_url": null,
+    "messages": [],
+    "multipack": null,
+    "pack_count": 150,
+    "price": null,
+    "product_name": "Pampers Swaddlers",
+    "provenance": null,
+    "retailers": [
+     {
+      "domain": "amazon.com",
+      "url": "https://www.amazon.com/dp/B07DC8BR3B"
+     },
+     {
+      "domain": "pampers.com",
+      "url": "https://www.pampers.com/en-us/products/pampers-swaddlers-diapers"
+     },
+     {
+      "domain": "walmart.com",
+      "url": "https://www.walmart.com/ip/Pampers-Swaddlers-Baby-Diapers-Size-4-150-Count/209107239"
+     }
+    ],
+    "row_number": 4,
+    "size_unit": null,
+    "size_value": null,
+    "sku": "sku_pg_swd_s4_150",
+    "status": "ready",
+    "variant_key": "00037000799818",
+    "variant_label": "Pampers Swaddlers, Size 4, 150 ct"
+   },
+   {
+    "brand_name": "Pampers",
+    "currency": null,
+    "description": "Swaddlers Ultra day and night diapers, size 3, club pack.",
+    "gtin": null,
+    "gtin14": null,
+    "image_url": null,
+    "messages": [
+     {
+      "code": "gtin_missing",
+      "field": "gtin",
+      "message": "no GTIN: this variant is identified by sku sku_pg_swultra_s3 and https://www.pampers.com/en-us/products/pampers-swaddlers-ultra-diapers. It is readable and scorable, and reference reads match it by SKU and URL. Google Merchant Center can carry it only as identifier_exists=false, when the publisher is told to include unidentified items; Manufacturer Center, which keys by GTIN, skips it.",
+      "severity": "warning"
+     }
+    ],
+    "multipack": null,
+    "pack_count": 180,
+    "price": null,
+    "product_name": "Pampers Swaddlers Ultra Day + Night",
+    "provenance": null,
+    "retailers": [
+     {
+      "domain": "pampers.com",
+      "url": "https://www.pampers.com/en-us/products/pampers-swaddlers-ultra-diapers"
+     },
+     {
+      "domain": "walmart.com",
+      "url": "https://www.walmart.com/ip/Pampers-Swaddlers-Ultra-Diapers-Size-3-13-26-Pounds-180-Count/19252374926"
+     }
+    ],
+    "row_number": 5,
+    "size_unit": null,
+    "size_value": null,
+    "sku": "sku_pg_swultra_s3",
+    "status": "warning",
+    "variant_key": "sku:sku_pg_swultra_s3",
+    "variant_label": "Pampers Swaddlers Ultra Day + Night, Size 3, 180 ct"
+   },
+   {
+    "brand_name": "Pampers",
+    "currency": null,
+    "description": "Pure Protection diapers, size 1. Retired on pampers.com; the page redirects to AMORE. Retailers still sell remaining stock.",
+    "gtin": null,
+    "gtin14": null,
+    "image_url": null,
+    "lifecycle": "retired",
+    "messages": [
+     {
+      "code": "gtin_missing",
+      "field": "gtin",
+      "message": "no GTIN: this variant is identified by sku sku_pg_pure_s1 and https://www.pampers.com/en-us/products/pampers-pure-protection-diapers. It is readable and scorable, and reference reads match it by SKU and URL. Google Merchant Center can carry it only as identifier_exists=false, when the publisher is told to include unidentified items; Manufacturer Center, which keys by GTIN, skips it.",
+      "severity": "warning"
+     }
+    ],
+    "multipack": null,
+    "pack_count": 132,
+    "price": null,
+    "product_name": "Pampers Pure Protection",
+    "provenance": null,
+    "retailers": [
+     {
+      "domain": "amazon.com",
+      "url": "https://www.amazon.com/dp/B082QBFMSZ"
+     },
+     {
+      "domain": "pampers.com",
+      "url": "https://www.pampers.com/en-us/products/pampers-pure-protection-diapers"
+     },
+     {
+      "domain": "target.com",
+      "url": "https://www.target.com/p/-/-/A-79647304"
+     },
+     {
+      "domain": "walmart.com",
+      "url": "https://www.walmart.com/ip/Pampers-Pure-Baby-Diapers-Size-1-82-Count/906348357"
+     }
+    ],
+    "row_number": 6,
+    "size_unit": null,
+    "size_value": null,
+    "sku": "sku_pg_pure_s1",
+    "status": "warning",
+    "successor_variant_key": "sku:sku_pg_amore_s1_132",
+    "variant_key": "sku:sku_pg_pure_s1",
+    "variant_label": "Pampers Pure Protection, Size 1 (retired)"
+   },
+   {
+    "brand_name": "Pampers",
+    "currency": null,
+    "description": "AMORE diapers, size 1 (8-14 lb), the line that replaced Pure Protection.",
+    "gtin": null,
+    "gtin14": null,
+    "image_url": null,
+    "messages": [
+     {
+      "code": "gtin_missing",
+      "field": "gtin",
+      "message": "no GTIN: this variant is identified by sku sku_pg_amore_s1_132 and https://www.pampers.com/en-us/product/amore. It is readable and scorable, and reference reads match it by SKU and URL. Google Merchant Center can carry it only as identifier_exists=false, when the publisher is told to include unidentified items; Manufacturer Center, which keys by GTIN, skips it.",
+      "severity": "warning"
+     }
+    ],
+    "multipack": null,
+    "pack_count": 132,
+    "price": null,
+    "product_name": "Pampers AMORE",
+    "provenance": null,
+    "retailers": [
+     {
+      "domain": "amazon.com",
+      "url": "https://www.amazon.com/dp/B0FXYHC1MD"
+     },
+     {
+      "domain": "pampers.com",
+      "url": "https://www.pampers.com/en-us/product/amore"
+     },
+     {
+      "domain": "target.com",
+      "url": "https://www.target.com/p/-/-/A-94794093"
+     },
+     {
+      "domain": "walmart.com",
+      "url": "https://www.walmart.com/ip/Pampers-Amore-Diapers-Size-1-132-Count/18916423987"
+     }
+    ],
+    "row_number": 7,
+    "size_unit": null,
+    "size_value": null,
+    "sku": "sku_pg_amore_s1_132",
+    "status": "warning",
+    "variant_key": "sku:sku_pg_amore_s1_132",
+    "variant_label": "Pampers AMORE, Size 1, 132 ct"
+   },
+   {
+    "brand_name": "Pampers",
+    "currency": null,
+    "description": "Baby-Dry diapers, size 4 (15-34 lb), 12-hour overnight protection.",
+    "gtin": "037000783817",
+    "gtin14": "00037000783817",
+    "image_url": null,
+    "messages": [],
+    "multipack": null,
+    "pack_count": 186,
+    "price": null,
+    "product_name": "Pampers Baby-Dry",
+    "provenance": null,
+    "retailers": [
+     {
+      "domain": "amazon.com",
+      "url": "https://www.amazon.com/dp/B07H34Q5S5"
+     },
+     {
+      "domain": "pampers.com",
+      "url": "https://www.pampers.com/en-us/products/pampers-baby-dry-diapers"
+     },
+     {
+      "domain": "walmart.com",
+      "url": "https://www.walmart.com/ip/Pampers-Baby-Dry-Baby-Diapers-Size-4-186-Count/782112197"
+     }
+    ],
+    "row_number": 8,
+    "size_unit": null,
+    "size_value": null,
+    "sku": "sku_pg_bd_s4_186",
+    "status": "ready",
+    "variant_key": "00037000783817",
+    "variant_label": "Pampers Baby-Dry, Size 4, 186 ct"
+   },
+   {
+    "brand_name": "Pampers",
+    "currency": null,
+    "description": "Cruisers 360 pull-on diapers, size 3 (16-28 lb), stretchy all-around waistband.",
+    "gtin": "037000717379",
+    "gtin14": "00037000717379",
+    "image_url": null,
+    "messages": [],
+    "multipack": null,
+    "pack_count": 168,
+    "price": null,
+    "product_name": "Pampers Cruisers 360",
+    "provenance": null,
+    "retailers": [
+     {
+      "domain": "amazon.com",
+      "url": "https://www.amazon.com/dp/B08VLB4NVQ"
+     },
+     {
+      "domain": "pampers.com",
+      "url": "https://www.pampers.com/en-us/products/pampers-cruisers-360"
+     },
+     {
+      "domain": "target.com",
+      "url": "https://www.target.com/p/-/-/A-95184568"
+     },
+     {
+      "domain": "walmart.com",
+      "url": "https://www.walmart.com/ip/Pampers-Cruisers-360-Pull-On-Baby-Diapers-Size-3-168-Count/283399865"
+     }
+    ],
+    "row_number": 9,
+    "size_unit": null,
+    "size_value": null,
+    "sku": "sku_pg_cr360_s3_168",
+    "status": "ready",
+    "variant_key": "00037000717379",
+    "variant_label": "Pampers Cruisers 360, Size 3, 168 ct"
+   },
+   {
+    "brand_name": "Pampers",
+    "currency": null,
+    "description": "Cruisers 360 pull-on diapers, size 5 (27+ lb), stretchy all-around waistband.",
+    "gtin": null,
+    "gtin14": null,
+    "image_url": null,
+    "messages": [
+     {
+      "code": "gtin_missing",
+      "field": "gtin",
+      "message": "no GTIN: this variant is identified by sku sku_pg_cr360_s5_128 and https://www.pampers.com/en-us/products/pampers-cruisers-360. It is readable and scorable, and reference reads match it by SKU and URL. Google Merchant Center can carry it only as identifier_exists=false, when the publisher is told to include unidentified items; Manufacturer Center, which keys by GTIN, skips it.",
+      "severity": "warning"
+     }
+    ],
+    "multipack": null,
+    "pack_count": 128,
+    "price": null,
+    "product_name": "Pampers Cruisers 360",
+    "provenance": null,
+    "retailers": [
+     {
+      "domain": "amazon.com",
+      "url": "https://www.amazon.com/dp/B08PX2V7PG"
+     },
+     {
+      "domain": "pampers.com",
+      "url": "https://www.pampers.com/en-us/products/pampers-cruisers-360"
+     },
+     {
+      "domain": "target.com",
+      "url": "https://www.target.com/p/-/-/A-95184565"
+     },
+     {
+      "domain": "walmart.com",
+      "url": "https://www.walmart.com/ip/Pampers-Cruisers-360-Pull-On-Baby-Diapers-Size-5-128-Count/297702421"
+     }
+    ],
+    "row_number": 10,
+    "size_unit": null,
+    "size_value": null,
+    "sku": "sku_pg_cr360_s5_128",
+    "status": "warning",
+    "variant_key": "sku:sku_pg_cr360_s5_128",
+    "variant_label": "Pampers Cruisers 360, Size 5, 128 ct"
+   },
+   {
+    "brand_name": "Pampers",
+    "currency": null,
+    "description": "Zzz overnight diapers, size 4 (22-37 lb), for up to 12 hours of nighttime protection.",
+    "gtin": "037000833970",
+    "gtin14": "00037000833970",
+    "image_url": null,
+    "messages": [],
+    "multipack": null,
+    "pack_count": 104,
+    "price": null,
+    "product_name": "Pampers Zzz",
+    "provenance": null,
+    "retailers": [
+     {
+      "domain": "amazon.com",
+      "url": "https://www.amazon.com/dp/B08PX2V97T"
+     },
+     {
+      "domain": "pampers.com",
+      "url": "https://www.pampers.com/en-us/products/pampers-zzz"
+     },
+     {
+      "domain": "target.com",
+      "url": "https://www.target.com/p/-/-/A-81041953"
+     },
+     {
+      "domain": "walmart.com",
+      "url": "https://www.walmart.com/ip/Pampers-Swaddlers-Overnight-Diapers-Size-4-104-Count/989998624"
+     }
+    ],
+    "row_number": 11,
+    "size_unit": null,
+    "size_value": null,
+    "sku": "sku_pg_zzz_s4_104",
+    "status": "ready",
+    "variant_key": "00037000833970",
+    "variant_label": "Pampers Zzz overnight, Size 4, 104 ct"
+   }
+  ],
+  "version": {
+   "committed_at": "2026-10-28T03:28:14.107805",
+   "counts": {
+    "left_out": 0,
+    "ready": 6,
+    "warning": 4
+   },
+   "id": 1,
+   "mode": "all_valid_rows",
+   "row_count": 10,
+   "superseded_at": null,
+   "upload_id": "c6257ad02bb54151abf55dd5dfd1f929",
+   "version_number": 1
+  }
+ },
+ "headers": {
+  "content-type": "application/json"
+ },
+ "status": 200
+}

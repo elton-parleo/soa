@@ -95,8 +95,9 @@ def test_the_surfaces_from_33(http, db, upstream):
     oai = surfaces['oai']
     assert (oai['status'], oai['last'], oai['note'], oai['blocked']) == ('blocked', 'Compiled Oct 25', CLAUSE, 4)
     markup = surfaces['markup']
-    assert (markup['name'], markup['status'], markup['last'], markup['pages']) == \
-        ('Site markup (pampers.com)', 'drift', 'Read Oct 20', 2)
+    # 2U-5 (B4): held first, the live site's drift its qualifier (the release card's words)
+    assert (markup['name'], markup['status'], markup['site_status'], markup['last'], markup['pages']) == \
+        ('Site markup (pampers.com)', 'held', 'drift', 'Oct 25 · site still drifts (read Oct 19)', 2)
     # the weight rows are the pair's (/reference attributes); the brand pages' GTINs are all GTINs as written
     assert markup['note'] == 'Cruisers 360, Zzz and Swaddlers markup carry the wrong Size 3, Size 4 and Size 5 weights'
     assert markup['gtin_flags'] == 0
@@ -483,9 +484,9 @@ def test_the_site_markup_date_is_the_newest_brand_page_read_on_the_recorded_rows
     assert [p['url'] for p in pages] == ['https://www.pampers.com/en-us/products/pampers-zzz',
                                          'https://www.pampers.com/en-us/products/pampers-swaddlers-diapers']
     assert pages[0]['brand_page']['size_chart'] and pages[0]['brand_page']['json_ld']
-    assert _markup(pages, manu.brand_page_read_at(rows))['last'] == 'Read Oct 20'
+    assert _markup(pages, manu.brand_page_read_at(rows))['last'] == 'Read Oct 19'
     # the date is read across the merchant's rows, with no own-domain match needed
-    assert _markup([], manu.brand_page_read_at(rows), own=None)['last'] == 'Read Oct 20'
+    assert _markup([], manu.brand_page_read_at(rows), own=None)['last'] == 'Read Oct 19'
     # "Not read yet" only when no row carries a brand page
     unread = [{k: v for k, v in r.items() if k not in manu.BRAND_PAGE_FIELDS} for r in rows]
     assert manu.brand_page_read_at(unread) is None and manu.brand_pages(unread, ['pampers.com']) == []

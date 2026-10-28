@@ -57,7 +57,7 @@ def test_the_six_checks_on_the_recorded_brand_pages():
     # no access run on #33's harness, no markup weight on its /reference: not checked, said why
     assert checks['robots']['status'] == checks['weight']['status'] == 'not_checked'
     assert checks['weight']['value'] == 'no weights in markup read'
-    assert out['hero']['text'] == 'pampers.com served 2 of 6 product pages on Oct 20.'
+    assert out['hero']['text'] == 'pampers.com served 2 of 6 product pages on Oct 19.'
 
 
 def test_a_gtin_that_drops_its_leading_zero():
@@ -114,7 +114,7 @@ def test_the_hero_when_every_page_is_served_and_the_blocks_by_retailer():
     checks = _by_key(out)
     assert (checks['robots']['value'], checks['robots']['status']) == ('6 of 6', 'ok')
     assert checks['html']['value'] == '6 of 6'
-    assert out['hero']['lead'] == 'pampers.com served every product page on Oct 24. What agents find there is the problem.'
+    assert out['hero']['lead'] == 'pampers.com served every product page on Oct 23. What agents find there is the problem.'
     assert [b['text'] for b in out['hero']['blocks']] == ["Amazon's robots.txt disallows 4 of 6 agents",
                                                           'Walmart challenged 3 page reads']
     assert out['hero']['text'].endswith("Amazon's robots.txt disallows 4 of 6 agents. Walmart challenged 3 page reads.")

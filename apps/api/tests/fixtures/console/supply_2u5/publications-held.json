@@ -1,0 +1,4482 @@
+{
+ "body": [
+  {
+   "channel": "mcp",
+   "channel_slug": "mcp",
+   "compiled_at": "2026-10-28T03:28:26",
+   "error": null,
+   "expressiveness": [],
+   "external_ref": "https://mcp.parleo.example#get_product_facts",
+   "held": false,
+   "id": 38,
+   "journal": [
+    {
+     "at": "2026-10-28T03:28:26+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-28T03:28:26.977646+00:00",
+     "by": "parleo",
+     "event": "published",
+     "note": "https://mcp.parleo.example#get_product_facts"
+    }
+   ],
+   "listing_id": null,
+   "mode": "manufacturer",
+   "payload": {
+    "held_publication_id": 28,
+    "line": "Pampers Zzz",
+    "merchant": "pampers-2u1",
+    "record_ref": "feed:pampers-2u1:00037000833970",
+    "served": 1,
+    "server": "https://mcp.parleo.example",
+    "skus": [
+     {
+      "gtin": "037000833970",
+      "product": "Pampers Zzz Pampers Zzz overnight, Size 4, 104 ct",
+      "query": "037000833970",
+      "resolved": true
+     }
+    ],
+    "tool": "get_product_facts"
+   },
+   "published_at": "2026-10-28T03:28:26.977646",
+   "reason": null,
+   "record_ref": "feed:pampers-2u1:00037000833970",
+   "spec_clause": null,
+   "spec_version": "parleo-internal",
+   "status": "published",
+   "validation": {
+    "errors": [],
+    "ok": true
+   }
+  },
+  {
+   "channel": "mcp",
+   "channel_slug": "mcp",
+   "compiled_at": "2026-10-28T03:28:26",
+   "error": null,
+   "expressiveness": [],
+   "external_ref": "https://mcp.parleo.example#get_product_facts",
+   "held": false,
+   "id": 37,
+   "journal": [
+    {
+     "at": "2026-10-28T03:28:26+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-28T03:28:26.977443+00:00",
+     "by": "parleo",
+     "event": "published",
+     "note": "https://mcp.parleo.example#get_product_facts"
+    }
+   ],
+   "listing_id": null,
+   "mode": "manufacturer",
+   "payload": {
+    "held_publication_id": 23,
+    "line": "Pampers Cruisers 360",
+    "merchant": "pampers-2u1",
+    "record_ref": "feed:pampers-2u1:00037000717379",
+    "served": 2,
+    "server": "https://mcp.parleo.example",
+    "skus": [
+     {
+      "gtin": "037000717379",
+      "product": "Pampers Cruisers 360 Pampers Cruisers 360, Size 3, 168 ct",
+      "query": "037000717379",
+      "resolved": true
+     },
+     {
+      "gtin": null,
+      "product": "Pampers Cruisers 360 Pampers Cruisers 360, Size 5, 128 ct",
+      "query": "Pampers Cruisers 360 Pampers Cruisers 360, Size 5, 128 ct",
+      "resolved": true
+     }
+    ],
+    "tool": "get_product_facts"
+   },
+   "published_at": "2026-10-28T03:28:26.977443",
+   "reason": null,
+   "record_ref": "feed:pampers-2u1:00037000717379",
+   "spec_clause": null,
+   "spec_version": "parleo-internal",
+   "status": "published",
+   "validation": {
+    "errors": [],
+    "ok": true
+   }
+  },
+  {
+   "channel": "mcp",
+   "channel_slug": "mcp",
+   "compiled_at": "2026-10-28T03:28:26",
+   "error": null,
+   "expressiveness": [],
+   "external_ref": "https://mcp.parleo.example#get_product_facts",
+   "held": false,
+   "id": 36,
+   "journal": [
+    {
+     "at": "2026-10-28T03:28:26+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-28T03:28:26.977183+00:00",
+     "by": "parleo",
+     "event": "published",
+     "note": "https://mcp.parleo.example#get_product_facts"
+    }
+   ],
+   "listing_id": null,
+   "mode": "manufacturer",
+   "payload": {
+    "held_publication_id": 19,
+    "line": "Pampers Baby-Dry",
+    "merchant": "pampers-2u1",
+    "record_ref": "feed:pampers-2u1:00037000783817",
+    "served": 1,
+    "server": "https://mcp.parleo.example",
+    "skus": [
+     {
+      "gtin": "037000783817",
+      "product": "Pampers Baby-Dry Pampers Baby-Dry, Size 4, 186 ct",
+      "query": "037000783817",
+      "resolved": true
+     }
+    ],
+    "tool": "get_product_facts"
+   },
+   "published_at": "2026-10-28T03:28:26.977183",
+   "reason": null,
+   "record_ref": "feed:pampers-2u1:00037000783817",
+   "spec_clause": null,
+   "spec_version": "parleo-internal",
+   "status": "published",
+   "validation": {
+    "errors": [],
+    "ok": true
+   }
+  },
+  {
+   "channel": "mcp",
+   "channel_slug": "mcp",
+   "compiled_at": "2026-10-28T03:28:26",
+   "error": null,
+   "expressiveness": [],
+   "external_ref": "https://mcp.parleo.example#get_product_facts",
+   "held": false,
+   "id": 35,
+   "journal": [
+    {
+     "at": "2026-10-28T03:28:26+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-28T03:28:26.976971+00:00",
+     "by": "parleo",
+     "event": "published",
+     "note": "https://mcp.parleo.example#get_product_facts"
+    }
+   ],
+   "listing_id": null,
+   "mode": "manufacturer",
+   "payload": {
+    "held_publication_id": 15,
+    "line": "Pampers AMORE",
+    "merchant": "pampers-2u1",
+    "record_ref": "feed:pampers-2u1:sku:sku_pg_amore_s1_132",
+    "served": 1,
+    "server": "https://mcp.parleo.example",
+    "skus": [
+     {
+      "gtin": null,
+      "product": "Pampers AMORE Pampers AMORE, Size 1, 132 ct",
+      "query": "Pampers AMORE Pampers AMORE, Size 1, 132 ct",
+      "resolved": true
+     }
+    ],
+    "tool": "get_product_facts"
+   },
+   "published_at": "2026-10-28T03:28:26.976971",
+   "reason": null,
+   "record_ref": "feed:pampers-2u1:sku:sku_pg_amore_s1_132",
+   "spec_clause": null,
+   "spec_version": "parleo-internal",
+   "status": "published",
+   "validation": {
+    "errors": [],
+    "ok": true
+   }
+  },
+  {
+   "channel": "mcp",
+   "channel_slug": "mcp",
+   "compiled_at": "2026-10-28T03:28:26",
+   "error": null,
+   "expressiveness": [],
+   "external_ref": "https://mcp.parleo.example#get_product_facts",
+   "held": false,
+   "id": 34,
+   "journal": [
+    {
+     "at": "2026-10-28T03:28:26+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-28T03:28:26.976709+00:00",
+     "by": "parleo",
+     "event": "published",
+     "note": "https://mcp.parleo.example#get_product_facts"
+    }
+   ],
+   "listing_id": null,
+   "mode": "manufacturer",
+   "payload": {
+    "held_publication_id": 11,
+    "line": "Pampers Pure Protection",
+    "merchant": "pampers-2u1",
+    "record_ref": "feed:pampers-2u1:sku:sku_pg_pure_s1",
+    "served": 1,
+    "server": "https://mcp.parleo.example",
+    "skus": [
+     {
+      "gtin": null,
+      "product": "Pampers Pure Protection Pampers Pure Protection, Size 1 (retired)",
+      "query": "Pampers Pure Protection Pampers Pure Protection, Size 1 (retired)",
+      "resolved": true
+     }
+    ],
+    "tool": "get_product_facts"
+   },
+   "published_at": "2026-10-28T03:28:26.976709",
+   "reason": null,
+   "record_ref": "feed:pampers-2u1:sku:sku_pg_pure_s1",
+   "spec_clause": null,
+   "spec_version": "parleo-internal",
+   "status": "published",
+   "validation": {
+    "errors": [],
+    "ok": true
+   }
+  },
+  {
+   "channel": "mcp",
+   "channel_slug": "mcp",
+   "compiled_at": "2026-10-28T03:28:26",
+   "error": null,
+   "expressiveness": [],
+   "external_ref": "https://mcp.parleo.example#get_product_facts",
+   "held": false,
+   "id": 33,
+   "journal": [
+    {
+     "at": "2026-10-28T03:28:26+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-28T03:28:26.976428+00:00",
+     "by": "parleo",
+     "event": "published",
+     "note": "https://mcp.parleo.example#get_product_facts"
+    }
+   ],
+   "listing_id": null,
+   "mode": "manufacturer",
+   "payload": {
+    "held_publication_id": 7,
+    "line": "Pampers Swaddlers Ultra Day + Night",
+    "merchant": "pampers-2u1",
+    "record_ref": "feed:pampers-2u1:sku:sku_pg_swultra_s3",
+    "served": 1,
+    "server": "https://mcp.parleo.example",
+    "skus": [
+     {
+      "gtin": null,
+      "product": "Pampers Swaddlers Ultra Day + Night Pampers Swaddlers Ultra Day + Night, Size 3, 180 ct",
+      "query": "Pampers Swaddlers Ultra Day + Night Pampers Swaddlers Ultra Day + Night, Size 3, 180 ct",
+      "resolved": true
+     }
+    ],
+    "tool": "get_product_facts"
+   },
+   "published_at": "2026-10-28T03:28:26.976428",
+   "reason": null,
+   "record_ref": "feed:pampers-2u1:sku:sku_pg_swultra_s3",
+   "spec_clause": null,
+   "spec_version": "parleo-internal",
+   "status": "published",
+   "validation": {
+    "errors": [],
+    "ok": true
+   }
+  },
+  {
+   "channel": "mcp",
+   "channel_slug": "mcp",
+   "compiled_at": "2026-10-28T03:28:26",
+   "error": null,
+   "expressiveness": [],
+   "external_ref": "https://mcp.parleo.example#get_product_facts",
+   "held": false,
+   "id": 32,
+   "journal": [
+    {
+     "at": "2026-10-28T03:28:26+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-28T03:28:26.976083+00:00",
+     "by": "parleo",
+     "event": "published",
+     "note": "https://mcp.parleo.example#get_product_facts"
+    }
+   ],
+   "listing_id": null,
+   "mode": "manufacturer",
+   "payload": {
+    "held_publication_id": 1,
+    "line": "Pampers Swaddlers",
+    "merchant": "pampers-2u1",
+    "record_ref": "feed:pampers-2u1:00037000749622",
+    "served": 3,
+    "server": "https://mcp.parleo.example",
+    "skus": [
+     {
+      "gtin": "037000749622",
+      "product": "Pampers Swaddlers Pampers Swaddlers, Newborn, 84 ct",
+      "query": "037000749622",
+      "resolved": true
+     },
+     {
+      "gtin": "037000828761",
+      "product": "Pampers Swaddlers Pampers Swaddlers, Size 1, 96 ct",
+      "query": "037000828761",
+      "resolved": true
+     },
+     {
+      "gtin": "037000799818",
+      "product": "Pampers Swaddlers Pampers Swaddlers, Size 4, 150 ct",
+      "query": "037000799818",
+      "resolved": true
+     }
+    ],
+    "tool": "get_product_facts"
+   },
+   "published_at": "2026-10-28T03:28:26.976083",
+   "reason": null,
+   "record_ref": "feed:pampers-2u1:00037000749622",
+   "spec_clause": null,
+   "spec_version": "parleo-internal",
+   "status": "published",
+   "validation": {
+    "errors": [],
+    "ok": true
+   }
+  },
+  {
+   "channel": "ucp_uip",
+   "channel_slug": "ucp_uip",
+   "compiled_at": "2026-10-28T03:28:26",
+   "error": null,
+   "expressiveness": [
+    {
+     "field": "price",
+     "note": "Rules r1 and r2: each price is what one retailer's page showed on the read day (2026-10-20), labeled with the retailer and dated; every retailer read that day, alphabetically, never a chosen one. The brand sets no price, and no MSRP is sent.",
+     "severity": "info"
+    },
+    {
+     "field": "checkout",
+     "note": "Manufacturer mode: catalog lookup only. The profile declares no checkout or cart service and payment_handlers is {}: the brand sells nothing here, and each variant's retailer page is where it is bought.",
+     "severity": "dropped"
+    },
+    {
+     "field": "loyalty",
+     "note": "Manufacturer mode: the loyalty extension (dev.ucp.common.loyalty) is neither declared nor populated; a retailer's program is the retailer's, not the brand's.",
+     "severity": "dropped"
+    },
+    {
+     "field": "member_price",
+     "note": "Manufacturer mode: a variant's price is the shelf price a retailer's page showed; member, subscription and loyalty prices are not compiled.",
+     "severity": "dropped"
+    },
+    {
+     "field": "seller_link",
+     "note": "seller.links[].type is \"product_page\", which is not one of link.json's well-known values (policy pages); the link's title names it.",
+     "severity": "info"
+    }
+   ],
+   "external_ref": null,
+   "held": true,
+   "id": 31,
+   "journal": [
+    {
+     "at": "2026-10-28T03:28:26+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-28T03:28:26+00:00",
+     "by": "parleo",
+     "event": "held_for_merchant",
+     "note": "compiled; the brand's own team sends it"
+    }
+   ],
+   "listing_id": null,
+   "mode": "manufacturer",
+   "payload": {
+    "product": {
+     "description": {
+      "plain": "Zzz overnight diapers, size 4 (22-37 lb), for up to 12 hours of nighttime protection."
+     },
+     "id": "00037000833970",
+     "media": [
+      {
+       "type": "image",
+       "url": "https://images.ctfassets.net/pfeg73t23esw/42JI7m5X9vpLZlpOmWxsk9/1474318b593a33988ab42d381d3187fc/37000833987_SwaddlersZZZs_CLEAN.jpg"
+      }
+     ],
+     "metadata": {
+      "read_date": "2026-10-20",
+      "unread_retailers": [
+       {
+        "detail": "page read, but it states no price for this SKU",
+        "name": "Target",
+        "reason": "walled",
+        "retailer_domain": "target.com",
+        "url": "https://www.target.com/p/-/-/A-81041953"
+       },
+       {
+        "detail": "page read, but it states no price for this SKU",
+        "name": "Walmart",
+        "reason": "walled",
+        "retailer_domain": "walmart.com",
+        "url": "https://www.walmart.com/ip/Pampers-Swaddlers-Overnight-Diapers-Size-4-104-Count/989998624"
+       }
+      ],
+      "weight_range": {
+       "max": 37,
+       "min": 22,
+       "unit": "lb"
+      }
+     },
+     "price_range": {
+      "max": {
+       "amount": 4499,
+       "currency": "USD"
+      },
+      "min": {
+       "amount": 4499,
+       "currency": "USD"
+      }
+     },
+     "tags": [
+      "Pampers"
+     ],
+     "title": "Pampers Zzz overnight, Size 4, 104 ct",
+     "url": "https://www.pampers.com/en-us/products/pampers-zzz",
+     "variants": [
+      {
+       "barcodes": [
+        {
+         "type": "GTIN",
+         "value": "037000833970"
+        }
+       ],
+       "description": {
+        "plain": "Zzz overnight diapers, size 4 (22-37 lb), for up to 12 hours of nighttime protection."
+       },
+       "id": "00037000833970:amazon.com",
+       "metadata": {
+        "observed_at": "2026-10-20T04:23:16.142155+00:00",
+        "read_method": "honest_fetch",
+        "retailer_domain": "amazon.com"
+       },
+       "options": [
+        {
+         "label": "104",
+         "name": "count"
+        }
+       ],
+       "price": {
+        "amount": 4499,
+        "currency": "USD"
+       },
+       "seller": {
+        "links": [
+         {
+          "title": "Amazon product page",
+          "type": "product_page",
+          "url": "https://www.amazon.com/dp/B08PX2V97T"
+         }
+        ],
+        "name": "Amazon"
+       },
+       "sku": "sku_pg_zzz_s4_104",
+       "title": "Pampers Zzz overnight, Size 4, 104 ct at Amazon",
+       "url": "https://www.amazon.com/dp/B08PX2V97T"
+      }
+     ]
+    },
+    "ucp": {
+     "version": "2026-08-25"
+    }
+   },
+   "published_at": null,
+   "reason": "held_for_merchant",
+   "record_ref": "feed:pampers-2u1:00037000833970",
+   "spec_clause": null,
+   "spec_version": "ucp-2026-08-25",
+   "status": "compiled_not_published",
+   "validation": {
+    "errors": [],
+    "ok": true
+   }
+  },
+  {
+   "channel": "acp",
+   "channel_slug": "acp",
+   "compiled_at": "2026-10-28T03:28:26",
+   "error": null,
+   "expressiveness": [
+    {
+     "field": "read_date",
+     "note": "The ACP digest (specs \u00a71) names no field for a date on an item (its only dates, sale_price_start_date and sale_price_end_date, are a sale's window), so no item states its read date. The feed's envelope, which is ours and not a spec field, carries it per item: read_dates {item_id: observed_at}.",
+     "severity": "dropped"
+    },
+    {
+     "field": "price",
+     "note": "Rules r1 and r2: each price is what one retailer's page showed on the read day (2026-10-20), labeled with the retailer and dated; every retailer read that day, alphabetically, never a chosen one. The brand sets no price, and no MSRP is sent.",
+     "severity": "info"
+    },
+    {
+     "field": "image_from_brand_page",
+     "note": "Pampers Zzz: the feed states no image; image_url is the line's image on the brand's own page.",
+     "severity": "info"
+    }
+   ],
+   "external_ref": null,
+   "held": true,
+   "id": 30,
+   "journal": [
+    {
+     "at": "2026-10-28T03:28:26+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-28T03:28:26+00:00",
+     "by": "parleo",
+     "event": "held_for_merchant",
+     "note": "compiled; the brand's own team sends it"
+    }
+   ],
+   "listing_id": null,
+   "mode": "manufacturer",
+   "payload": {
+    "domains": {
+     "00037000833970:amazon.com": "amazon.com"
+    },
+    "items": [
+     {
+      "availability": "unknown",
+      "brand": "Pampers",
+      "description": "Zzz overnight diapers, size 4 (22-37 lb), for up to 12 hours of nighttime protection.",
+      "gtin": "037000833970",
+      "image_url": "https://images.ctfassets.net/pfeg73t23esw/42JI7m5X9vpLZlpOmWxsk9/1474318b593a33988ab42d381d3187fc/37000833987_SwaddlersZZZs_CLEAN.jpg",
+      "is_eligible_checkout": false,
+      "is_eligible_search": true,
+      "item_id": "00037000833970:amazon.com",
+      "listing_has_variations": false,
+      "price": "44.99 USD",
+      "seller_name": "Amazon",
+      "target_countries": [
+       "US"
+      ],
+      "title": "Pampers Zzz overnight, Size 4, 104 ct",
+      "url": "https://www.amazon.com/dp/B08PX2V97T",
+      "variant_dict": {
+       "count": "104"
+      }
+     }
+    ],
+    "read_dates": {
+     "00037000833970:amazon.com": "2026-10-20T04:23:16.142155+00:00"
+    }
+   },
+   "published_at": null,
+   "reason": "held_for_merchant",
+   "record_ref": "feed:pampers-2u1:00037000833970",
+   "spec_clause": null,
+   "spec_version": "acp-feed-stable-2026-08-18",
+   "status": "compiled_not_published",
+   "validation": {
+    "errors": [],
+    "ok": true
+   }
+  },
+  {
+   "channel": "manufacturer_center",
+   "channel_slug": "manufacturer_center",
+   "compiled_at": "2026-10-28T03:28:26",
+   "error": null,
+   "expressiveness": [
+    {
+     "field": "percent_off",
+     "note": "Manufacturer Center: no sale-price or discount attribute; suggestedRetailPrice is MSRP and lowering it to encode a discount would misstate it (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "amount_off",
+     "note": "Manufacturer Center: no sale-price or discount attribute; suggestedRetailPrice is MSRP and lowering it to encode a discount would misstate it (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "member_price",
+     "note": "Manufacturer Center: no price attribute but MSRP and no membership concept (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "subscribe_and_save",
+     "note": "Manufacturer Center: no subscription attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "points_earn",
+     "note": "Manufacturer Center: no loyalty attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "free_shipping",
+     "note": "Manufacturer Center: no shipping attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "gift_with_purchase",
+     "note": "Manufacturer Center: no promotion attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "mfr_coupon",
+     "note": "Manufacturer Center: no promotion or code attribute, even for the manufacturer's own coupon (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "member",
+     "note": "Manufacturer Center: no eligibility attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "tier",
+     "note": "Manufacturer Center: no eligibility attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "subscription",
+     "note": "Manufacturer Center: no eligibility attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "new_customer",
+     "note": "Manufacturer Center: no eligibility attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "retailer_availability",
+     "note": "Manufacturer Center has no field for who sells the product or where; retailer URLs and the retailer list are not sent (MC-0 \u00a74b).",
+     "severity": "dropped"
+    },
+    {
+     "field": "availability",
+     "note": "No stock or availability attribute; 'availability' is n/a for Manufacturer Center (answer/7073012).",
+     "severity": "dropped"
+    },
+    {
+     "field": "shelf_price",
+     "note": "No price or sale_price attribute; only suggestedRetailPrice (MSRP) exists (answer/7073012, discovery Attributes).",
+     "severity": "dropped"
+    },
+    {
+     "field": "provenance",
+     "note": "No provenance attribute; the brand's verified account is itself the provenance claim (MC-0 \u00a74a).",
+     "severity": "dropped"
+    },
+    {
+     "field": "validity_dates",
+     "note": "No offer validity; disclosureDate and releaseDate are product-lifecycle dates, not offer windows (MC-0 \u00a74b).",
+     "severity": "dropped"
+    },
+    {
+     "field": "price",
+     "note": "Manufacturer mode, rule r1: the brand sets no price, and this channel carries no retailer price (no shelf price, no MSRP).",
+     "severity": "dropped"
+    },
+    {
+     "field": "image_from_brand_page",
+     "note": "Pampers Zzz Pampers Zzz overnight, Size 4, 104 ct: no image_url in the feed; imageLink is the line's image on the brand's own page (https://images.ctfassets.net/pfeg73t23esw/42JI7m5X9vpLZlpOmWxsk9/1474318b593a33988ab42d381d3187fc/37000833987_SwaddlersZZZs_CLEAN.jpg).",
+     "severity": "info"
+    }
+   ],
+   "external_ref": null,
+   "held": true,
+   "id": 29,
+   "journal": [
+    {
+     "at": "2026-10-28T03:28:26+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-28T03:28:26+00:00",
+     "by": "parleo",
+     "event": "held_for_merchant",
+     "note": "compiled; the brand's own team sends it"
+    }
+   ],
+   "listing_id": null,
+   "mode": "manufacturer",
+   "payload": {
+    "apiVersion": "manufacturers/v1",
+    "products": [
+     {
+      "attributes": {
+       "brand": "Pampers",
+       "count": {
+        "unit": "count",
+        "value": "104"
+       },
+       "description": "Zzz overnight diapers, size 4 (22-37 lb), for up to 12 hours of nighttime protection.",
+       "gtin": [
+        "037000833970"
+       ],
+       "imageLink": {
+        "imageUrl": "https://images.ctfassets.net/pfeg73t23esw/42JI7m5X9vpLZlpOmWxsk9/1474318b593a33988ab42d381d3187fc/37000833987_SwaddlersZZZs_CLEAN.jpg"
+       },
+       "productDetail": [
+        {
+         "attributeName": "Weight range",
+         "attributeValue": "22 to 37 lb",
+         "sectionName": "Size chart"
+        }
+       ],
+       "productName": "Pampers Zzz",
+       "productPageUrl": "https://www.pampers.com/en-us/products/pampers-zzz",
+       "title": "Pampers Zzz Pampers Zzz overnight, Size 4, 104 ct"
+      },
+      "name": "US:en:00037000833970"
+     }
+    ]
+   },
+   "published_at": null,
+   "reason": "held_for_merchant",
+   "record_ref": "feed:pampers-2u1:00037000833970",
+   "spec_clause": null,
+   "spec_version": "manufacturers-v1-2026-10-05",
+   "status": "compiled_not_published",
+   "validation": {
+    "errors": [],
+    "ok": true
+   }
+  },
+  {
+   "channel": "schema_org",
+   "channel_slug": "schema_org",
+   "compiled_at": "2026-10-28T03:28:26",
+   "error": null,
+   "expressiveness": [
+    {
+     "field": "price",
+     "note": "Manufacturer mode, rule r1: the brand sets no price, and this channel carries no retailer price (no shelf price, no MSRP).",
+     "severity": "dropped"
+    },
+    {
+     "field": "availability",
+     "note": "Manufacturer mode: retailer-neutral, so no availability for any retailer.",
+     "severity": "dropped"
+    }
+   ],
+   "external_ref": null,
+   "held": true,
+   "id": 28,
+   "journal": [
+    {
+     "at": "2026-10-28T03:28:26+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-28T03:28:26+00:00",
+     "by": "parleo",
+     "event": "held_for_merchant",
+     "note": "compiled; the brand's own team sends it"
+    }
+   ],
+   "listing_id": null,
+   "mode": "manufacturer",
+   "payload": {
+    "@context": "https://schema.org",
+    "@type": "ProductGroup",
+    "brand": {
+     "@type": "Brand",
+     "name": "Pampers"
+    },
+    "description": "Zzz overnight diapers, size 4 (22-37 lb), for up to 12 hours of nighttime protection.",
+    "hasVariant": [
+     {
+      "@type": "Product",
+      "additionalProperty": [
+       {
+        "@type": "PropertyValue",
+        "name": "Weight range",
+        "value": {
+         "@type": "QuantitativeValue",
+         "maxValue": 37,
+         "minValue": 22,
+         "unitText": "lb"
+        }
+       },
+       {
+        "@type": "PropertyValue",
+        "name": "Pack count",
+        "value": 104
+       }
+      ],
+      "brand": {
+       "@type": "Brand",
+       "name": "Pampers"
+      },
+      "description": "Zzz overnight diapers, size 4 (22-37 lb), for up to 12 hours of nighttime protection.",
+      "gtin": "037000833970",
+      "gtin12": "037000833970",
+      "name": "Pampers Zzz Pampers Zzz overnight, Size 4, 104 ct",
+      "offers": [
+       {
+        "@type": "Offer",
+        "seller": {
+         "@type": "Organization",
+         "name": "amazon.com"
+        },
+        "url": "https://www.amazon.com/dp/B08PX2V97T"
+       },
+       {
+        "@type": "Offer",
+        "seller": {
+         "@type": "Organization",
+         "name": "target.com"
+        },
+        "url": "https://www.target.com/p/-/-/A-81041953"
+       },
+       {
+        "@type": "Offer",
+        "seller": {
+         "@type": "Organization",
+         "name": "walmart.com"
+        },
+        "url": "https://www.walmart.com/ip/Pampers-Swaddlers-Overnight-Diapers-Size-4-104-Count/989998624"
+       }
+      ],
+      "sku": "sku_pg_zzz_s4_104",
+      "url": "https://www.pampers.com/en-us/products/pampers-zzz"
+     }
+    ],
+    "name": "Pampers Zzz",
+    "productGroupID": "feed:pampers-2u1:00037000833970",
+    "url": "https://www.pampers.com/en-us/products/pampers-zzz",
+    "variesBy": [
+     "size",
+     "count"
+    ]
+   },
+   "published_at": null,
+   "reason": "held_for_merchant",
+   "record_ref": "feed:pampers-2u1:00037000833970",
+   "spec_clause": null,
+   "spec_version": "schemaorg-merchant-listing-2026-08-18",
+   "status": "compiled_not_published",
+   "validation": {
+    "errors": [],
+    "ok": true
+   }
+  },
+  {
+   "channel": "ucp_uip",
+   "channel_slug": "ucp_uip",
+   "compiled_at": "2026-10-28T03:28:26",
+   "error": "blocked: no_priced_read: Pampers Cruisers 360, Size 5, 128 ct (sku:sku_pg_cr360_s5_128): no retailer page priced it on the read day (2026-10-20), and a UCP product requires a variant and a price range: truesync/specs/ucp/ucp-2026-08-25/shopping/types/product.json: \"required\": [\"id\", \"title\", \"description\", \"price_range\", \"variants\"], and \"variants\" has \"minItems\": 1.; product: 'price_range' is a required property; product/variants: [] should be non-empty",
+   "expressiveness": [
+    {
+     "field": "channel",
+     "note": "no_priced_read: Pampers Cruisers 360, Size 5, 128 ct (sku:sku_pg_cr360_s5_128): no retailer page priced it on the read day (2026-10-20), and a UCP product requires a variant and a price range: truesync/specs/ucp/ucp-2026-08-25/shopping/types/product.json: \"required\": [\"id\", \"title\", \"description\", \"price_range\", \"variants\"], and \"variants\" has \"minItems\": 1.",
+     "severity": "blocked"
+    },
+    {
+     "field": "no_priced_read",
+     "note": "no_priced_read: Pampers Cruisers 360, Size 5, 128 ct (sku:sku_pg_cr360_s5_128): no retailer page priced it on the read day (2026-10-20), and a UCP product requires a variant and a price range: truesync/specs/ucp/ucp-2026-08-25/shopping/types/product.json: \"required\": [\"id\", \"title\", \"description\", \"price_range\", \"variants\"], and \"variants\" has \"minItems\": 1.",
+     "severity": "blocked"
+    },
+    {
+     "field": "price",
+     "note": "Rules r1 and r2: each price is what one retailer's page showed on the read day (2026-10-20), labeled with the retailer and dated; every retailer read that day, alphabetically, never a chosen one. The brand sets no price, and no MSRP is sent.",
+     "severity": "info"
+    },
+    {
+     "field": "checkout",
+     "note": "Manufacturer mode: catalog lookup only. The profile declares no checkout or cart service and payment_handlers is {}: the brand sells nothing here, and each variant's retailer page is where it is bought.",
+     "severity": "dropped"
+    },
+    {
+     "field": "loyalty",
+     "note": "Manufacturer mode: the loyalty extension (dev.ucp.common.loyalty) is neither declared nor populated; a retailer's program is the retailer's, not the brand's.",
+     "severity": "dropped"
+    },
+    {
+     "field": "member_price",
+     "note": "Manufacturer mode: a variant's price is the shelf price a retailer's page showed; member, subscription and loyalty prices are not compiled.",
+     "severity": "dropped"
+    }
+   ],
+   "external_ref": null,
+   "held": true,
+   "id": 27,
+   "journal": [
+    {
+     "at": "2026-10-28T03:28:26+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-28T03:28:26+00:00",
+     "by": "parleo",
+     "cause": "no_priced_read",
+     "event": "blocked",
+     "note": "no_priced_read: Pampers Cruisers 360, Size 5, 128 ct (sku:sku_pg_cr360_s5_128): no retailer page priced it on the read day (2026-10-20), and a UCP product requires a variant and a price range: truesync/specs/ucp/ucp-2026-08-25/shopping/types/product.json: \"required\": [\"id\", \"title\", \"description\", \"price_range\", \"variants\"], and \"variants\" has \"minItems\": 1.",
+     "rules": []
+    }
+   ],
+   "listing_id": null,
+   "mode": "manufacturer",
+   "payload": {
+    "product": {
+     "description": {
+      "plain": "Cruisers 360 pull-on diapers, size 5 (27+ lb), stretchy all-around waistband."
+     },
+     "id": "sku:sku_pg_cr360_s5_128",
+     "media": [
+      {
+       "type": "image",
+       "url": "https://images.ctfassets.net/pfeg73t23esw/1MZEXq3ebGFnpGablgItD6/934dbfa674740f0e1f17339ba0f15900/56a6b9167438ebc7888aac3f74b98f746607c06e.png"
+      }
+     ],
+     "metadata": {
+      "read_date": "2026-10-20",
+      "unread_retailers": [
+       {
+        "detail": "no read of this page",
+        "name": "Amazon",
+        "reason": "not_read",
+        "retailer_domain": "amazon.com",
+        "url": "https://www.amazon.com/dp/B08PX2V7PG"
+       },
+       {
+        "detail": "no read of this page",
+        "name": "Target",
+        "reason": "not_read",
+        "retailer_domain": "target.com",
+        "url": "https://www.target.com/p/-/-/A-95184565"
+       },
+       {
+        "detail": "no read of this page",
+        "name": "Walmart",
+        "reason": "not_read",
+        "retailer_domain": "walmart.com",
+        "url": "https://www.walmart.com/ip/Pampers-Cruisers-360-Pull-On-Baby-Diapers-Size-5-128-Count/297702421"
+       }
+      ],
+      "weight_range": {
+       "min": 27,
+       "unit": "lb"
+      }
+     },
+     "tags": [
+      "Pampers"
+     ],
+     "title": "Pampers Cruisers 360, Size 5, 128 ct",
+     "url": "https://www.pampers.com/en-us/products/pampers-cruisers-360",
+     "variants": []
+    },
+    "ucp": {
+     "version": "2026-08-25"
+    }
+   },
+   "published_at": null,
+   "reason": "blocked",
+   "record_ref": "feed:pampers-2u1:sku:sku_pg_cr360_s5_128",
+   "spec_clause": "no_priced_read: Pampers Cruisers 360, Size 5, 128 ct (sku:sku_pg_cr360_s5_128): no retailer page priced it on the read day (2026-10-20), and a UCP product requires a variant and a price range: truesync/specs/ucp/ucp-2026-08-25/shopping/types/product.json: \"required\": [\"id\", \"title\", \"description\", \"price_range\", \"variants\"], and \"variants\" has \"minItems\": 1.",
+   "spec_version": "ucp-2026-08-25",
+   "status": "compiled_not_published",
+   "validation": {
+    "errors": [
+     "blocked: no_priced_read: Pampers Cruisers 360, Size 5, 128 ct (sku:sku_pg_cr360_s5_128): no retailer page priced it on the read day (2026-10-20), and a UCP product requires a variant and a price range: truesync/specs/ucp/ucp-2026-08-25/shopping/types/product.json: \"required\": [\"id\", \"title\", \"description\", \"price_range\", \"variants\"], and \"variants\" has \"minItems\": 1.",
+     "product: 'price_range' is a required property",
+     "product/variants: [] should be non-empty"
+    ],
+    "ok": false
+   }
+  },
+  {
+   "channel": "ucp_uip",
+   "channel_slug": "ucp_uip",
+   "compiled_at": "2026-10-28T03:28:26",
+   "error": null,
+   "expressiveness": [
+    {
+     "field": "price",
+     "note": "Rules r1 and r2: each price is what one retailer's page showed on the read day (2026-10-20), labeled with the retailer and dated; every retailer read that day, alphabetically, never a chosen one. The brand sets no price, and no MSRP is sent.",
+     "severity": "info"
+    },
+    {
+     "field": "checkout",
+     "note": "Manufacturer mode: catalog lookup only. The profile declares no checkout or cart service and payment_handlers is {}: the brand sells nothing here, and each variant's retailer page is where it is bought.",
+     "severity": "dropped"
+    },
+    {
+     "field": "loyalty",
+     "note": "Manufacturer mode: the loyalty extension (dev.ucp.common.loyalty) is neither declared nor populated; a retailer's program is the retailer's, not the brand's.",
+     "severity": "dropped"
+    },
+    {
+     "field": "member_price",
+     "note": "Manufacturer mode: a variant's price is the shelf price a retailer's page showed; member, subscription and loyalty prices are not compiled.",
+     "severity": "dropped"
+    },
+    {
+     "field": "seller_link",
+     "note": "seller.links[].type is \"product_page\", which is not one of link.json's well-known values (policy pages); the link's title names it.",
+     "severity": "info"
+    }
+   ],
+   "external_ref": null,
+   "held": true,
+   "id": 26,
+   "journal": [
+    {
+     "at": "2026-10-28T03:28:26+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-28T03:28:26+00:00",
+     "by": "parleo",
+     "event": "held_for_merchant",
+     "note": "compiled; the brand's own team sends it"
+    }
+   ],
+   "listing_id": null,
+   "mode": "manufacturer",
+   "payload": {
+    "product": {
+     "description": {
+      "plain": "Cruisers 360 pull-on diapers, size 3 (16-28 lb), stretchy all-around waistband."
+     },
+     "id": "00037000717379",
+     "media": [
+      {
+       "type": "image",
+       "url": "https://images.ctfassets.net/pfeg73t23esw/1MZEXq3ebGFnpGablgItD6/934dbfa674740f0e1f17339ba0f15900/56a6b9167438ebc7888aac3f74b98f746607c06e.png"
+      }
+     ],
+     "metadata": {
+      "read_date": "2026-10-20",
+      "unread_retailers": [
+       {
+        "detail": "page read, but it states no price for this SKU",
+        "name": "Amazon",
+        "reason": "walled",
+        "retailer_domain": "amazon.com",
+        "url": "https://www.amazon.com/dp/B08VLB4NVQ"
+       }
+      ],
+      "weight_range": {
+       "max": 28,
+       "min": 16,
+       "unit": "lb"
+      }
+     },
+     "price_range": {
+      "max": {
+       "amount": 5171,
+       "currency": "USD"
+      },
+      "min": {
+       "amount": 4977,
+       "currency": "USD"
+      }
+     },
+     "tags": [
+      "Pampers"
+     ],
+     "title": "Pampers Cruisers 360, Size 3, 168 ct",
+     "url": "https://www.pampers.com/en-us/products/pampers-cruisers-360",
+     "variants": [
+      {
+       "barcodes": [
+        {
+         "type": "GTIN",
+         "value": "037000717379"
+        }
+       ],
+       "description": {
+        "plain": "Cruisers 360 pull-on diapers, size 3 (16-28 lb), stretchy all-around waistband."
+       },
+       "id": "00037000717379:target.com",
+       "metadata": {
+        "observed_at": "2026-10-20T04:23:16.142155+00:00",
+        "read_method": "hosted_render",
+        "retailer_domain": "target.com"
+       },
+       "options": [
+        {
+         "label": "168",
+         "name": "count"
+        }
+       ],
+       "price": {
+        "amount": 5171,
+        "currency": "USD"
+       },
+       "seller": {
+        "links": [
+         {
+          "title": "Target product page",
+          "type": "product_page",
+          "url": "https://www.target.com/p/-/-/A-95184568"
+         }
+        ],
+        "name": "Target"
+       },
+       "sku": "sku_pg_cr360_s3_168",
+       "title": "Pampers Cruisers 360, Size 3, 168 ct at Target",
+       "url": "https://www.target.com/p/-/-/A-95184568"
+      },
+      {
+       "barcodes": [
+        {
+         "type": "GTIN",
+         "value": "037000717379"
+        }
+       ],
+       "description": {
+        "plain": "Cruisers 360 pull-on diapers, size 3 (16-28 lb), stretchy all-around waistband."
+       },
+       "id": "00037000717379:walmart.com",
+       "metadata": {
+        "observed_at": "2026-10-20T04:23:16.142155+00:00",
+        "read_method": "hosted_render",
+        "retailer_domain": "walmart.com"
+       },
+       "options": [
+        {
+         "label": "168",
+         "name": "count"
+        }
+       ],
+       "price": {
+        "amount": 4977,
+        "currency": "USD"
+       },
+       "seller": {
+        "links": [
+         {
+          "title": "Walmart product page",
+          "type": "product_page",
+          "url": "https://www.walmart.com/ip/Pampers-Cruisers-360-Pull-On-Baby-Diapers-Size-3-168-Count/283399865"
+         }
+        ],
+        "name": "Walmart"
+       },
+       "sku": "sku_pg_cr360_s3_168",
+       "title": "Pampers Cruisers 360, Size 3, 168 ct at Walmart",
+       "url": "https://www.walmart.com/ip/Pampers-Cruisers-360-Pull-On-Baby-Diapers-Size-3-168-Count/283399865"
+      }
+     ]
+    },
+    "ucp": {
+     "version": "2026-08-25"
+    }
+   },
+   "published_at": null,
+   "reason": "held_for_merchant",
+   "record_ref": "feed:pampers-2u1:00037000717379",
+   "spec_clause": null,
+   "spec_version": "ucp-2026-08-25",
+   "status": "compiled_not_published",
+   "validation": {
+    "errors": [],
+    "ok": true
+   }
+  },
+  {
+   "channel": "acp",
+   "channel_slug": "acp",
+   "compiled_at": "2026-10-28T03:28:26",
+   "error": null,
+   "expressiveness": [
+    {
+     "field": "read_date",
+     "note": "The ACP digest (specs \u00a71) names no field for a date on an item (its only dates, sale_price_start_date and sale_price_end_date, are a sale's window), so no item states its read date. The feed's envelope, which is ours and not a spec field, carries it per item: read_dates {item_id: observed_at}.",
+     "severity": "dropped"
+    },
+    {
+     "field": "price",
+     "note": "Rules r1 and r2: each price is what one retailer's page showed on the read day (2026-10-20), labeled with the retailer and dated; every retailer read that day, alphabetically, never a chosen one. The brand sets no price, and no MSRP is sent.",
+     "severity": "info"
+    },
+    {
+     "field": "image_from_brand_page",
+     "note": "Pampers Cruisers 360: the feed states no image; image_url is the line's image on the brand's own page.",
+     "severity": "info"
+    },
+    {
+     "field": "no_priced_read",
+     "note": "No item for Pampers Cruisers 360 Pampers Cruisers 360, Size 5, 128 ct: no retailer page priced it on the read day (2026-10-20).",
+     "severity": "dropped"
+    }
+   ],
+   "external_ref": null,
+   "held": true,
+   "id": 25,
+   "journal": [
+    {
+     "at": "2026-10-28T03:28:26+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-28T03:28:26+00:00",
+     "by": "parleo",
+     "event": "held_for_merchant",
+     "note": "compiled; the brand's own team sends it"
+    }
+   ],
+   "listing_id": null,
+   "mode": "manufacturer",
+   "payload": {
+    "domains": {
+     "00037000717379:target.com": "target.com",
+     "00037000717379:walmart.com": "walmart.com"
+    },
+    "items": [
+     {
+      "availability": "unknown",
+      "brand": "Pampers",
+      "description": "Cruisers 360 pull-on diapers, size 3 (16-28 lb), stretchy all-around waistband.",
+      "group_id": "feed:pampers-2u1:00037000717379",
+      "gtin": "037000717379",
+      "image_url": "https://images.ctfassets.net/pfeg73t23esw/1MZEXq3ebGFnpGablgItD6/934dbfa674740f0e1f17339ba0f15900/56a6b9167438ebc7888aac3f74b98f746607c06e.png",
+      "is_eligible_checkout": false,
+      "is_eligible_search": true,
+      "item_group_title": "Pampers Cruisers 360",
+      "item_id": "00037000717379:target.com",
+      "listing_has_variations": true,
+      "price": "51.71 USD",
+      "seller_name": "Target",
+      "target_countries": [
+       "US"
+      ],
+      "title": "Pampers Cruisers 360, Size 3, 168 ct",
+      "url": "https://www.target.com/p/-/-/A-95184568",
+      "variant_dict": {
+       "count": "168"
+      }
+     },
+     {
+      "availability": "unknown",
+      "brand": "Pampers",
+      "description": "Cruisers 360 pull-on diapers, size 3 (16-28 lb), stretchy all-around waistband.",
+      "group_id": "feed:pampers-2u1:00037000717379",
+      "gtin": "037000717379",
+      "image_url": "https://images.ctfassets.net/pfeg73t23esw/1MZEXq3ebGFnpGablgItD6/934dbfa674740f0e1f17339ba0f15900/56a6b9167438ebc7888aac3f74b98f746607c06e.png",
+      "is_eligible_checkout": false,
+      "is_eligible_search": true,
+      "item_group_title": "Pampers Cruisers 360",
+      "item_id": "00037000717379:walmart.com",
+      "listing_has_variations": true,
+      "price": "49.77 USD",
+      "seller_name": "Walmart",
+      "target_countries": [
+       "US"
+      ],
+      "title": "Pampers Cruisers 360, Size 3, 168 ct",
+      "url": "https://www.walmart.com/ip/Pampers-Cruisers-360-Pull-On-Baby-Diapers-Size-3-168-Count/283399865",
+      "variant_dict": {
+       "count": "168"
+      }
+     }
+    ],
+    "read_dates": {
+     "00037000717379:target.com": "2026-10-20T04:23:16.142155+00:00",
+     "00037000717379:walmart.com": "2026-10-20T04:23:16.142155+00:00"
+    }
+   },
+   "published_at": null,
+   "reason": "held_for_merchant",
+   "record_ref": "feed:pampers-2u1:00037000717379",
+   "spec_clause": null,
+   "spec_version": "acp-feed-stable-2026-08-18",
+   "status": "compiled_not_published",
+   "validation": {
+    "errors": [],
+    "ok": true
+   }
+  },
+  {
+   "channel": "manufacturer_center",
+   "channel_slug": "manufacturer_center",
+   "compiled_at": "2026-10-28T03:28:26",
+   "error": null,
+   "expressiveness": [
+    {
+     "field": "percent_off",
+     "note": "Manufacturer Center: no sale-price or discount attribute; suggestedRetailPrice is MSRP and lowering it to encode a discount would misstate it (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "amount_off",
+     "note": "Manufacturer Center: no sale-price or discount attribute; suggestedRetailPrice is MSRP and lowering it to encode a discount would misstate it (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "member_price",
+     "note": "Manufacturer Center: no price attribute but MSRP and no membership concept (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "subscribe_and_save",
+     "note": "Manufacturer Center: no subscription attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "points_earn",
+     "note": "Manufacturer Center: no loyalty attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "free_shipping",
+     "note": "Manufacturer Center: no shipping attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "gift_with_purchase",
+     "note": "Manufacturer Center: no promotion attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "mfr_coupon",
+     "note": "Manufacturer Center: no promotion or code attribute, even for the manufacturer's own coupon (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "member",
+     "note": "Manufacturer Center: no eligibility attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "tier",
+     "note": "Manufacturer Center: no eligibility attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "subscription",
+     "note": "Manufacturer Center: no eligibility attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "new_customer",
+     "note": "Manufacturer Center: no eligibility attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "retailer_availability",
+     "note": "Manufacturer Center has no field for who sells the product or where; retailer URLs and the retailer list are not sent (MC-0 \u00a74b).",
+     "severity": "dropped"
+    },
+    {
+     "field": "availability",
+     "note": "No stock or availability attribute; 'availability' is n/a for Manufacturer Center (answer/7073012).",
+     "severity": "dropped"
+    },
+    {
+     "field": "shelf_price",
+     "note": "No price or sale_price attribute; only suggestedRetailPrice (MSRP) exists (answer/7073012, discovery Attributes).",
+     "severity": "dropped"
+    },
+    {
+     "field": "provenance",
+     "note": "No provenance attribute; the brand's verified account is itself the provenance claim (MC-0 \u00a74a).",
+     "severity": "dropped"
+    },
+    {
+     "field": "validity_dates",
+     "note": "No offer validity; disclosureDate and releaseDate are product-lifecycle dates, not offer windows (MC-0 \u00a74b).",
+     "severity": "dropped"
+    },
+    {
+     "field": "gtin",
+     "note": "1 variant(s) without a GTIN not compiled (sku:sku_pg_cr360_s5_128): Manufacturer Center keys every product by GTIN and has no identifier_exists=false (answer/6358237).",
+     "severity": "dropped"
+    },
+    {
+     "field": "price",
+     "note": "Manufacturer mode, rule r1: the brand sets no price, and this channel carries no retailer price (no shelf price, no MSRP).",
+     "severity": "dropped"
+    },
+    {
+     "field": "image_from_brand_page",
+     "note": "Pampers Cruisers 360 Pampers Cruisers 360, Size 3, 168 ct: no image_url in the feed; imageLink is the line's image on the brand's own page (https://images.ctfassets.net/pfeg73t23esw/1MZEXq3ebGFnpGablgItD6/934dbfa674740f0e1f17339ba0f15900/56a6b9167438ebc7888aac3f74b98f746607c06e.png).",
+     "severity": "info"
+    }
+   ],
+   "external_ref": null,
+   "held": true,
+   "id": 24,
+   "journal": [
+    {
+     "at": "2026-10-28T03:28:26+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-28T03:28:26+00:00",
+     "by": "parleo",
+     "event": "held_for_merchant",
+     "note": "compiled; the brand's own team sends it"
+    }
+   ],
+   "listing_id": null,
+   "mode": "manufacturer",
+   "payload": {
+    "apiVersion": "manufacturers/v1",
+    "products": [
+     {
+      "attributes": {
+       "brand": "Pampers",
+       "count": {
+        "unit": "count",
+        "value": "168"
+       },
+       "description": "Cruisers 360 pull-on diapers, size 3 (16-28 lb), stretchy all-around waistband.",
+       "gtin": [
+        "037000717379"
+       ],
+       "imageLink": {
+        "imageUrl": "https://images.ctfassets.net/pfeg73t23esw/1MZEXq3ebGFnpGablgItD6/934dbfa674740f0e1f17339ba0f15900/56a6b9167438ebc7888aac3f74b98f746607c06e.png"
+       },
+       "itemGroupId": "feed:pampers-2u1:00037000717379",
+       "productDetail": [
+        {
+         "attributeName": "Weight range",
+         "attributeValue": "16 to 28 lb",
+         "sectionName": "Size chart"
+        }
+       ],
+       "productName": "Pampers Cruisers 360",
+       "productPageUrl": "https://www.pampers.com/en-us/products/pampers-cruisers-360",
+       "title": "Pampers Cruisers 360 Pampers Cruisers 360, Size 3, 168 ct"
+      },
+      "name": "US:en:00037000717379"
+     }
+    ]
+   },
+   "published_at": null,
+   "reason": "held_for_merchant",
+   "record_ref": "feed:pampers-2u1:00037000717379",
+   "spec_clause": null,
+   "spec_version": "manufacturers-v1-2026-10-05",
+   "status": "compiled_not_published",
+   "validation": {
+    "errors": [],
+    "ok": true
+   }
+  },
+  {
+   "channel": "schema_org",
+   "channel_slug": "schema_org",
+   "compiled_at": "2026-10-28T03:28:26",
+   "error": null,
+   "expressiveness": [
+    {
+     "field": "price",
+     "note": "Manufacturer mode, rule r1: the brand sets no price, and this channel carries no retailer price (no shelf price, no MSRP).",
+     "severity": "dropped"
+    },
+    {
+     "field": "availability",
+     "note": "Manufacturer mode: retailer-neutral, so no availability for any retailer.",
+     "severity": "dropped"
+    }
+   ],
+   "external_ref": null,
+   "held": true,
+   "id": 23,
+   "journal": [
+    {
+     "at": "2026-10-28T03:28:26+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-28T03:28:26+00:00",
+     "by": "parleo",
+     "event": "held_for_merchant",
+     "note": "compiled; the brand's own team sends it"
+    }
+   ],
+   "listing_id": null,
+   "mode": "manufacturer",
+   "payload": {
+    "@context": "https://schema.org",
+    "@type": "ProductGroup",
+    "brand": {
+     "@type": "Brand",
+     "name": "Pampers"
+    },
+    "description": "Cruisers 360 pull-on diapers, size 3 (16-28 lb), stretchy all-around waistband.",
+    "hasVariant": [
+     {
+      "@type": "Product",
+      "additionalProperty": [
+       {
+        "@type": "PropertyValue",
+        "name": "Weight range",
+        "value": {
+         "@type": "QuantitativeValue",
+         "maxValue": 28,
+         "minValue": 16,
+         "unitText": "lb"
+        }
+       },
+       {
+        "@type": "PropertyValue",
+        "name": "Pack count",
+        "value": 168
+       }
+      ],
+      "brand": {
+       "@type": "Brand",
+       "name": "Pampers"
+      },
+      "description": "Cruisers 360 pull-on diapers, size 3 (16-28 lb), stretchy all-around waistband.",
+      "gtin": "037000717379",
+      "gtin12": "037000717379",
+      "name": "Pampers Cruisers 360 Pampers Cruisers 360, Size 3, 168 ct",
+      "offers": [
+       {
+        "@type": "Offer",
+        "seller": {
+         "@type": "Organization",
+         "name": "amazon.com"
+        },
+        "url": "https://www.amazon.com/dp/B08VLB4NVQ"
+       },
+       {
+        "@type": "Offer",
+        "seller": {
+         "@type": "Organization",
+         "name": "target.com"
+        },
+        "url": "https://www.target.com/p/-/-/A-95184568"
+       },
+       {
+        "@type": "Offer",
+        "seller": {
+         "@type": "Organization",
+         "name": "walmart.com"
+        },
+        "url": "https://www.walmart.com/ip/Pampers-Cruisers-360-Pull-On-Baby-Diapers-Size-3-168-Count/283399865"
+       }
+      ],
+      "sku": "sku_pg_cr360_s3_168",
+      "url": "https://www.pampers.com/en-us/products/pampers-cruisers-360"
+     },
+     {
+      "@type": "Product",
+      "additionalProperty": [
+       {
+        "@type": "PropertyValue",
+        "name": "Weight range",
+        "value": {
+         "@type": "QuantitativeValue",
+         "minValue": 27,
+         "unitText": "lb"
+        }
+       },
+       {
+        "@type": "PropertyValue",
+        "name": "Pack count",
+        "value": 128
+       }
+      ],
+      "brand": {
+       "@type": "Brand",
+       "name": "Pampers"
+      },
+      "description": "Cruisers 360 pull-on diapers, size 5 (27+ lb), stretchy all-around waistband.",
+      "name": "Pampers Cruisers 360 Pampers Cruisers 360, Size 5, 128 ct",
+      "offers": [
+       {
+        "@type": "Offer",
+        "seller": {
+         "@type": "Organization",
+         "name": "amazon.com"
+        },
+        "url": "https://www.amazon.com/dp/B08PX2V7PG"
+       },
+       {
+        "@type": "Offer",
+        "seller": {
+         "@type": "Organization",
+         "name": "target.com"
+        },
+        "url": "https://www.target.com/p/-/-/A-95184565"
+       },
+       {
+        "@type": "Offer",
+        "seller": {
+         "@type": "Organization",
+         "name": "walmart.com"
+        },
+        "url": "https://www.walmart.com/ip/Pampers-Cruisers-360-Pull-On-Baby-Diapers-Size-5-128-Count/297702421"
+       }
+      ],
+      "sku": "sku_pg_cr360_s5_128",
+      "url": "https://www.pampers.com/en-us/products/pampers-cruisers-360"
+     }
+    ],
+    "name": "Pampers Cruisers 360",
+    "productGroupID": "feed:pampers-2u1:00037000717379",
+    "url": "https://www.pampers.com/en-us/products/pampers-cruisers-360",
+    "variesBy": [
+     "size",
+     "count"
+    ]
+   },
+   "published_at": null,
+   "reason": "held_for_merchant",
+   "record_ref": "feed:pampers-2u1:00037000717379",
+   "spec_clause": null,
+   "spec_version": "schemaorg-merchant-listing-2026-08-18",
+   "status": "compiled_not_published",
+   "validation": {
+    "errors": [],
+    "ok": true
+   }
+  },
+  {
+   "channel": "ucp_uip",
+   "channel_slug": "ucp_uip",
+   "compiled_at": "2026-10-28T03:28:26",
+   "error": "blocked: no_priced_read: Pampers Baby-Dry, Size 4, 186 ct (00037000783817): no retailer page priced it on the read day (2026-10-20), and a UCP product requires a variant and a price range: truesync/specs/ucp/ucp-2026-08-25/shopping/types/product.json: \"required\": [\"id\", \"title\", \"description\", \"price_range\", \"variants\"], and \"variants\" has \"minItems\": 1.; product: 'price_range' is a required property; product/variants: [] should be non-empty",
+   "expressiveness": [
+    {
+     "field": "channel",
+     "note": "no_priced_read: Pampers Baby-Dry, Size 4, 186 ct (00037000783817): no retailer page priced it on the read day (2026-10-20), and a UCP product requires a variant and a price range: truesync/specs/ucp/ucp-2026-08-25/shopping/types/product.json: \"required\": [\"id\", \"title\", \"description\", \"price_range\", \"variants\"], and \"variants\" has \"minItems\": 1.",
+     "severity": "blocked"
+    },
+    {
+     "field": "no_priced_read",
+     "note": "no_priced_read: Pampers Baby-Dry, Size 4, 186 ct (00037000783817): no retailer page priced it on the read day (2026-10-20), and a UCP product requires a variant and a price range: truesync/specs/ucp/ucp-2026-08-25/shopping/types/product.json: \"required\": [\"id\", \"title\", \"description\", \"price_range\", \"variants\"], and \"variants\" has \"minItems\": 1.",
+     "severity": "blocked"
+    },
+    {
+     "field": "price",
+     "note": "Rules r1 and r2: each price is what one retailer's page showed on the read day (2026-10-20), labeled with the retailer and dated; every retailer read that day, alphabetically, never a chosen one. The brand sets no price, and no MSRP is sent.",
+     "severity": "info"
+    },
+    {
+     "field": "checkout",
+     "note": "Manufacturer mode: catalog lookup only. The profile declares no checkout or cart service and payment_handlers is {}: the brand sells nothing here, and each variant's retailer page is where it is bought.",
+     "severity": "dropped"
+    },
+    {
+     "field": "loyalty",
+     "note": "Manufacturer mode: the loyalty extension (dev.ucp.common.loyalty) is neither declared nor populated; a retailer's program is the retailer's, not the brand's.",
+     "severity": "dropped"
+    },
+    {
+     "field": "member_price",
+     "note": "Manufacturer mode: a variant's price is the shelf price a retailer's page showed; member, subscription and loyalty prices are not compiled.",
+     "severity": "dropped"
+    }
+   ],
+   "external_ref": null,
+   "held": true,
+   "id": 22,
+   "journal": [
+    {
+     "at": "2026-10-28T03:28:26+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-28T03:28:26+00:00",
+     "by": "parleo",
+     "cause": "no_priced_read",
+     "event": "blocked",
+     "note": "no_priced_read: Pampers Baby-Dry, Size 4, 186 ct (00037000783817): no retailer page priced it on the read day (2026-10-20), and a UCP product requires a variant and a price range: truesync/specs/ucp/ucp-2026-08-25/shopping/types/product.json: \"required\": [\"id\", \"title\", \"description\", \"price_range\", \"variants\"], and \"variants\" has \"minItems\": 1.",
+     "rules": []
+    }
+   ],
+   "listing_id": null,
+   "mode": "manufacturer",
+   "payload": {
+    "product": {
+     "description": {
+      "plain": "Baby-Dry diapers, size 4 (15-34 lb), 12-hour overnight protection."
+     },
+     "id": "00037000783817",
+     "metadata": {
+      "read_date": "2026-10-20",
+      "unread_retailers": [
+       {
+        "detail": "no read of this page",
+        "name": "Amazon",
+        "reason": "not_read",
+        "retailer_domain": "amazon.com",
+        "url": "https://www.amazon.com/dp/B07H34Q5S5"
+       },
+       {
+        "detail": "no read of this page",
+        "name": "Walmart",
+        "reason": "not_read",
+        "retailer_domain": "walmart.com",
+        "url": "https://www.walmart.com/ip/Pampers-Baby-Dry-Baby-Diapers-Size-4-186-Count/782112197"
+       }
+      ]
+     },
+     "tags": [
+      "Pampers"
+     ],
+     "title": "Pampers Baby-Dry, Size 4, 186 ct",
+     "url": "https://www.pampers.com/en-us/products/pampers-baby-dry-diapers",
+     "variants": []
+    },
+    "ucp": {
+     "version": "2026-08-25"
+    }
+   },
+   "published_at": null,
+   "reason": "blocked",
+   "record_ref": "feed:pampers-2u1:00037000783817",
+   "spec_clause": "no_priced_read: Pampers Baby-Dry, Size 4, 186 ct (00037000783817): no retailer page priced it on the read day (2026-10-20), and a UCP product requires a variant and a price range: truesync/specs/ucp/ucp-2026-08-25/shopping/types/product.json: \"required\": [\"id\", \"title\", \"description\", \"price_range\", \"variants\"], and \"variants\" has \"minItems\": 1.",
+   "spec_version": "ucp-2026-08-25",
+   "status": "compiled_not_published",
+   "validation": {
+    "errors": [
+     "blocked: no_priced_read: Pampers Baby-Dry, Size 4, 186 ct (00037000783817): no retailer page priced it on the read day (2026-10-20), and a UCP product requires a variant and a price range: truesync/specs/ucp/ucp-2026-08-25/shopping/types/product.json: \"required\": [\"id\", \"title\", \"description\", \"price_range\", \"variants\"], and \"variants\" has \"minItems\": 1.",
+     "product: 'price_range' is a required property",
+     "product/variants: [] should be non-empty"
+    ],
+    "ok": false
+   }
+  },
+  {
+   "channel": "acp",
+   "channel_slug": "acp",
+   "compiled_at": "2026-10-28T03:28:26",
+   "error": "blocked: no_priced_read: Pampers Baby-Dry: no retailer page priced any of its SKUs on the read day (2026-10-20), and a feed row requires a price. docs/truesync/truesync-protocol-specs.md \u00a71 (acp-feed-stable-2026-08-18): \"Required for non-Ads feeds: `item_id`, `title`, `description`, `url`, `brand`, `image_url`, `price` (\"79.99 USD\"), `availability` (...), `target_countries`, `seller_name`, and OpenAI flags `is_eligible_search`, `is_eligible_checkout`.\"",
+   "expressiveness": [
+    {
+     "field": "channel",
+     "note": "no_priced_read: Pampers Baby-Dry: no retailer page priced any of its SKUs on the read day (2026-10-20), and a feed row requires a price. docs/truesync/truesync-protocol-specs.md \u00a71 (acp-feed-stable-2026-08-18): \"Required for non-Ads feeds: `item_id`, `title`, `description`, `url`, `brand`, `image_url`, `price` (\"79.99 USD\"), `availability` (...), `target_countries`, `seller_name`, and OpenAI flags `is_eligible_search`, `is_eligible_checkout`.\"",
+     "severity": "blocked"
+    },
+    {
+     "field": "price",
+     "note": "Rules r1 and r2: each price is what one retailer's page showed on the read day (2026-10-20), labeled with the retailer and dated; every retailer read that day, alphabetically, never a chosen one. The brand sets no price, and no MSRP is sent.",
+     "severity": "info"
+    }
+   ],
+   "external_ref": null,
+   "held": true,
+   "id": 21,
+   "journal": [
+    {
+     "at": "2026-10-28T03:28:26+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-28T03:28:26+00:00",
+     "by": "parleo",
+     "cause": "no_priced_read",
+     "event": "blocked",
+     "note": "no_priced_read: Pampers Baby-Dry: no retailer page priced any of its SKUs on the read day (2026-10-20), and a feed row requires a price. docs/truesync/truesync-protocol-specs.md \u00a71 (acp-feed-stable-2026-08-18): \"Required for non-Ads feeds: `item_id`, `title`, `description`, `url`, `brand`, `image_url`, `price` (\"79.99 USD\"), `availability` (...), `target_countries`, `seller_name`, and OpenAI flags `is_eligible_search`, `is_eligible_checkout`.\"",
+     "rules": []
+    }
+   ],
+   "listing_id": null,
+   "mode": "manufacturer",
+   "payload": {
+    "domains": {},
+    "items": [],
+    "read_dates": {}
+   },
+   "published_at": null,
+   "reason": "blocked",
+   "record_ref": "feed:pampers-2u1:00037000783817",
+   "spec_clause": "no_priced_read: Pampers Baby-Dry: no retailer page priced any of its SKUs on the read day (2026-10-20), and a feed row requires a price. docs/truesync/truesync-protocol-specs.md \u00a71 (acp-feed-stable-2026-08-18): \"Required for non-Ads feeds: `item_id`, `title`, `description`, `url`, `brand`, `image_url`, `price` (\"79.99 USD\"), `availability` (...), `target_countries`, `seller_name`, and OpenAI flags `is_eligible_search`, `is_eligible_checkout`.\"",
+   "spec_version": "acp-feed-stable-2026-08-18",
+   "status": "compiled_not_published",
+   "validation": {
+    "errors": [
+     "blocked: no_priced_read: Pampers Baby-Dry: no retailer page priced any of its SKUs on the read day (2026-10-20), and a feed row requires a price. docs/truesync/truesync-protocol-specs.md \u00a71 (acp-feed-stable-2026-08-18): \"Required for non-Ads feeds: `item_id`, `title`, `description`, `url`, `brand`, `image_url`, `price` (\"79.99 USD\"), `availability` (...), `target_countries`, `seller_name`, and OpenAI flags `is_eligible_search`, `is_eligible_checkout`.\""
+    ],
+    "ok": false
+   }
+  },
+  {
+   "channel": "manufacturer_center",
+   "channel_slug": "manufacturer_center",
+   "compiled_at": "2026-10-28T03:28:26",
+   "error": "US:en:00037000783817: missing required attribute imageLink",
+   "expressiveness": [
+    {
+     "field": "percent_off",
+     "note": "Manufacturer Center: no sale-price or discount attribute; suggestedRetailPrice is MSRP and lowering it to encode a discount would misstate it (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "amount_off",
+     "note": "Manufacturer Center: no sale-price or discount attribute; suggestedRetailPrice is MSRP and lowering it to encode a discount would misstate it (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "member_price",
+     "note": "Manufacturer Center: no price attribute but MSRP and no membership concept (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "subscribe_and_save",
+     "note": "Manufacturer Center: no subscription attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "points_earn",
+     "note": "Manufacturer Center: no loyalty attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "free_shipping",
+     "note": "Manufacturer Center: no shipping attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "gift_with_purchase",
+     "note": "Manufacturer Center: no promotion attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "mfr_coupon",
+     "note": "Manufacturer Center: no promotion or code attribute, even for the manufacturer's own coupon (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "member",
+     "note": "Manufacturer Center: no eligibility attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "tier",
+     "note": "Manufacturer Center: no eligibility attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "subscription",
+     "note": "Manufacturer Center: no eligibility attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "new_customer",
+     "note": "Manufacturer Center: no eligibility attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "retailer_availability",
+     "note": "Manufacturer Center has no field for who sells the product or where; retailer URLs and the retailer list are not sent (MC-0 \u00a74b).",
+     "severity": "dropped"
+    },
+    {
+     "field": "availability",
+     "note": "No stock or availability attribute; 'availability' is n/a for Manufacturer Center (answer/7073012).",
+     "severity": "dropped"
+    },
+    {
+     "field": "shelf_price",
+     "note": "No price or sale_price attribute; only suggestedRetailPrice (MSRP) exists (answer/7073012, discovery Attributes).",
+     "severity": "dropped"
+    },
+    {
+     "field": "provenance",
+     "note": "No provenance attribute; the brand's verified account is itself the provenance claim (MC-0 \u00a74a).",
+     "severity": "dropped"
+    },
+    {
+     "field": "validity_dates",
+     "note": "No offer validity; disclosureDate and releaseDate are product-lifecycle dates, not offer windows (MC-0 \u00a74b).",
+     "severity": "dropped"
+    },
+    {
+     "field": "price",
+     "note": "Manufacturer mode, rule r1: the brand sets no price, and this channel carries no retailer price (no shelf price, no MSRP).",
+     "severity": "dropped"
+    },
+    {
+     "field": "size_chart",
+     "note": "No weight-range row for Pampers Baby-Dry Pampers Baby-Dry, Size 4, 186 ct: the brand page served no size chart for this line (rule r5 takes the chart only).",
+     "severity": "dropped"
+    },
+    {
+     "field": "imageLink",
+     "note": "Pampers Baby-Dry Pampers Baby-Dry, Size 4, 186 ct: no image_url in the feed and no brand-page image for this line; Manufacturer Center requires imageLink, so this product fails validation.",
+     "severity": "dropped"
+    }
+   ],
+   "external_ref": null,
+   "held": true,
+   "id": 20,
+   "journal": [
+    {
+     "at": "2026-10-28T03:28:26+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-28T03:28:26+00:00",
+     "by": "parleo",
+     "event": "held_for_merchant",
+     "note": "compiled; the brand's own team sends it"
+    }
+   ],
+   "listing_id": null,
+   "mode": "manufacturer",
+   "payload": {
+    "apiVersion": "manufacturers/v1",
+    "products": [
+     {
+      "attributes": {
+       "brand": "Pampers",
+       "count": {
+        "unit": "count",
+        "value": "186"
+       },
+       "description": "Baby-Dry diapers, size 4 (15-34 lb), 12-hour overnight protection.",
+       "gtin": [
+        "037000783817"
+       ],
+       "productName": "Pampers Baby-Dry",
+       "productPageUrl": "https://www.pampers.com/en-us/products/pampers-baby-dry-diapers",
+       "title": "Pampers Baby-Dry Pampers Baby-Dry, Size 4, 186 ct"
+      },
+      "name": "US:en:00037000783817"
+     }
+    ]
+   },
+   "published_at": null,
+   "reason": "held_for_merchant",
+   "record_ref": "feed:pampers-2u1:00037000783817",
+   "spec_clause": null,
+   "spec_version": "manufacturers-v1-2026-10-05",
+   "status": "compiled_not_published",
+   "validation": {
+    "errors": [
+     "US:en:00037000783817: missing required attribute imageLink"
+    ],
+    "ok": false
+   }
+  },
+  {
+   "channel": "schema_org",
+   "channel_slug": "schema_org",
+   "compiled_at": "2026-10-28T03:28:26",
+   "error": null,
+   "expressiveness": [
+    {
+     "field": "price",
+     "note": "Manufacturer mode, rule r1: the brand sets no price, and this channel carries no retailer price (no shelf price, no MSRP).",
+     "severity": "dropped"
+    },
+    {
+     "field": "availability",
+     "note": "Manufacturer mode: retailer-neutral, so no availability for any retailer.",
+     "severity": "dropped"
+    },
+    {
+     "field": "size_chart",
+     "note": "No weight-range row for Pampers Baby-Dry Pampers Baby-Dry, Size 4, 186 ct: the brand page served no size chart for this line (rule r5 takes the chart only).",
+     "severity": "dropped"
+    }
+   ],
+   "external_ref": null,
+   "held": true,
+   "id": 19,
+   "journal": [
+    {
+     "at": "2026-10-28T03:28:26+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-28T03:28:26+00:00",
+     "by": "parleo",
+     "event": "held_for_merchant",
+     "note": "compiled; the brand's own team sends it"
+    }
+   ],
+   "listing_id": null,
+   "mode": "manufacturer",
+   "payload": {
+    "@context": "https://schema.org",
+    "@type": "ProductGroup",
+    "brand": {
+     "@type": "Brand",
+     "name": "Pampers"
+    },
+    "description": "Baby-Dry diapers, size 4 (15-34 lb), 12-hour overnight protection.",
+    "hasVariant": [
+     {
+      "@type": "Product",
+      "additionalProperty": [
+       {
+        "@type": "PropertyValue",
+        "name": "Pack count",
+        "value": 186
+       }
+      ],
+      "brand": {
+       "@type": "Brand",
+       "name": "Pampers"
+      },
+      "description": "Baby-Dry diapers, size 4 (15-34 lb), 12-hour overnight protection.",
+      "gtin": "037000783817",
+      "gtin12": "037000783817",
+      "name": "Pampers Baby-Dry Pampers Baby-Dry, Size 4, 186 ct",
+      "offers": [
+       {
+        "@type": "Offer",
+        "seller": {
+         "@type": "Organization",
+         "name": "amazon.com"
+        },
+        "url": "https://www.amazon.com/dp/B07H34Q5S5"
+       },
+       {
+        "@type": "Offer",
+        "seller": {
+         "@type": "Organization",
+         "name": "walmart.com"
+        },
+        "url": "https://www.walmart.com/ip/Pampers-Baby-Dry-Baby-Diapers-Size-4-186-Count/782112197"
+       }
+      ],
+      "sku": "sku_pg_bd_s4_186",
+      "url": "https://www.pampers.com/en-us/products/pampers-baby-dry-diapers"
+     }
+    ],
+    "name": "Pampers Baby-Dry",
+    "productGroupID": "feed:pampers-2u1:00037000783817",
+    "url": "https://www.pampers.com/en-us/products/pampers-baby-dry-diapers",
+    "variesBy": [
+     "size",
+     "count"
+    ]
+   },
+   "published_at": null,
+   "reason": "held_for_merchant",
+   "record_ref": "feed:pampers-2u1:00037000783817",
+   "spec_clause": null,
+   "spec_version": "schemaorg-merchant-listing-2026-08-18",
+   "status": "compiled_not_published",
+   "validation": {
+    "errors": [],
+    "ok": true
+   }
+  },
+  {
+   "channel": "ucp_uip",
+   "channel_slug": "ucp_uip",
+   "compiled_at": "2026-10-28T03:28:26",
+   "error": "blocked: no_priced_read: Pampers AMORE, Size 1, 132 ct (sku:sku_pg_amore_s1_132): no retailer page priced it on the read day (2026-10-20), and a UCP product requires a variant and a price range: truesync/specs/ucp/ucp-2026-08-25/shopping/types/product.json: \"required\": [\"id\", \"title\", \"description\", \"price_range\", \"variants\"], and \"variants\" has \"minItems\": 1.; product: 'price_range' is a required property; product/variants: [] should be non-empty",
+   "expressiveness": [
+    {
+     "field": "channel",
+     "note": "no_priced_read: Pampers AMORE, Size 1, 132 ct (sku:sku_pg_amore_s1_132): no retailer page priced it on the read day (2026-10-20), and a UCP product requires a variant and a price range: truesync/specs/ucp/ucp-2026-08-25/shopping/types/product.json: \"required\": [\"id\", \"title\", \"description\", \"price_range\", \"variants\"], and \"variants\" has \"minItems\": 1.",
+     "severity": "blocked"
+    },
+    {
+     "field": "no_priced_read",
+     "note": "no_priced_read: Pampers AMORE, Size 1, 132 ct (sku:sku_pg_amore_s1_132): no retailer page priced it on the read day (2026-10-20), and a UCP product requires a variant and a price range: truesync/specs/ucp/ucp-2026-08-25/shopping/types/product.json: \"required\": [\"id\", \"title\", \"description\", \"price_range\", \"variants\"], and \"variants\" has \"minItems\": 1.",
+     "severity": "blocked"
+    },
+    {
+     "field": "price",
+     "note": "Rules r1 and r2: each price is what one retailer's page showed on the read day (2026-10-20), labeled with the retailer and dated; every retailer read that day, alphabetically, never a chosen one. The brand sets no price, and no MSRP is sent.",
+     "severity": "info"
+    },
+    {
+     "field": "checkout",
+     "note": "Manufacturer mode: catalog lookup only. The profile declares no checkout or cart service and payment_handlers is {}: the brand sells nothing here, and each variant's retailer page is where it is bought.",
+     "severity": "dropped"
+    },
+    {
+     "field": "loyalty",
+     "note": "Manufacturer mode: the loyalty extension (dev.ucp.common.loyalty) is neither declared nor populated; a retailer's program is the retailer's, not the brand's.",
+     "severity": "dropped"
+    },
+    {
+     "field": "member_price",
+     "note": "Manufacturer mode: a variant's price is the shelf price a retailer's page showed; member, subscription and loyalty prices are not compiled.",
+     "severity": "dropped"
+    }
+   ],
+   "external_ref": null,
+   "held": true,
+   "id": 18,
+   "journal": [
+    {
+     "at": "2026-10-28T03:28:26+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-28T03:28:26+00:00",
+     "by": "parleo",
+     "cause": "no_priced_read",
+     "event": "blocked",
+     "note": "no_priced_read: Pampers AMORE, Size 1, 132 ct (sku:sku_pg_amore_s1_132): no retailer page priced it on the read day (2026-10-20), and a UCP product requires a variant and a price range: truesync/specs/ucp/ucp-2026-08-25/shopping/types/product.json: \"required\": [\"id\", \"title\", \"description\", \"price_range\", \"variants\"], and \"variants\" has \"minItems\": 1.",
+     "rules": []
+    }
+   ],
+   "listing_id": null,
+   "mode": "manufacturer",
+   "payload": {
+    "product": {
+     "description": {
+      "plain": "AMORE diapers, size 1 (8-14 lb), the line that replaced Pure Protection."
+     },
+     "id": "sku:sku_pg_amore_s1_132",
+     "metadata": {
+      "read_date": "2026-10-20",
+      "unread_retailers": [
+       {
+        "detail": "no read of this page",
+        "name": "Amazon",
+        "reason": "not_read",
+        "retailer_domain": "amazon.com",
+        "url": "https://www.amazon.com/dp/B0FXYHC1MD"
+       },
+       {
+        "detail": "no read of this page",
+        "name": "Target",
+        "reason": "not_read",
+        "retailer_domain": "target.com",
+        "url": "https://www.target.com/p/-/-/A-94794093"
+       },
+       {
+        "detail": "no read of this page",
+        "name": "Walmart",
+        "reason": "not_read",
+        "retailer_domain": "walmart.com",
+        "url": "https://www.walmart.com/ip/Pampers-Amore-Diapers-Size-1-132-Count/18916423987"
+       }
+      ]
+     },
+     "tags": [
+      "Pampers"
+     ],
+     "title": "Pampers AMORE, Size 1, 132 ct",
+     "url": "https://www.pampers.com/en-us/product/amore",
+     "variants": []
+    },
+    "ucp": {
+     "version": "2026-08-25"
+    }
+   },
+   "published_at": null,
+   "reason": "blocked",
+   "record_ref": "feed:pampers-2u1:sku:sku_pg_amore_s1_132",
+   "spec_clause": "no_priced_read: Pampers AMORE, Size 1, 132 ct (sku:sku_pg_amore_s1_132): no retailer page priced it on the read day (2026-10-20), and a UCP product requires a variant and a price range: truesync/specs/ucp/ucp-2026-08-25/shopping/types/product.json: \"required\": [\"id\", \"title\", \"description\", \"price_range\", \"variants\"], and \"variants\" has \"minItems\": 1.",
+   "spec_version": "ucp-2026-08-25",
+   "status": "compiled_not_published",
+   "validation": {
+    "errors": [
+     "blocked: no_priced_read: Pampers AMORE, Size 1, 132 ct (sku:sku_pg_amore_s1_132): no retailer page priced it on the read day (2026-10-20), and a UCP product requires a variant and a price range: truesync/specs/ucp/ucp-2026-08-25/shopping/types/product.json: \"required\": [\"id\", \"title\", \"description\", \"price_range\", \"variants\"], and \"variants\" has \"minItems\": 1.",
+     "product: 'price_range' is a required property",
+     "product/variants: [] should be non-empty"
+    ],
+    "ok": false
+   }
+  },
+  {
+   "channel": "acp",
+   "channel_slug": "acp",
+   "compiled_at": "2026-10-28T03:28:26",
+   "error": "blocked: no_priced_read: Pampers AMORE: no retailer page priced any of its SKUs on the read day (2026-10-20), and a feed row requires a price. docs/truesync/truesync-protocol-specs.md \u00a71 (acp-feed-stable-2026-08-18): \"Required for non-Ads feeds: `item_id`, `title`, `description`, `url`, `brand`, `image_url`, `price` (\"79.99 USD\"), `availability` (...), `target_countries`, `seller_name`, and OpenAI flags `is_eligible_search`, `is_eligible_checkout`.\"",
+   "expressiveness": [
+    {
+     "field": "channel",
+     "note": "no_priced_read: Pampers AMORE: no retailer page priced any of its SKUs on the read day (2026-10-20), and a feed row requires a price. docs/truesync/truesync-protocol-specs.md \u00a71 (acp-feed-stable-2026-08-18): \"Required for non-Ads feeds: `item_id`, `title`, `description`, `url`, `brand`, `image_url`, `price` (\"79.99 USD\"), `availability` (...), `target_countries`, `seller_name`, and OpenAI flags `is_eligible_search`, `is_eligible_checkout`.\"",
+     "severity": "blocked"
+    },
+    {
+     "field": "price",
+     "note": "Rules r1 and r2: each price is what one retailer's page showed on the read day (2026-10-20), labeled with the retailer and dated; every retailer read that day, alphabetically, never a chosen one. The brand sets no price, and no MSRP is sent.",
+     "severity": "info"
+    }
+   ],
+   "external_ref": null,
+   "held": true,
+   "id": 17,
+   "journal": [
+    {
+     "at": "2026-10-28T03:28:26+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-28T03:28:26+00:00",
+     "by": "parleo",
+     "cause": "no_priced_read",
+     "event": "blocked",
+     "note": "no_priced_read: Pampers AMORE: no retailer page priced any of its SKUs on the read day (2026-10-20), and a feed row requires a price. docs/truesync/truesync-protocol-specs.md \u00a71 (acp-feed-stable-2026-08-18): \"Required for non-Ads feeds: `item_id`, `title`, `description`, `url`, `brand`, `image_url`, `price` (\"79.99 USD\"), `availability` (...), `target_countries`, `seller_name`, and OpenAI flags `is_eligible_search`, `is_eligible_checkout`.\"",
+     "rules": []
+    }
+   ],
+   "listing_id": null,
+   "mode": "manufacturer",
+   "payload": {
+    "domains": {},
+    "items": [],
+    "read_dates": {}
+   },
+   "published_at": null,
+   "reason": "blocked",
+   "record_ref": "feed:pampers-2u1:sku:sku_pg_amore_s1_132",
+   "spec_clause": "no_priced_read: Pampers AMORE: no retailer page priced any of its SKUs on the read day (2026-10-20), and a feed row requires a price. docs/truesync/truesync-protocol-specs.md \u00a71 (acp-feed-stable-2026-08-18): \"Required for non-Ads feeds: `item_id`, `title`, `description`, `url`, `brand`, `image_url`, `price` (\"79.99 USD\"), `availability` (...), `target_countries`, `seller_name`, and OpenAI flags `is_eligible_search`, `is_eligible_checkout`.\"",
+   "spec_version": "acp-feed-stable-2026-08-18",
+   "status": "compiled_not_published",
+   "validation": {
+    "errors": [
+     "blocked: no_priced_read: Pampers AMORE: no retailer page priced any of its SKUs on the read day (2026-10-20), and a feed row requires a price. docs/truesync/truesync-protocol-specs.md \u00a71 (acp-feed-stable-2026-08-18): \"Required for non-Ads feeds: `item_id`, `title`, `description`, `url`, `brand`, `image_url`, `price` (\"79.99 USD\"), `availability` (...), `target_countries`, `seller_name`, and OpenAI flags `is_eligible_search`, `is_eligible_checkout`.\""
+    ],
+    "ok": false
+   }
+  },
+  {
+   "channel": "manufacturer_center",
+   "channel_slug": "manufacturer_center",
+   "compiled_at": "2026-10-28T03:28:26",
+   "error": "no variant carries a GTIN; Manufacturer Center keys every product by GTIN",
+   "expressiveness": [
+    {
+     "field": "percent_off",
+     "note": "Manufacturer Center: no sale-price or discount attribute; suggestedRetailPrice is MSRP and lowering it to encode a discount would misstate it (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "amount_off",
+     "note": "Manufacturer Center: no sale-price or discount attribute; suggestedRetailPrice is MSRP and lowering it to encode a discount would misstate it (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "member_price",
+     "note": "Manufacturer Center: no price attribute but MSRP and no membership concept (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "subscribe_and_save",
+     "note": "Manufacturer Center: no subscription attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "points_earn",
+     "note": "Manufacturer Center: no loyalty attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "free_shipping",
+     "note": "Manufacturer Center: no shipping attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "gift_with_purchase",
+     "note": "Manufacturer Center: no promotion attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "mfr_coupon",
+     "note": "Manufacturer Center: no promotion or code attribute, even for the manufacturer's own coupon (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "member",
+     "note": "Manufacturer Center: no eligibility attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "tier",
+     "note": "Manufacturer Center: no eligibility attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "subscription",
+     "note": "Manufacturer Center: no eligibility attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "new_customer",
+     "note": "Manufacturer Center: no eligibility attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "retailer_availability",
+     "note": "Manufacturer Center has no field for who sells the product or where; retailer URLs and the retailer list are not sent (MC-0 \u00a74b).",
+     "severity": "dropped"
+    },
+    {
+     "field": "availability",
+     "note": "No stock or availability attribute; 'availability' is n/a for Manufacturer Center (answer/7073012).",
+     "severity": "dropped"
+    },
+    {
+     "field": "shelf_price",
+     "note": "No price or sale_price attribute; only suggestedRetailPrice (MSRP) exists (answer/7073012, discovery Attributes).",
+     "severity": "dropped"
+    },
+    {
+     "field": "provenance",
+     "note": "No provenance attribute; the brand's verified account is itself the provenance claim (MC-0 \u00a74a).",
+     "severity": "dropped"
+    },
+    {
+     "field": "validity_dates",
+     "note": "No offer validity; disclosureDate and releaseDate are product-lifecycle dates, not offer windows (MC-0 \u00a74b).",
+     "severity": "dropped"
+    },
+    {
+     "field": "gtin",
+     "note": "1 variant(s) without a GTIN not compiled (sku:sku_pg_amore_s1_132): Manufacturer Center keys every product by GTIN and has no identifier_exists=false (answer/6358237).",
+     "severity": "dropped"
+    },
+    {
+     "field": "price",
+     "note": "Manufacturer mode, rule r1: the brand sets no price, and this channel carries no retailer price (no shelf price, no MSRP).",
+     "severity": "dropped"
+    },
+    {
+     "field": "size_chart",
+     "note": "No weight-range row for Pampers AMORE Pampers AMORE, Size 1, 132 ct: the brand page served no size chart for this line (rule r5 takes the chart only).",
+     "severity": "dropped"
+    }
+   ],
+   "external_ref": null,
+   "held": true,
+   "id": 16,
+   "journal": [
+    {
+     "at": "2026-10-28T03:28:26+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-28T03:28:26+00:00",
+     "by": "parleo",
+     "event": "held_for_merchant",
+     "note": "compiled; the brand's own team sends it"
+    }
+   ],
+   "listing_id": null,
+   "mode": "manufacturer",
+   "payload": {
+    "apiVersion": "manufacturers/v1",
+    "products": []
+   },
+   "published_at": null,
+   "reason": "held_for_merchant",
+   "record_ref": "feed:pampers-2u1:sku:sku_pg_amore_s1_132",
+   "spec_clause": null,
+   "spec_version": "manufacturers-v1-2026-10-05",
+   "status": "compiled_not_published",
+   "validation": {
+    "errors": [
+     "no variant carries a GTIN; Manufacturer Center keys every product by GTIN"
+    ],
+    "ok": false
+   }
+  },
+  {
+   "channel": "schema_org",
+   "channel_slug": "schema_org",
+   "compiled_at": "2026-10-28T03:28:26",
+   "error": null,
+   "expressiveness": [
+    {
+     "field": "price",
+     "note": "Manufacturer mode, rule r1: the brand sets no price, and this channel carries no retailer price (no shelf price, no MSRP).",
+     "severity": "dropped"
+    },
+    {
+     "field": "availability",
+     "note": "Manufacturer mode: retailer-neutral, so no availability for any retailer.",
+     "severity": "dropped"
+    },
+    {
+     "field": "size_chart",
+     "note": "No weight-range row for Pampers AMORE Pampers AMORE, Size 1, 132 ct: the brand page served no size chart for this line (rule r5 takes the chart only).",
+     "severity": "dropped"
+    }
+   ],
+   "external_ref": null,
+   "held": true,
+   "id": 15,
+   "journal": [
+    {
+     "at": "2026-10-28T03:28:26+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-28T03:28:26+00:00",
+     "by": "parleo",
+     "event": "held_for_merchant",
+     "note": "compiled; the brand's own team sends it"
+    }
+   ],
+   "listing_id": null,
+   "mode": "manufacturer",
+   "payload": {
+    "@context": "https://schema.org",
+    "@type": "ProductGroup",
+    "brand": {
+     "@type": "Brand",
+     "name": "Pampers"
+    },
+    "description": "AMORE diapers, size 1 (8-14 lb), the line that replaced Pure Protection.",
+    "hasVariant": [
+     {
+      "@type": "Product",
+      "additionalProperty": [
+       {
+        "@type": "PropertyValue",
+        "name": "Pack count",
+        "value": 132
+       }
+      ],
+      "brand": {
+       "@type": "Brand",
+       "name": "Pampers"
+      },
+      "description": "AMORE diapers, size 1 (8-14 lb), the line that replaced Pure Protection.",
+      "name": "Pampers AMORE Pampers AMORE, Size 1, 132 ct",
+      "offers": [
+       {
+        "@type": "Offer",
+        "seller": {
+         "@type": "Organization",
+         "name": "amazon.com"
+        },
+        "url": "https://www.amazon.com/dp/B0FXYHC1MD"
+       },
+       {
+        "@type": "Offer",
+        "seller": {
+         "@type": "Organization",
+         "name": "target.com"
+        },
+        "url": "https://www.target.com/p/-/-/A-94794093"
+       },
+       {
+        "@type": "Offer",
+        "seller": {
+         "@type": "Organization",
+         "name": "walmart.com"
+        },
+        "url": "https://www.walmart.com/ip/Pampers-Amore-Diapers-Size-1-132-Count/18916423987"
+       }
+      ],
+      "sku": "sku_pg_amore_s1_132",
+      "url": "https://www.pampers.com/en-us/product/amore"
+     }
+    ],
+    "name": "Pampers AMORE",
+    "productGroupID": "feed:pampers-2u1:sku:sku_pg_amore_s1_132",
+    "url": "https://www.pampers.com/en-us/product/amore",
+    "variesBy": [
+     "size",
+     "count"
+    ]
+   },
+   "published_at": null,
+   "reason": "held_for_merchant",
+   "record_ref": "feed:pampers-2u1:sku:sku_pg_amore_s1_132",
+   "spec_clause": null,
+   "spec_version": "schemaorg-merchant-listing-2026-08-18",
+   "status": "compiled_not_published",
+   "validation": {
+    "errors": [],
+    "ok": true
+   }
+  },
+  {
+   "channel": "ucp_uip",
+   "channel_slug": "ucp_uip",
+   "compiled_at": "2026-10-28T03:28:26",
+   "error": "blocked: no_priced_read: Pampers Pure Protection, Size 1 (retired) (sku:sku_pg_pure_s1): no retailer page priced it on the read day (2026-10-20), and a UCP product requires a variant and a price range: truesync/specs/ucp/ucp-2026-08-25/shopping/types/product.json: \"required\": [\"id\", \"title\", \"description\", \"price_range\", \"variants\"], and \"variants\" has \"minItems\": 1.; product: 'price_range' is a required property; product/variants: [] should be non-empty",
+   "expressiveness": [
+    {
+     "field": "channel",
+     "note": "no_priced_read: Pampers Pure Protection, Size 1 (retired) (sku:sku_pg_pure_s1): no retailer page priced it on the read day (2026-10-20), and a UCP product requires a variant and a price range: truesync/specs/ucp/ucp-2026-08-25/shopping/types/product.json: \"required\": [\"id\", \"title\", \"description\", \"price_range\", \"variants\"], and \"variants\" has \"minItems\": 1.",
+     "severity": "blocked"
+    },
+    {
+     "field": "no_priced_read",
+     "note": "no_priced_read: Pampers Pure Protection, Size 1 (retired) (sku:sku_pg_pure_s1): no retailer page priced it on the read day (2026-10-20), and a UCP product requires a variant and a price range: truesync/specs/ucp/ucp-2026-08-25/shopping/types/product.json: \"required\": [\"id\", \"title\", \"description\", \"price_range\", \"variants\"], and \"variants\" has \"minItems\": 1.",
+     "severity": "blocked"
+    },
+    {
+     "field": "price",
+     "note": "Rules r1 and r2: each price is what one retailer's page showed on the read day (2026-10-20), labeled with the retailer and dated; every retailer read that day, alphabetically, never a chosen one. The brand sets no price, and no MSRP is sent.",
+     "severity": "info"
+    },
+    {
+     "field": "checkout",
+     "note": "Manufacturer mode: catalog lookup only. The profile declares no checkout or cart service and payment_handlers is {}: the brand sells nothing here, and each variant's retailer page is where it is bought.",
+     "severity": "dropped"
+    },
+    {
+     "field": "loyalty",
+     "note": "Manufacturer mode: the loyalty extension (dev.ucp.common.loyalty) is neither declared nor populated; a retailer's program is the retailer's, not the brand's.",
+     "severity": "dropped"
+    },
+    {
+     "field": "member_price",
+     "note": "Manufacturer mode: a variant's price is the shelf price a retailer's page showed; member, subscription and loyalty prices are not compiled.",
+     "severity": "dropped"
+    }
+   ],
+   "external_ref": null,
+   "held": true,
+   "id": 14,
+   "journal": [
+    {
+     "at": "2026-10-28T03:28:26+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-28T03:28:26+00:00",
+     "by": "parleo",
+     "cause": "no_priced_read",
+     "event": "blocked",
+     "note": "no_priced_read: Pampers Pure Protection, Size 1 (retired) (sku:sku_pg_pure_s1): no retailer page priced it on the read day (2026-10-20), and a UCP product requires a variant and a price range: truesync/specs/ucp/ucp-2026-08-25/shopping/types/product.json: \"required\": [\"id\", \"title\", \"description\", \"price_range\", \"variants\"], and \"variants\" has \"minItems\": 1.",
+     "rules": []
+    }
+   ],
+   "listing_id": null,
+   "mode": "manufacturer",
+   "payload": {
+    "product": {
+     "description": {
+      "plain": "Pure Protection diapers, size 1. Retired on pampers.com; the page redirects to AMORE. Retailers still sell remaining stock."
+     },
+     "id": "sku:sku_pg_pure_s1",
+     "metadata": {
+      "read_date": "2026-10-20",
+      "successor": {
+       "product_name": "Pampers AMORE",
+       "sku": "sku_pg_amore_s1_132",
+       "title": "Pampers AMORE, Size 1, 132 ct",
+       "variant_id": "sku:sku_pg_amore_s1_132"
+      },
+      "unread_retailers": [
+       {
+        "detail": "no read of this page",
+        "name": "Amazon",
+        "reason": "not_read",
+        "retailer_domain": "amazon.com",
+        "url": "https://www.amazon.com/dp/B082QBFMSZ"
+       },
+       {
+        "detail": "no read of this page",
+        "name": "Target",
+        "reason": "not_read",
+        "retailer_domain": "target.com",
+        "url": "https://www.target.com/p/-/-/A-79647304"
+       },
+       {
+        "detail": "no read of this page",
+        "name": "Walmart",
+        "reason": "not_read",
+        "retailer_domain": "walmart.com",
+        "url": "https://www.walmart.com/ip/Pampers-Pure-Baby-Diapers-Size-1-82-Count/906348357"
+       }
+      ]
+     },
+     "tags": [
+      "Pampers"
+     ],
+     "title": "Pampers Pure Protection, Size 1 (retired)",
+     "url": "https://www.pampers.com/en-us/products/pampers-pure-protection-diapers",
+     "variants": []
+    },
+    "ucp": {
+     "version": "2026-08-25"
+    }
+   },
+   "published_at": null,
+   "reason": "blocked",
+   "record_ref": "feed:pampers-2u1:sku:sku_pg_pure_s1",
+   "spec_clause": "no_priced_read: Pampers Pure Protection, Size 1 (retired) (sku:sku_pg_pure_s1): no retailer page priced it on the read day (2026-10-20), and a UCP product requires a variant and a price range: truesync/specs/ucp/ucp-2026-08-25/shopping/types/product.json: \"required\": [\"id\", \"title\", \"description\", \"price_range\", \"variants\"], and \"variants\" has \"minItems\": 1.",
+   "spec_version": "ucp-2026-08-25",
+   "status": "compiled_not_published",
+   "validation": {
+    "errors": [
+     "blocked: no_priced_read: Pampers Pure Protection, Size 1 (retired) (sku:sku_pg_pure_s1): no retailer page priced it on the read day (2026-10-20), and a UCP product requires a variant and a price range: truesync/specs/ucp/ucp-2026-08-25/shopping/types/product.json: \"required\": [\"id\", \"title\", \"description\", \"price_range\", \"variants\"], and \"variants\" has \"minItems\": 1.",
+     "product: 'price_range' is a required property",
+     "product/variants: [] should be non-empty"
+    ],
+    "ok": false
+   }
+  },
+  {
+   "channel": "acp",
+   "channel_slug": "acp",
+   "compiled_at": "2026-10-28T03:28:26",
+   "error": "blocked: no_priced_read: Pampers Pure Protection: no retailer page priced any of its SKUs on the read day (2026-10-20), and a feed row requires a price. docs/truesync/truesync-protocol-specs.md \u00a71 (acp-feed-stable-2026-08-18): \"Required for non-Ads feeds: `item_id`, `title`, `description`, `url`, `brand`, `image_url`, `price` (\"79.99 USD\"), `availability` (...), `target_countries`, `seller_name`, and OpenAI flags `is_eligible_search`, `is_eligible_checkout`.\"",
+   "expressiveness": [
+    {
+     "field": "channel",
+     "note": "no_priced_read: Pampers Pure Protection: no retailer page priced any of its SKUs on the read day (2026-10-20), and a feed row requires a price. docs/truesync/truesync-protocol-specs.md \u00a71 (acp-feed-stable-2026-08-18): \"Required for non-Ads feeds: `item_id`, `title`, `description`, `url`, `brand`, `image_url`, `price` (\"79.99 USD\"), `availability` (...), `target_countries`, `seller_name`, and OpenAI flags `is_eligible_search`, `is_eligible_checkout`.\"",
+     "severity": "blocked"
+    },
+    {
+     "field": "price",
+     "note": "Rules r1 and r2: each price is what one retailer's page showed on the read day (2026-10-20), labeled with the retailer and dated; every retailer read that day, alphabetically, never a chosen one. The brand sets no price, and no MSRP is sent.",
+     "severity": "info"
+    },
+    {
+     "field": "successor",
+     "note": "no successor field in the ACP feed (specs \u00a71). The record states it (Pampers Pure Protection Pampers Pure Protection, Size 1 (retired) -> Pampers AMORE, Size 1, 132 ct).",
+     "severity": "dropped"
+    }
+   ],
+   "external_ref": null,
+   "held": true,
+   "id": 13,
+   "journal": [
+    {
+     "at": "2026-10-28T03:28:26+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-28T03:28:26+00:00",
+     "by": "parleo",
+     "cause": "no_priced_read",
+     "event": "blocked",
+     "note": "no_priced_read: Pampers Pure Protection: no retailer page priced any of its SKUs on the read day (2026-10-20), and a feed row requires a price. docs/truesync/truesync-protocol-specs.md \u00a71 (acp-feed-stable-2026-08-18): \"Required for non-Ads feeds: `item_id`, `title`, `description`, `url`, `brand`, `image_url`, `price` (\"79.99 USD\"), `availability` (...), `target_countries`, `seller_name`, and OpenAI flags `is_eligible_search`, `is_eligible_checkout`.\"",
+     "rules": []
+    }
+   ],
+   "listing_id": null,
+   "mode": "manufacturer",
+   "payload": {
+    "domains": {},
+    "items": [],
+    "read_dates": {}
+   },
+   "published_at": null,
+   "reason": "blocked",
+   "record_ref": "feed:pampers-2u1:sku:sku_pg_pure_s1",
+   "spec_clause": "no_priced_read: Pampers Pure Protection: no retailer page priced any of its SKUs on the read day (2026-10-20), and a feed row requires a price. docs/truesync/truesync-protocol-specs.md \u00a71 (acp-feed-stable-2026-08-18): \"Required for non-Ads feeds: `item_id`, `title`, `description`, `url`, `brand`, `image_url`, `price` (\"79.99 USD\"), `availability` (...), `target_countries`, `seller_name`, and OpenAI flags `is_eligible_search`, `is_eligible_checkout`.\"",
+   "spec_version": "acp-feed-stable-2026-08-18",
+   "status": "compiled_not_published",
+   "validation": {
+    "errors": [
+     "blocked: no_priced_read: Pampers Pure Protection: no retailer page priced any of its SKUs on the read day (2026-10-20), and a feed row requires a price. docs/truesync/truesync-protocol-specs.md \u00a71 (acp-feed-stable-2026-08-18): \"Required for non-Ads feeds: `item_id`, `title`, `description`, `url`, `brand`, `image_url`, `price` (\"79.99 USD\"), `availability` (...), `target_countries`, `seller_name`, and OpenAI flags `is_eligible_search`, `is_eligible_checkout`.\""
+    ],
+    "ok": false
+   }
+  },
+  {
+   "channel": "manufacturer_center",
+   "channel_slug": "manufacturer_center",
+   "compiled_at": "2026-10-28T03:28:26",
+   "error": "no variant carries a GTIN; Manufacturer Center keys every product by GTIN",
+   "expressiveness": [
+    {
+     "field": "percent_off",
+     "note": "Manufacturer Center: no sale-price or discount attribute; suggestedRetailPrice is MSRP and lowering it to encode a discount would misstate it (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "amount_off",
+     "note": "Manufacturer Center: no sale-price or discount attribute; suggestedRetailPrice is MSRP and lowering it to encode a discount would misstate it (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "member_price",
+     "note": "Manufacturer Center: no price attribute but MSRP and no membership concept (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "subscribe_and_save",
+     "note": "Manufacturer Center: no subscription attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "points_earn",
+     "note": "Manufacturer Center: no loyalty attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "free_shipping",
+     "note": "Manufacturer Center: no shipping attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "gift_with_purchase",
+     "note": "Manufacturer Center: no promotion attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "mfr_coupon",
+     "note": "Manufacturer Center: no promotion or code attribute, even for the manufacturer's own coupon (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "member",
+     "note": "Manufacturer Center: no eligibility attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "tier",
+     "note": "Manufacturer Center: no eligibility attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "subscription",
+     "note": "Manufacturer Center: no eligibility attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "new_customer",
+     "note": "Manufacturer Center: no eligibility attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "retailer_availability",
+     "note": "Manufacturer Center has no field for who sells the product or where; retailer URLs and the retailer list are not sent (MC-0 \u00a74b).",
+     "severity": "dropped"
+    },
+    {
+     "field": "availability",
+     "note": "No stock or availability attribute; 'availability' is n/a for Manufacturer Center (answer/7073012).",
+     "severity": "dropped"
+    },
+    {
+     "field": "shelf_price",
+     "note": "No price or sale_price attribute; only suggestedRetailPrice (MSRP) exists (answer/7073012, discovery Attributes).",
+     "severity": "dropped"
+    },
+    {
+     "field": "provenance",
+     "note": "No provenance attribute; the brand's verified account is itself the provenance claim (MC-0 \u00a74a).",
+     "severity": "dropped"
+    },
+    {
+     "field": "validity_dates",
+     "note": "No offer validity; disclosureDate and releaseDate are product-lifecycle dates, not offer windows (MC-0 \u00a74b).",
+     "severity": "dropped"
+    },
+    {
+     "field": "gtin",
+     "note": "1 variant(s) without a GTIN not compiled (sku:sku_pg_pure_s1): Manufacturer Center keys every product by GTIN and has no identifier_exists=false (answer/6358237).",
+     "severity": "dropped"
+    },
+    {
+     "field": "price",
+     "note": "Manufacturer mode, rule r1: the brand sets no price, and this channel carries no retailer price (no shelf price, no MSRP).",
+     "severity": "dropped"
+    },
+    {
+     "field": "size_chart",
+     "note": "No weight-range row for Pampers Pure Protection Pampers Pure Protection, Size 1 (retired): the brand page served no size chart for this line (rule r5 takes the chart only).",
+     "severity": "dropped"
+    },
+    {
+     "field": "successor",
+     "note": "no successor field; MC-0 \u00a74. The record states it (Pampers Pure Protection Pampers Pure Protection, Size 1 (retired) -> Pampers AMORE, Size 1, 132 ct).",
+     "severity": "dropped"
+    }
+   ],
+   "external_ref": null,
+   "held": true,
+   "id": 12,
+   "journal": [
+    {
+     "at": "2026-10-28T03:28:26+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-28T03:28:26+00:00",
+     "by": "parleo",
+     "event": "held_for_merchant",
+     "note": "compiled; the brand's own team sends it"
+    }
+   ],
+   "listing_id": null,
+   "mode": "manufacturer",
+   "payload": {
+    "apiVersion": "manufacturers/v1",
+    "products": []
+   },
+   "published_at": null,
+   "reason": "held_for_merchant",
+   "record_ref": "feed:pampers-2u1:sku:sku_pg_pure_s1",
+   "spec_clause": null,
+   "spec_version": "manufacturers-v1-2026-10-05",
+   "status": "compiled_not_published",
+   "validation": {
+    "errors": [
+     "no variant carries a GTIN; Manufacturer Center keys every product by GTIN"
+    ],
+    "ok": false
+   }
+  },
+  {
+   "channel": "schema_org",
+   "channel_slug": "schema_org",
+   "compiled_at": "2026-10-28T03:28:26",
+   "error": null,
+   "expressiveness": [
+    {
+     "field": "price",
+     "note": "Manufacturer mode, rule r1: the brand sets no price, and this channel carries no retailer price (no shelf price, no MSRP).",
+     "severity": "dropped"
+    },
+    {
+     "field": "availability",
+     "note": "Manufacturer mode: retailer-neutral, so no availability for any retailer.",
+     "severity": "dropped"
+    },
+    {
+     "field": "size_chart",
+     "note": "No weight-range row for Pampers Pure Protection Pampers Pure Protection, Size 1 (retired): the brand page served no size chart for this line (rule r5 takes the chart only).",
+     "severity": "dropped"
+    },
+    {
+     "field": "successor",
+     "note": "no property: nothing in the vendored schema.org material (truesync/specs/schema_org/) states a successor for a Product, so the payload states none and the record carries it (Pampers Pure Protection Pampers Pure Protection, Size 1 (retired) -> Pampers AMORE, Size 1, 132 ct).",
+     "severity": "dropped"
+    }
+   ],
+   "external_ref": null,
+   "held": true,
+   "id": 11,
+   "journal": [
+    {
+     "at": "2026-10-28T03:28:26+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-28T03:28:26+00:00",
+     "by": "parleo",
+     "event": "held_for_merchant",
+     "note": "compiled; the brand's own team sends it"
+    }
+   ],
+   "listing_id": null,
+   "mode": "manufacturer",
+   "payload": {
+    "@context": "https://schema.org",
+    "@type": "ProductGroup",
+    "brand": {
+     "@type": "Brand",
+     "name": "Pampers"
+    },
+    "description": "Pure Protection diapers, size 1. Retired on pampers.com; the page redirects to AMORE. Retailers still sell remaining stock.",
+    "hasVariant": [
+     {
+      "@type": "Product",
+      "additionalProperty": [
+       {
+        "@type": "PropertyValue",
+        "name": "Pack count",
+        "value": 132
+       }
+      ],
+      "brand": {
+       "@type": "Brand",
+       "name": "Pampers"
+      },
+      "description": "Pure Protection diapers, size 1. Retired on pampers.com; the page redirects to AMORE. Retailers still sell remaining stock.",
+      "name": "Pampers Pure Protection Pampers Pure Protection, Size 1 (retired)",
+      "offers": [
+       {
+        "@type": "Offer",
+        "seller": {
+         "@type": "Organization",
+         "name": "amazon.com"
+        },
+        "url": "https://www.amazon.com/dp/B082QBFMSZ"
+       },
+       {
+        "@type": "Offer",
+        "seller": {
+         "@type": "Organization",
+         "name": "target.com"
+        },
+        "url": "https://www.target.com/p/-/-/A-79647304"
+       },
+       {
+        "@type": "Offer",
+        "seller": {
+         "@type": "Organization",
+         "name": "walmart.com"
+        },
+        "url": "https://www.walmart.com/ip/Pampers-Pure-Baby-Diapers-Size-1-82-Count/906348357"
+       }
+      ],
+      "sku": "sku_pg_pure_s1",
+      "url": "https://www.pampers.com/en-us/products/pampers-pure-protection-diapers"
+     }
+    ],
+    "name": "Pampers Pure Protection",
+    "productGroupID": "feed:pampers-2u1:sku:sku_pg_pure_s1",
+    "url": "https://www.pampers.com/en-us/products/pampers-pure-protection-diapers",
+    "variesBy": [
+     "size",
+     "count"
+    ]
+   },
+   "published_at": null,
+   "reason": "held_for_merchant",
+   "record_ref": "feed:pampers-2u1:sku:sku_pg_pure_s1",
+   "spec_clause": null,
+   "spec_version": "schemaorg-merchant-listing-2026-08-18",
+   "status": "compiled_not_published",
+   "validation": {
+    "errors": [],
+    "ok": true
+   }
+  },
+  {
+   "channel": "ucp_uip",
+   "channel_slug": "ucp_uip",
+   "compiled_at": "2026-10-28T03:28:26",
+   "error": "blocked: no_priced_read: Pampers Swaddlers Ultra Day + Night, Size 3, 180 ct (sku:sku_pg_swultra_s3): no retailer page priced it on the read day (2026-10-20), and a UCP product requires a variant and a price range: truesync/specs/ucp/ucp-2026-08-25/shopping/types/product.json: \"required\": [\"id\", \"title\", \"description\", \"price_range\", \"variants\"], and \"variants\" has \"minItems\": 1.; product: 'price_range' is a required property; product/variants: [] should be non-empty",
+   "expressiveness": [
+    {
+     "field": "channel",
+     "note": "no_priced_read: Pampers Swaddlers Ultra Day + Night, Size 3, 180 ct (sku:sku_pg_swultra_s3): no retailer page priced it on the read day (2026-10-20), and a UCP product requires a variant and a price range: truesync/specs/ucp/ucp-2026-08-25/shopping/types/product.json: \"required\": [\"id\", \"title\", \"description\", \"price_range\", \"variants\"], and \"variants\" has \"minItems\": 1.",
+     "severity": "blocked"
+    },
+    {
+     "field": "no_priced_read",
+     "note": "no_priced_read: Pampers Swaddlers Ultra Day + Night, Size 3, 180 ct (sku:sku_pg_swultra_s3): no retailer page priced it on the read day (2026-10-20), and a UCP product requires a variant and a price range: truesync/specs/ucp/ucp-2026-08-25/shopping/types/product.json: \"required\": [\"id\", \"title\", \"description\", \"price_range\", \"variants\"], and \"variants\" has \"minItems\": 1.",
+     "severity": "blocked"
+    },
+    {
+     "field": "price",
+     "note": "Rules r1 and r2: each price is what one retailer's page showed on the read day (2026-10-20), labeled with the retailer and dated; every retailer read that day, alphabetically, never a chosen one. The brand sets no price, and no MSRP is sent.",
+     "severity": "info"
+    },
+    {
+     "field": "checkout",
+     "note": "Manufacturer mode: catalog lookup only. The profile declares no checkout or cart service and payment_handlers is {}: the brand sells nothing here, and each variant's retailer page is where it is bought.",
+     "severity": "dropped"
+    },
+    {
+     "field": "loyalty",
+     "note": "Manufacturer mode: the loyalty extension (dev.ucp.common.loyalty) is neither declared nor populated; a retailer's program is the retailer's, not the brand's.",
+     "severity": "dropped"
+    },
+    {
+     "field": "member_price",
+     "note": "Manufacturer mode: a variant's price is the shelf price a retailer's page showed; member, subscription and loyalty prices are not compiled.",
+     "severity": "dropped"
+    }
+   ],
+   "external_ref": null,
+   "held": true,
+   "id": 10,
+   "journal": [
+    {
+     "at": "2026-10-28T03:28:26+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-28T03:28:26+00:00",
+     "by": "parleo",
+     "cause": "no_priced_read",
+     "event": "blocked",
+     "note": "no_priced_read: Pampers Swaddlers Ultra Day + Night, Size 3, 180 ct (sku:sku_pg_swultra_s3): no retailer page priced it on the read day (2026-10-20), and a UCP product requires a variant and a price range: truesync/specs/ucp/ucp-2026-08-25/shopping/types/product.json: \"required\": [\"id\", \"title\", \"description\", \"price_range\", \"variants\"], and \"variants\" has \"minItems\": 1.",
+     "rules": []
+    }
+   ],
+   "listing_id": null,
+   "mode": "manufacturer",
+   "payload": {
+    "product": {
+     "description": {
+      "plain": "Swaddlers Ultra day and night diapers, size 3, club pack."
+     },
+     "id": "sku:sku_pg_swultra_s3",
+     "metadata": {
+      "read_date": "2026-10-20",
+      "unread_retailers": [
+       {
+        "detail": "no read of this page",
+        "name": "Walmart",
+        "reason": "not_read",
+        "retailer_domain": "walmart.com",
+        "url": "https://www.walmart.com/ip/Pampers-Swaddlers-Ultra-Diapers-Size-3-13-26-Pounds-180-Count/19252374926"
+       }
+      ]
+     },
+     "tags": [
+      "Pampers"
+     ],
+     "title": "Pampers Swaddlers Ultra Day + Night, Size 3, 180 ct",
+     "url": "https://www.pampers.com/en-us/products/pampers-swaddlers-ultra-diapers",
+     "variants": []
+    },
+    "ucp": {
+     "version": "2026-08-25"
+    }
+   },
+   "published_at": null,
+   "reason": "blocked",
+   "record_ref": "feed:pampers-2u1:sku:sku_pg_swultra_s3",
+   "spec_clause": "no_priced_read: Pampers Swaddlers Ultra Day + Night, Size 3, 180 ct (sku:sku_pg_swultra_s3): no retailer page priced it on the read day (2026-10-20), and a UCP product requires a variant and a price range: truesync/specs/ucp/ucp-2026-08-25/shopping/types/product.json: \"required\": [\"id\", \"title\", \"description\", \"price_range\", \"variants\"], and \"variants\" has \"minItems\": 1.",
+   "spec_version": "ucp-2026-08-25",
+   "status": "compiled_not_published",
+   "validation": {
+    "errors": [
+     "blocked: no_priced_read: Pampers Swaddlers Ultra Day + Night, Size 3, 180 ct (sku:sku_pg_swultra_s3): no retailer page priced it on the read day (2026-10-20), and a UCP product requires a variant and a price range: truesync/specs/ucp/ucp-2026-08-25/shopping/types/product.json: \"required\": [\"id\", \"title\", \"description\", \"price_range\", \"variants\"], and \"variants\" has \"minItems\": 1.",
+     "product: 'price_range' is a required property",
+     "product/variants: [] should be non-empty"
+    ],
+    "ok": false
+   }
+  },
+  {
+   "channel": "acp",
+   "channel_slug": "acp",
+   "compiled_at": "2026-10-28T03:28:26",
+   "error": "blocked: no_priced_read: Pampers Swaddlers Ultra Day + Night: no retailer page priced any of its SKUs on the read day (2026-10-20), and a feed row requires a price. docs/truesync/truesync-protocol-specs.md \u00a71 (acp-feed-stable-2026-08-18): \"Required for non-Ads feeds: `item_id`, `title`, `description`, `url`, `brand`, `image_url`, `price` (\"79.99 USD\"), `availability` (...), `target_countries`, `seller_name`, and OpenAI flags `is_eligible_search`, `is_eligible_checkout`.\"",
+   "expressiveness": [
+    {
+     "field": "channel",
+     "note": "no_priced_read: Pampers Swaddlers Ultra Day + Night: no retailer page priced any of its SKUs on the read day (2026-10-20), and a feed row requires a price. docs/truesync/truesync-protocol-specs.md \u00a71 (acp-feed-stable-2026-08-18): \"Required for non-Ads feeds: `item_id`, `title`, `description`, `url`, `brand`, `image_url`, `price` (\"79.99 USD\"), `availability` (...), `target_countries`, `seller_name`, and OpenAI flags `is_eligible_search`, `is_eligible_checkout`.\"",
+     "severity": "blocked"
+    },
+    {
+     "field": "price",
+     "note": "Rules r1 and r2: each price is what one retailer's page showed on the read day (2026-10-20), labeled with the retailer and dated; every retailer read that day, alphabetically, never a chosen one. The brand sets no price, and no MSRP is sent.",
+     "severity": "info"
+    }
+   ],
+   "external_ref": null,
+   "held": true,
+   "id": 9,
+   "journal": [
+    {
+     "at": "2026-10-28T03:28:26+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-28T03:28:26+00:00",
+     "by": "parleo",
+     "cause": "no_priced_read",
+     "event": "blocked",
+     "note": "no_priced_read: Pampers Swaddlers Ultra Day + Night: no retailer page priced any of its SKUs on the read day (2026-10-20), and a feed row requires a price. docs/truesync/truesync-protocol-specs.md \u00a71 (acp-feed-stable-2026-08-18): \"Required for non-Ads feeds: `item_id`, `title`, `description`, `url`, `brand`, `image_url`, `price` (\"79.99 USD\"), `availability` (...), `target_countries`, `seller_name`, and OpenAI flags `is_eligible_search`, `is_eligible_checkout`.\"",
+     "rules": []
+    }
+   ],
+   "listing_id": null,
+   "mode": "manufacturer",
+   "payload": {
+    "domains": {},
+    "items": [],
+    "read_dates": {}
+   },
+   "published_at": null,
+   "reason": "blocked",
+   "record_ref": "feed:pampers-2u1:sku:sku_pg_swultra_s3",
+   "spec_clause": "no_priced_read: Pampers Swaddlers Ultra Day + Night: no retailer page priced any of its SKUs on the read day (2026-10-20), and a feed row requires a price. docs/truesync/truesync-protocol-specs.md \u00a71 (acp-feed-stable-2026-08-18): \"Required for non-Ads feeds: `item_id`, `title`, `description`, `url`, `brand`, `image_url`, `price` (\"79.99 USD\"), `availability` (...), `target_countries`, `seller_name`, and OpenAI flags `is_eligible_search`, `is_eligible_checkout`.\"",
+   "spec_version": "acp-feed-stable-2026-08-18",
+   "status": "compiled_not_published",
+   "validation": {
+    "errors": [
+     "blocked: no_priced_read: Pampers Swaddlers Ultra Day + Night: no retailer page priced any of its SKUs on the read day (2026-10-20), and a feed row requires a price. docs/truesync/truesync-protocol-specs.md \u00a71 (acp-feed-stable-2026-08-18): \"Required for non-Ads feeds: `item_id`, `title`, `description`, `url`, `brand`, `image_url`, `price` (\"79.99 USD\"), `availability` (...), `target_countries`, `seller_name`, and OpenAI flags `is_eligible_search`, `is_eligible_checkout`.\""
+    ],
+    "ok": false
+   }
+  },
+  {
+   "channel": "manufacturer_center",
+   "channel_slug": "manufacturer_center",
+   "compiled_at": "2026-10-28T03:28:26",
+   "error": "no variant carries a GTIN; Manufacturer Center keys every product by GTIN",
+   "expressiveness": [
+    {
+     "field": "percent_off",
+     "note": "Manufacturer Center: no sale-price or discount attribute; suggestedRetailPrice is MSRP and lowering it to encode a discount would misstate it (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "amount_off",
+     "note": "Manufacturer Center: no sale-price or discount attribute; suggestedRetailPrice is MSRP and lowering it to encode a discount would misstate it (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "member_price",
+     "note": "Manufacturer Center: no price attribute but MSRP and no membership concept (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "subscribe_and_save",
+     "note": "Manufacturer Center: no subscription attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "points_earn",
+     "note": "Manufacturer Center: no loyalty attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "free_shipping",
+     "note": "Manufacturer Center: no shipping attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "gift_with_purchase",
+     "note": "Manufacturer Center: no promotion attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "mfr_coupon",
+     "note": "Manufacturer Center: no promotion or code attribute, even for the manufacturer's own coupon (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "member",
+     "note": "Manufacturer Center: no eligibility attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "tier",
+     "note": "Manufacturer Center: no eligibility attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "subscription",
+     "note": "Manufacturer Center: no eligibility attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "new_customer",
+     "note": "Manufacturer Center: no eligibility attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "retailer_availability",
+     "note": "Manufacturer Center has no field for who sells the product or where; retailer URLs and the retailer list are not sent (MC-0 \u00a74b).",
+     "severity": "dropped"
+    },
+    {
+     "field": "availability",
+     "note": "No stock or availability attribute; 'availability' is n/a for Manufacturer Center (answer/7073012).",
+     "severity": "dropped"
+    },
+    {
+     "field": "shelf_price",
+     "note": "No price or sale_price attribute; only suggestedRetailPrice (MSRP) exists (answer/7073012, discovery Attributes).",
+     "severity": "dropped"
+    },
+    {
+     "field": "provenance",
+     "note": "No provenance attribute; the brand's verified account is itself the provenance claim (MC-0 \u00a74a).",
+     "severity": "dropped"
+    },
+    {
+     "field": "validity_dates",
+     "note": "No offer validity; disclosureDate and releaseDate are product-lifecycle dates, not offer windows (MC-0 \u00a74b).",
+     "severity": "dropped"
+    },
+    {
+     "field": "gtin",
+     "note": "1 variant(s) without a GTIN not compiled (sku:sku_pg_swultra_s3): Manufacturer Center keys every product by GTIN and has no identifier_exists=false (answer/6358237).",
+     "severity": "dropped"
+    },
+    {
+     "field": "price",
+     "note": "Manufacturer mode, rule r1: the brand sets no price, and this channel carries no retailer price (no shelf price, no MSRP).",
+     "severity": "dropped"
+    },
+    {
+     "field": "size_chart",
+     "note": "No weight-range row for Pampers Swaddlers Ultra Day + Night Pampers Swaddlers Ultra Day + Night, Size 3, 180 ct: the brand page served no size chart for this line (rule r5 takes the chart only).",
+     "severity": "dropped"
+    }
+   ],
+   "external_ref": null,
+   "held": true,
+   "id": 8,
+   "journal": [
+    {
+     "at": "2026-10-28T03:28:26+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-28T03:28:26+00:00",
+     "by": "parleo",
+     "event": "held_for_merchant",
+     "note": "compiled; the brand's own team sends it"
+    }
+   ],
+   "listing_id": null,
+   "mode": "manufacturer",
+   "payload": {
+    "apiVersion": "manufacturers/v1",
+    "products": []
+   },
+   "published_at": null,
+   "reason": "held_for_merchant",
+   "record_ref": "feed:pampers-2u1:sku:sku_pg_swultra_s3",
+   "spec_clause": null,
+   "spec_version": "manufacturers-v1-2026-10-05",
+   "status": "compiled_not_published",
+   "validation": {
+    "errors": [
+     "no variant carries a GTIN; Manufacturer Center keys every product by GTIN"
+    ],
+    "ok": false
+   }
+  },
+  {
+   "channel": "schema_org",
+   "channel_slug": "schema_org",
+   "compiled_at": "2026-10-28T03:28:26",
+   "error": null,
+   "expressiveness": [
+    {
+     "field": "price",
+     "note": "Manufacturer mode, rule r1: the brand sets no price, and this channel carries no retailer price (no shelf price, no MSRP).",
+     "severity": "dropped"
+    },
+    {
+     "field": "availability",
+     "note": "Manufacturer mode: retailer-neutral, so no availability for any retailer.",
+     "severity": "dropped"
+    },
+    {
+     "field": "size_chart",
+     "note": "No weight-range row for Pampers Swaddlers Ultra Day + Night Pampers Swaddlers Ultra Day + Night, Size 3, 180 ct: the brand page served no size chart for this line (rule r5 takes the chart only).",
+     "severity": "dropped"
+    }
+   ],
+   "external_ref": null,
+   "held": true,
+   "id": 7,
+   "journal": [
+    {
+     "at": "2026-10-28T03:28:26+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-28T03:28:26+00:00",
+     "by": "parleo",
+     "event": "held_for_merchant",
+     "note": "compiled; the brand's own team sends it"
+    }
+   ],
+   "listing_id": null,
+   "mode": "manufacturer",
+   "payload": {
+    "@context": "https://schema.org",
+    "@type": "ProductGroup",
+    "brand": {
+     "@type": "Brand",
+     "name": "Pampers"
+    },
+    "description": "Swaddlers Ultra day and night diapers, size 3, club pack.",
+    "hasVariant": [
+     {
+      "@type": "Product",
+      "additionalProperty": [
+       {
+        "@type": "PropertyValue",
+        "name": "Pack count",
+        "value": 180
+       }
+      ],
+      "brand": {
+       "@type": "Brand",
+       "name": "Pampers"
+      },
+      "description": "Swaddlers Ultra day and night diapers, size 3, club pack.",
+      "name": "Pampers Swaddlers Ultra Day + Night Pampers Swaddlers Ultra Day + Night, Size 3, 180 ct",
+      "offers": [
+       {
+        "@type": "Offer",
+        "seller": {
+         "@type": "Organization",
+         "name": "walmart.com"
+        },
+        "url": "https://www.walmart.com/ip/Pampers-Swaddlers-Ultra-Diapers-Size-3-13-26-Pounds-180-Count/19252374926"
+       }
+      ],
+      "sku": "sku_pg_swultra_s3",
+      "url": "https://www.pampers.com/en-us/products/pampers-swaddlers-ultra-diapers"
+     }
+    ],
+    "name": "Pampers Swaddlers Ultra Day + Night",
+    "productGroupID": "feed:pampers-2u1:sku:sku_pg_swultra_s3",
+    "url": "https://www.pampers.com/en-us/products/pampers-swaddlers-ultra-diapers",
+    "variesBy": [
+     "size",
+     "count"
+    ]
+   },
+   "published_at": null,
+   "reason": "held_for_merchant",
+   "record_ref": "feed:pampers-2u1:sku:sku_pg_swultra_s3",
+   "spec_clause": null,
+   "spec_version": "schemaorg-merchant-listing-2026-08-18",
+   "status": "compiled_not_published",
+   "validation": {
+    "errors": [],
+    "ok": true
+   }
+  },
+  {
+   "channel": "ucp_uip",
+   "channel_slug": "ucp_uip",
+   "compiled_at": "2026-10-28T03:28:26",
+   "error": "blocked: no_priced_read: Pampers Swaddlers, Size 4, 150 ct (00037000799818): no retailer page priced it on the read day (2026-10-20), and a UCP product requires a variant and a price range: truesync/specs/ucp/ucp-2026-08-25/shopping/types/product.json: \"required\": [\"id\", \"title\", \"description\", \"price_range\", \"variants\"], and \"variants\" has \"minItems\": 1.; product: 'price_range' is a required property; product/variants: [] should be non-empty",
+   "expressiveness": [
+    {
+     "field": "channel",
+     "note": "no_priced_read: Pampers Swaddlers, Size 4, 150 ct (00037000799818): no retailer page priced it on the read day (2026-10-20), and a UCP product requires a variant and a price range: truesync/specs/ucp/ucp-2026-08-25/shopping/types/product.json: \"required\": [\"id\", \"title\", \"description\", \"price_range\", \"variants\"], and \"variants\" has \"minItems\": 1.",
+     "severity": "blocked"
+    },
+    {
+     "field": "no_priced_read",
+     "note": "no_priced_read: Pampers Swaddlers, Size 4, 150 ct (00037000799818): no retailer page priced it on the read day (2026-10-20), and a UCP product requires a variant and a price range: truesync/specs/ucp/ucp-2026-08-25/shopping/types/product.json: \"required\": [\"id\", \"title\", \"description\", \"price_range\", \"variants\"], and \"variants\" has \"minItems\": 1.",
+     "severity": "blocked"
+    },
+    {
+     "field": "price",
+     "note": "Rules r1 and r2: each price is what one retailer's page showed on the read day (2026-10-20), labeled with the retailer and dated; every retailer read that day, alphabetically, never a chosen one. The brand sets no price, and no MSRP is sent.",
+     "severity": "info"
+    },
+    {
+     "field": "checkout",
+     "note": "Manufacturer mode: catalog lookup only. The profile declares no checkout or cart service and payment_handlers is {}: the brand sells nothing here, and each variant's retailer page is where it is bought.",
+     "severity": "dropped"
+    },
+    {
+     "field": "loyalty",
+     "note": "Manufacturer mode: the loyalty extension (dev.ucp.common.loyalty) is neither declared nor populated; a retailer's program is the retailer's, not the brand's.",
+     "severity": "dropped"
+    },
+    {
+     "field": "member_price",
+     "note": "Manufacturer mode: a variant's price is the shelf price a retailer's page showed; member, subscription and loyalty prices are not compiled.",
+     "severity": "dropped"
+    }
+   ],
+   "external_ref": null,
+   "held": true,
+   "id": 6,
+   "journal": [
+    {
+     "at": "2026-10-28T03:28:26+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-28T03:28:26+00:00",
+     "by": "parleo",
+     "cause": "no_priced_read",
+     "event": "blocked",
+     "note": "no_priced_read: Pampers Swaddlers, Size 4, 150 ct (00037000799818): no retailer page priced it on the read day (2026-10-20), and a UCP product requires a variant and a price range: truesync/specs/ucp/ucp-2026-08-25/shopping/types/product.json: \"required\": [\"id\", \"title\", \"description\", \"price_range\", \"variants\"], and \"variants\" has \"minItems\": 1.",
+     "rules": []
+    }
+   ],
+   "listing_id": null,
+   "mode": "manufacturer",
+   "payload": {
+    "product": {
+     "description": {
+      "plain": "Swaddlers diapers, size 4 (15-34 lb), with wetness indicator."
+     },
+     "id": "00037000799818",
+     "media": [
+      {
+       "type": "image",
+       "url": "https://images.ctfassets.net/pfeg73t23esw/1RKbw0c8rZttOQ1c7tCCOG/055e51318eafad9844bc07a4297a0be3/Swaddlers_New_Clean.png"
+      }
+     ],
+     "metadata": {
+      "read_date": "2026-10-20",
+      "unread_retailers": [
+       {
+        "detail": "no read of this page",
+        "name": "Amazon",
+        "reason": "not_read",
+        "retailer_domain": "amazon.com",
+        "url": "https://www.amazon.com/dp/B07DC8BR3B"
+       },
+       {
+        "detail": "no read of this page",
+        "name": "Walmart",
+        "reason": "not_read",
+        "retailer_domain": "walmart.com",
+        "url": "https://www.walmart.com/ip/Pampers-Swaddlers-Baby-Diapers-Size-4-150-Count/209107239"
+       }
+      ],
+      "weight_range": {
+       "max": 34,
+       "min": 15,
+       "unit": "lb"
+      }
+     },
+     "tags": [
+      "Pampers"
+     ],
+     "title": "Pampers Swaddlers, Size 4, 150 ct",
+     "url": "https://www.pampers.com/en-us/products/pampers-swaddlers-diapers",
+     "variants": []
+    },
+    "ucp": {
+     "version": "2026-08-25"
+    }
+   },
+   "published_at": null,
+   "reason": "blocked",
+   "record_ref": "feed:pampers-2u1:00037000799818",
+   "spec_clause": "no_priced_read: Pampers Swaddlers, Size 4, 150 ct (00037000799818): no retailer page priced it on the read day (2026-10-20), and a UCP product requires a variant and a price range: truesync/specs/ucp/ucp-2026-08-25/shopping/types/product.json: \"required\": [\"id\", \"title\", \"description\", \"price_range\", \"variants\"], and \"variants\" has \"minItems\": 1.",
+   "spec_version": "ucp-2026-08-25",
+   "status": "compiled_not_published",
+   "validation": {
+    "errors": [
+     "blocked: no_priced_read: Pampers Swaddlers, Size 4, 150 ct (00037000799818): no retailer page priced it on the read day (2026-10-20), and a UCP product requires a variant and a price range: truesync/specs/ucp/ucp-2026-08-25/shopping/types/product.json: \"required\": [\"id\", \"title\", \"description\", \"price_range\", \"variants\"], and \"variants\" has \"minItems\": 1.",
+     "product: 'price_range' is a required property",
+     "product/variants: [] should be non-empty"
+    ],
+    "ok": false
+   }
+  },
+  {
+   "channel": "ucp_uip",
+   "channel_slug": "ucp_uip",
+   "compiled_at": "2026-10-28T03:28:26",
+   "error": null,
+   "expressiveness": [
+    {
+     "field": "price",
+     "note": "Rules r1 and r2: each price is what one retailer's page showed on the read day (2026-10-20), labeled with the retailer and dated; every retailer read that day, alphabetically, never a chosen one. The brand sets no price, and no MSRP is sent.",
+     "severity": "info"
+    },
+    {
+     "field": "checkout",
+     "note": "Manufacturer mode: catalog lookup only. The profile declares no checkout or cart service and payment_handlers is {}: the brand sells nothing here, and each variant's retailer page is where it is bought.",
+     "severity": "dropped"
+    },
+    {
+     "field": "loyalty",
+     "note": "Manufacturer mode: the loyalty extension (dev.ucp.common.loyalty) is neither declared nor populated; a retailer's program is the retailer's, not the brand's.",
+     "severity": "dropped"
+    },
+    {
+     "field": "member_price",
+     "note": "Manufacturer mode: a variant's price is the shelf price a retailer's page showed; member, subscription and loyalty prices are not compiled.",
+     "severity": "dropped"
+    },
+    {
+     "field": "seller_link",
+     "note": "seller.links[].type is \"product_page\", which is not one of link.json's well-known values (policy pages); the link's title names it.",
+     "severity": "info"
+    }
+   ],
+   "external_ref": null,
+   "held": true,
+   "id": 5,
+   "journal": [
+    {
+     "at": "2026-10-28T03:28:26+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-28T03:28:26+00:00",
+     "by": "parleo",
+     "event": "held_for_merchant",
+     "note": "compiled; the brand's own team sends it"
+    }
+   ],
+   "listing_id": null,
+   "mode": "manufacturer",
+   "payload": {
+    "product": {
+     "description": {
+      "plain": "Swaddlers diapers, size 1 (8-14 lb), with wetness indicator."
+     },
+     "id": "00037000828761",
+     "media": [
+      {
+       "type": "image",
+       "url": "https://images.ctfassets.net/pfeg73t23esw/1RKbw0c8rZttOQ1c7tCCOG/055e51318eafad9844bc07a4297a0be3/Swaddlers_New_Clean.png"
+      }
+     ],
+     "metadata": {
+      "read_date": "2026-10-20",
+      "unread_retailers": [
+       {
+        "detail": "page read, but it states no price for this SKU",
+        "name": "Amazon",
+        "reason": "walled",
+        "retailer_domain": "amazon.com",
+        "url": "https://www.amazon.com/dp/B08VLCSTPC"
+       },
+       {
+        "detail": "page read, but it states no price for this SKU",
+        "name": "Target",
+        "reason": "walled",
+        "retailer_domain": "target.com",
+        "url": "https://www.target.com/p/-/-/A-14723176"
+       }
+      ],
+      "weight_range": {
+       "max": 14,
+       "min": 8,
+       "unit": "lb"
+      }
+     },
+     "price_range": {
+      "max": {
+       "amount": 2797,
+       "currency": "USD"
+      },
+      "min": {
+       "amount": 2797,
+       "currency": "USD"
+      }
+     },
+     "tags": [
+      "Pampers"
+     ],
+     "title": "Pampers Swaddlers, Size 1, 96 ct",
+     "url": "https://www.pampers.com/en-us/products/pampers-swaddlers-diapers",
+     "variants": [
+      {
+       "barcodes": [
+        {
+         "type": "GTIN",
+         "value": "037000828761"
+        }
+       ],
+       "description": {
+        "plain": "Swaddlers diapers, size 1 (8-14 lb), with wetness indicator."
+       },
+       "id": "00037000828761:walmart.com",
+       "metadata": {
+        "observed_at": "2026-10-20T04:23:16.142155+00:00",
+        "read_method": "hosted_render",
+        "retailer_domain": "walmart.com"
+       },
+       "options": [
+        {
+         "label": "96",
+         "name": "count"
+        }
+       ],
+       "price": {
+        "amount": 2797,
+        "currency": "USD"
+       },
+       "seller": {
+        "links": [
+         {
+          "title": "Walmart product page",
+          "type": "product_page",
+          "url": "https://www.walmart.com/ip/Pampers-Swaddlers-Baby-Diapers-Size-1-96-Count/606480268"
+         }
+        ],
+        "name": "Walmart"
+       },
+       "sku": "sku_pg_swd_s1_96",
+       "title": "Pampers Swaddlers, Size 1, 96 ct at Walmart",
+       "url": "https://www.walmart.com/ip/Pampers-Swaddlers-Baby-Diapers-Size-1-96-Count/606480268"
+      }
+     ]
+    },
+    "ucp": {
+     "version": "2026-08-25"
+    }
+   },
+   "published_at": null,
+   "reason": "held_for_merchant",
+   "record_ref": "feed:pampers-2u1:00037000828761",
+   "spec_clause": null,
+   "spec_version": "ucp-2026-08-25",
+   "status": "compiled_not_published",
+   "validation": {
+    "errors": [],
+    "ok": true
+   }
+  },
+  {
+   "channel": "ucp_uip",
+   "channel_slug": "ucp_uip",
+   "compiled_at": "2026-10-28T03:28:26",
+   "error": null,
+   "expressiveness": [
+    {
+     "field": "price",
+     "note": "Rules r1 and r2: each price is what one retailer's page showed on the read day (2026-10-20), labeled with the retailer and dated; every retailer read that day, alphabetically, never a chosen one. The brand sets no price, and no MSRP is sent.",
+     "severity": "info"
+    },
+    {
+     "field": "checkout",
+     "note": "Manufacturer mode: catalog lookup only. The profile declares no checkout or cart service and payment_handlers is {}: the brand sells nothing here, and each variant's retailer page is where it is bought.",
+     "severity": "dropped"
+    },
+    {
+     "field": "loyalty",
+     "note": "Manufacturer mode: the loyalty extension (dev.ucp.common.loyalty) is neither declared nor populated; a retailer's program is the retailer's, not the brand's.",
+     "severity": "dropped"
+    },
+    {
+     "field": "member_price",
+     "note": "Manufacturer mode: a variant's price is the shelf price a retailer's page showed; member, subscription and loyalty prices are not compiled.",
+     "severity": "dropped"
+    },
+    {
+     "field": "seller_link",
+     "note": "seller.links[].type is \"product_page\", which is not one of link.json's well-known values (policy pages); the link's title names it.",
+     "severity": "info"
+    }
+   ],
+   "external_ref": null,
+   "held": true,
+   "id": 4,
+   "journal": [
+    {
+     "at": "2026-10-28T03:28:26+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-28T03:28:26+00:00",
+     "by": "parleo",
+     "event": "held_for_merchant",
+     "note": "compiled; the brand's own team sends it"
+    }
+   ],
+   "listing_id": null,
+   "mode": "manufacturer",
+   "payload": {
+    "product": {
+     "description": {
+      "plain": "Swaddlers diapers for newborns under 10 lb, with wetness indicator and umbilical cord notch."
+     },
+     "id": "00037000749622",
+     "media": [
+      {
+       "type": "image",
+       "url": "https://images.ctfassets.net/pfeg73t23esw/1RKbw0c8rZttOQ1c7tCCOG/055e51318eafad9844bc07a4297a0be3/Swaddlers_New_Clean.png"
+      }
+     ],
+     "metadata": {
+      "read_date": "2026-10-20",
+      "unread_retailers": [
+       {
+        "detail": "page read, but it states no price for this SKU",
+        "name": "Target",
+        "reason": "walled",
+        "retailer_domain": "target.com",
+        "url": "https://www.target.com/p/-/-/A-14723178"
+       }
+      ],
+      "weight_range": {
+       "max": 10,
+       "unit": "lb"
+      }
+     },
+     "price_range": {
+      "max": {
+       "amount": 2797,
+       "currency": "USD"
+      },
+      "min": {
+       "amount": 2797,
+       "currency": "USD"
+      }
+     },
+     "tags": [
+      "Pampers"
+     ],
+     "title": "Pampers Swaddlers, Newborn, 84 ct",
+     "url": "https://www.pampers.com/en-us/products/pampers-swaddlers-diapers",
+     "variants": [
+      {
+       "barcodes": [
+        {
+         "type": "GTIN",
+         "value": "037000749622"
+        }
+       ],
+       "description": {
+        "plain": "Swaddlers diapers for newborns under 10 lb, with wetness indicator and umbilical cord notch."
+       },
+       "id": "00037000749622:amazon.com",
+       "metadata": {
+        "observed_at": "2026-10-20T04:23:16.142155+00:00",
+        "read_method": "honest_fetch",
+        "retailer_domain": "amazon.com"
+       },
+       "options": [
+        {
+         "label": "84",
+         "name": "count"
+        }
+       ],
+       "price": {
+        "amount": 2797,
+        "currency": "USD"
+       },
+       "seller": {
+        "links": [
+         {
+          "title": "Amazon product page",
+          "type": "product_page",
+          "url": "https://www.amazon.com/dp/B07CVBTN3N"
+         }
+        ],
+        "name": "Amazon"
+       },
+       "sku": "sku_pg_swd_nb_84",
+       "title": "Pampers Swaddlers, Newborn, 84 ct at Amazon",
+       "url": "https://www.amazon.com/dp/B07CVBTN3N"
+      },
+      {
+       "barcodes": [
+        {
+         "type": "GTIN",
+         "value": "037000749622"
+        }
+       ],
+       "description": {
+        "plain": "Swaddlers diapers for newborns under 10 lb, with wetness indicator and umbilical cord notch."
+       },
+       "id": "00037000749622:walmart.com",
+       "metadata": {
+        "observed_at": "2026-10-20T04:23:16.142155+00:00",
+        "read_method": "hosted_render",
+        "retailer_domain": "walmart.com"
+       },
+       "options": [
+        {
+         "label": "84",
+         "name": "count"
+        }
+       ],
+       "price": {
+        "amount": 2797,
+        "currency": "USD"
+       },
+       "seller": {
+        "links": [
+         {
+          "title": "Walmart product page",
+          "type": "product_page",
+          "url": "https://www.walmart.com/ip/Pampers-Swaddlers-Baby-Diapers-Size-Newborn-84-Count/454558491"
+         }
+        ],
+        "name": "Walmart"
+       },
+       "sku": "sku_pg_swd_nb_84",
+       "title": "Pampers Swaddlers, Newborn, 84 ct at Walmart",
+       "url": "https://www.walmart.com/ip/Pampers-Swaddlers-Baby-Diapers-Size-Newborn-84-Count/454558491"
+      }
+     ]
+    },
+    "ucp": {
+     "version": "2026-08-25"
+    }
+   },
+   "published_at": null,
+   "reason": "held_for_merchant",
+   "record_ref": "feed:pampers-2u1:00037000749622",
+   "spec_clause": null,
+   "spec_version": "ucp-2026-08-25",
+   "status": "compiled_not_published",
+   "validation": {
+    "errors": [],
+    "ok": true
+   }
+  },
+  {
+   "channel": "acp",
+   "channel_slug": "acp",
+   "compiled_at": "2026-10-28T03:28:26",
+   "error": null,
+   "expressiveness": [
+    {
+     "field": "read_date",
+     "note": "The ACP digest (specs \u00a71) names no field for a date on an item (its only dates, sale_price_start_date and sale_price_end_date, are a sale's window), so no item states its read date. The feed's envelope, which is ours and not a spec field, carries it per item: read_dates {item_id: observed_at}.",
+     "severity": "dropped"
+    },
+    {
+     "field": "price",
+     "note": "Rules r1 and r2: each price is what one retailer's page showed on the read day (2026-10-20), labeled with the retailer and dated; every retailer read that day, alphabetically, never a chosen one. The brand sets no price, and no MSRP is sent.",
+     "severity": "info"
+    },
+    {
+     "field": "image_from_brand_page",
+     "note": "Pampers Swaddlers: the feed states no image; image_url is the line's image on the brand's own page.",
+     "severity": "info"
+    },
+    {
+     "field": "no_priced_read",
+     "note": "No item for Pampers Swaddlers Pampers Swaddlers, Size 4, 150 ct: no retailer page priced it on the read day (2026-10-20).",
+     "severity": "dropped"
+    }
+   ],
+   "external_ref": null,
+   "held": true,
+   "id": 3,
+   "journal": [
+    {
+     "at": "2026-10-28T03:28:26+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-28T03:28:26+00:00",
+     "by": "parleo",
+     "event": "held_for_merchant",
+     "note": "compiled; the brand's own team sends it"
+    }
+   ],
+   "listing_id": null,
+   "mode": "manufacturer",
+   "payload": {
+    "domains": {
+     "00037000749622:amazon.com": "amazon.com",
+     "00037000749622:walmart.com": "walmart.com",
+     "00037000828761:walmart.com": "walmart.com"
+    },
+    "items": [
+     {
+      "availability": "unknown",
+      "brand": "Pampers",
+      "description": "Swaddlers diapers for newborns under 10 lb, with wetness indicator and umbilical cord notch.",
+      "group_id": "feed:pampers-2u1:00037000749622",
+      "gtin": "037000749622",
+      "image_url": "https://images.ctfassets.net/pfeg73t23esw/1RKbw0c8rZttOQ1c7tCCOG/055e51318eafad9844bc07a4297a0be3/Swaddlers_New_Clean.png",
+      "is_eligible_checkout": false,
+      "is_eligible_search": true,
+      "item_group_title": "Pampers Swaddlers",
+      "item_id": "00037000749622:amazon.com",
+      "listing_has_variations": true,
+      "price": "27.97 USD",
+      "seller_name": "Amazon",
+      "target_countries": [
+       "US"
+      ],
+      "title": "Pampers Swaddlers, Newborn, 84 ct",
+      "url": "https://www.amazon.com/dp/B07CVBTN3N",
+      "variant_dict": {
+       "count": "84"
+      }
+     },
+     {
+      "availability": "unknown",
+      "brand": "Pampers",
+      "description": "Swaddlers diapers for newborns under 10 lb, with wetness indicator and umbilical cord notch.",
+      "group_id": "feed:pampers-2u1:00037000749622",
+      "gtin": "037000749622",
+      "image_url": "https://images.ctfassets.net/pfeg73t23esw/1RKbw0c8rZttOQ1c7tCCOG/055e51318eafad9844bc07a4297a0be3/Swaddlers_New_Clean.png",
+      "is_eligible_checkout": false,
+      "is_eligible_search": true,
+      "item_group_title": "Pampers Swaddlers",
+      "item_id": "00037000749622:walmart.com",
+      "listing_has_variations": true,
+      "price": "27.97 USD",
+      "seller_name": "Walmart",
+      "target_countries": [
+       "US"
+      ],
+      "title": "Pampers Swaddlers, Newborn, 84 ct",
+      "url": "https://www.walmart.com/ip/Pampers-Swaddlers-Baby-Diapers-Size-Newborn-84-Count/454558491",
+      "variant_dict": {
+       "count": "84"
+      }
+     },
+     {
+      "availability": "unknown",
+      "brand": "Pampers",
+      "description": "Swaddlers diapers, size 1 (8-14 lb), with wetness indicator.",
+      "group_id": "feed:pampers-2u1:00037000749622",
+      "gtin": "037000828761",
+      "image_url": "https://images.ctfassets.net/pfeg73t23esw/1RKbw0c8rZttOQ1c7tCCOG/055e51318eafad9844bc07a4297a0be3/Swaddlers_New_Clean.png",
+      "is_eligible_checkout": false,
+      "is_eligible_search": true,
+      "item_group_title": "Pampers Swaddlers",
+      "item_id": "00037000828761:walmart.com",
+      "listing_has_variations": true,
+      "price": "27.97 USD",
+      "seller_name": "Walmart",
+      "target_countries": [
+       "US"
+      ],
+      "title": "Pampers Swaddlers, Size 1, 96 ct",
+      "url": "https://www.walmart.com/ip/Pampers-Swaddlers-Baby-Diapers-Size-1-96-Count/606480268",
+      "variant_dict": {
+       "count": "96"
+      }
+     }
+    ],
+    "read_dates": {
+     "00037000749622:amazon.com": "2026-10-20T04:23:16.142155+00:00",
+     "00037000749622:walmart.com": "2026-10-20T04:23:16.142155+00:00",
+     "00037000828761:walmart.com": "2026-10-20T04:23:16.142155+00:00"
+    }
+   },
+   "published_at": null,
+   "reason": "held_for_merchant",
+   "record_ref": "feed:pampers-2u1:00037000749622",
+   "spec_clause": null,
+   "spec_version": "acp-feed-stable-2026-08-18",
+   "status": "compiled_not_published",
+   "validation": {
+    "errors": [],
+    "ok": true
+   }
+  },
+  {
+   "channel": "manufacturer_center",
+   "channel_slug": "manufacturer_center",
+   "compiled_at": "2026-10-28T03:28:26",
+   "error": null,
+   "expressiveness": [
+    {
+     "field": "percent_off",
+     "note": "Manufacturer Center: no sale-price or discount attribute; suggestedRetailPrice is MSRP and lowering it to encode a discount would misstate it (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "amount_off",
+     "note": "Manufacturer Center: no sale-price or discount attribute; suggestedRetailPrice is MSRP and lowering it to encode a discount would misstate it (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "member_price",
+     "note": "Manufacturer Center: no price attribute but MSRP and no membership concept (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "subscribe_and_save",
+     "note": "Manufacturer Center: no subscription attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "points_earn",
+     "note": "Manufacturer Center: no loyalty attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "free_shipping",
+     "note": "Manufacturer Center: no shipping attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "gift_with_purchase",
+     "note": "Manufacturer Center: no promotion attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "mfr_coupon",
+     "note": "Manufacturer Center: no promotion or code attribute, even for the manufacturer's own coupon (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "member",
+     "note": "Manufacturer Center: no eligibility attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "tier",
+     "note": "Manufacturer Center: no eligibility attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "subscription",
+     "note": "Manufacturer Center: no eligibility attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "new_customer",
+     "note": "Manufacturer Center: no eligibility attribute (manufacturers_v1.discovery.json, Attributes; promotional wording in descriptive text is rejected \u2014 MERCHANT_SPECIFIC_INFORMATION, answer/7656106).",
+     "severity": "dropped"
+    },
+    {
+     "field": "retailer_availability",
+     "note": "Manufacturer Center has no field for who sells the product or where; retailer URLs and the retailer list are not sent (MC-0 \u00a74b).",
+     "severity": "dropped"
+    },
+    {
+     "field": "availability",
+     "note": "No stock or availability attribute; 'availability' is n/a for Manufacturer Center (answer/7073012).",
+     "severity": "dropped"
+    },
+    {
+     "field": "shelf_price",
+     "note": "No price or sale_price attribute; only suggestedRetailPrice (MSRP) exists (answer/7073012, discovery Attributes).",
+     "severity": "dropped"
+    },
+    {
+     "field": "provenance",
+     "note": "No provenance attribute; the brand's verified account is itself the provenance claim (MC-0 \u00a74a).",
+     "severity": "dropped"
+    },
+    {
+     "field": "validity_dates",
+     "note": "No offer validity; disclosureDate and releaseDate are product-lifecycle dates, not offer windows (MC-0 \u00a74b).",
+     "severity": "dropped"
+    },
+    {
+     "field": "price",
+     "note": "Manufacturer mode, rule r1: the brand sets no price, and this channel carries no retailer price (no shelf price, no MSRP).",
+     "severity": "dropped"
+    },
+    {
+     "field": "image_from_brand_page",
+     "note": "Pampers Swaddlers Pampers Swaddlers, Newborn, 84 ct: no image_url in the feed; imageLink is the line's image on the brand's own page (https://images.ctfassets.net/pfeg73t23esw/1RKbw0c8rZttOQ1c7tCCOG/055e51318eafad9844bc07a4297a0be3/Swaddlers_New_Clean.png).",
+     "severity": "info"
+    },
+    {
+     "field": "image_from_brand_page",
+     "note": "Pampers Swaddlers Pampers Swaddlers, Size 1, 96 ct: no image_url in the feed; imageLink is the line's image on the brand's own page (https://images.ctfassets.net/pfeg73t23esw/1RKbw0c8rZttOQ1c7tCCOG/055e51318eafad9844bc07a4297a0be3/Swaddlers_New_Clean.png).",
+     "severity": "info"
+    },
+    {
+     "field": "image_from_brand_page",
+     "note": "Pampers Swaddlers Pampers Swaddlers, Size 4, 150 ct: no image_url in the feed; imageLink is the line's image on the brand's own page (https://images.ctfassets.net/pfeg73t23esw/1RKbw0c8rZttOQ1c7tCCOG/055e51318eafad9844bc07a4297a0be3/Swaddlers_New_Clean.png).",
+     "severity": "info"
+    }
+   ],
+   "external_ref": null,
+   "held": true,
+   "id": 2,
+   "journal": [
+    {
+     "at": "2026-10-28T03:28:26+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-28T03:28:26+00:00",
+     "by": "parleo",
+     "event": "held_for_merchant",
+     "note": "compiled; the brand's own team sends it"
+    }
+   ],
+   "listing_id": null,
+   "mode": "manufacturer",
+   "payload": {
+    "apiVersion": "manufacturers/v1",
+    "products": [
+     {
+      "attributes": {
+       "brand": "Pampers",
+       "count": {
+        "unit": "count",
+        "value": "84"
+       },
+       "description": "Swaddlers diapers for newborns under 10 lb, with wetness indicator and umbilical cord notch.",
+       "gtin": [
+        "037000749622"
+       ],
+       "imageLink": {
+        "imageUrl": "https://images.ctfassets.net/pfeg73t23esw/1RKbw0c8rZttOQ1c7tCCOG/055e51318eafad9844bc07a4297a0be3/Swaddlers_New_Clean.png"
+       },
+       "itemGroupId": "feed:pampers-2u1:00037000749622",
+       "productDetail": [
+        {
+         "attributeName": "Weight range",
+         "attributeValue": "under 10 lb",
+         "sectionName": "Size chart"
+        }
+       ],
+       "productName": "Pampers Swaddlers",
+       "productPageUrl": "https://www.pampers.com/en-us/products/pampers-swaddlers-diapers",
+       "title": "Pampers Swaddlers Pampers Swaddlers, Newborn, 84 ct"
+      },
+      "name": "US:en:00037000749622"
+     },
+     {
+      "attributes": {
+       "brand": "Pampers",
+       "count": {
+        "unit": "count",
+        "value": "96"
+       },
+       "description": "Swaddlers diapers for newborns under 10 lb, with wetness indicator and umbilical cord notch.",
+       "gtin": [
+        "037000828761"
+       ],
+       "imageLink": {
+        "imageUrl": "https://images.ctfassets.net/pfeg73t23esw/1RKbw0c8rZttOQ1c7tCCOG/055e51318eafad9844bc07a4297a0be3/Swaddlers_New_Clean.png"
+       },
+       "itemGroupId": "feed:pampers-2u1:00037000749622",
+       "productDetail": [
+        {
+         "attributeName": "Weight range",
+         "attributeValue": "8 to 14 lb",
+         "sectionName": "Size chart"
+        }
+       ],
+       "productName": "Pampers Swaddlers",
+       "productPageUrl": "https://www.pampers.com/en-us/products/pampers-swaddlers-diapers",
+       "title": "Pampers Swaddlers Pampers Swaddlers, Size 1, 96 ct"
+      },
+      "name": "US:en:00037000828761"
+     },
+     {
+      "attributes": {
+       "brand": "Pampers",
+       "count": {
+        "unit": "count",
+        "value": "150"
+       },
+       "description": "Swaddlers diapers for newborns under 10 lb, with wetness indicator and umbilical cord notch.",
+       "gtin": [
+        "037000799818"
+       ],
+       "imageLink": {
+        "imageUrl": "https://images.ctfassets.net/pfeg73t23esw/1RKbw0c8rZttOQ1c7tCCOG/055e51318eafad9844bc07a4297a0be3/Swaddlers_New_Clean.png"
+       },
+       "itemGroupId": "feed:pampers-2u1:00037000749622",
+       "productDetail": [
+        {
+         "attributeName": "Weight range",
+         "attributeValue": "15 to 34 lb",
+         "sectionName": "Size chart"
+        }
+       ],
+       "productName": "Pampers Swaddlers",
+       "productPageUrl": "https://www.pampers.com/en-us/products/pampers-swaddlers-diapers",
+       "title": "Pampers Swaddlers Pampers Swaddlers, Size 4, 150 ct"
+      },
+      "name": "US:en:00037000799818"
+     }
+    ]
+   },
+   "published_at": null,
+   "reason": "held_for_merchant",
+   "record_ref": "feed:pampers-2u1:00037000749622",
+   "spec_clause": null,
+   "spec_version": "manufacturers-v1-2026-10-05",
+   "status": "compiled_not_published",
+   "validation": {
+    "errors": [],
+    "ok": true
+   }
+  },
+  {
+   "channel": "schema_org",
+   "channel_slug": "schema_org",
+   "compiled_at": "2026-10-28T03:28:26",
+   "error": null,
+   "expressiveness": [
+    {
+     "field": "price",
+     "note": "Manufacturer mode, rule r1: the brand sets no price, and this channel carries no retailer price (no shelf price, no MSRP).",
+     "severity": "dropped"
+    },
+    {
+     "field": "availability",
+     "note": "Manufacturer mode: retailer-neutral, so no availability for any retailer.",
+     "severity": "dropped"
+    }
+   ],
+   "external_ref": null,
+   "held": true,
+   "id": 1,
+   "journal": [
+    {
+     "at": "2026-10-28T03:28:26+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-28T03:28:26+00:00",
+     "by": "parleo",
+     "event": "held_for_merchant",
+     "note": "compiled; the brand's own team sends it"
+    }
+   ],
+   "listing_id": null,
+   "mode": "manufacturer",
+   "payload": {
+    "@context": "https://schema.org",
+    "@type": "ProductGroup",
+    "brand": {
+     "@type": "Brand",
+     "name": "Pampers"
+    },
+    "description": "Swaddlers diapers for newborns under 10 lb, with wetness indicator and umbilical cord notch.",
+    "hasVariant": [
+     {
+      "@type": "Product",
+      "additionalProperty": [
+       {
+        "@type": "PropertyValue",
+        "name": "Weight range",
+        "value": {
+         "@type": "QuantitativeValue",
+         "maxValue": 10,
+         "unitText": "lb"
+        }
+       },
+       {
+        "@type": "PropertyValue",
+        "name": "Pack count",
+        "value": 84
+       }
+      ],
+      "brand": {
+       "@type": "Brand",
+       "name": "Pampers"
+      },
+      "description": "Swaddlers diapers for newborns under 10 lb, with wetness indicator and umbilical cord notch.",
+      "gtin": "037000749622",
+      "gtin12": "037000749622",
+      "name": "Pampers Swaddlers Pampers Swaddlers, Newborn, 84 ct",
+      "offers": [
+       {
+        "@type": "Offer",
+        "seller": {
+         "@type": "Organization",
+         "name": "amazon.com"
+        },
+        "url": "https://www.amazon.com/dp/B07CVBTN3N"
+       },
+       {
+        "@type": "Offer",
+        "seller": {
+         "@type": "Organization",
+         "name": "target.com"
+        },
+        "url": "https://www.target.com/p/-/-/A-14723178"
+       },
+       {
+        "@type": "Offer",
+        "seller": {
+         "@type": "Organization",
+         "name": "walmart.com"
+        },
+        "url": "https://www.walmart.com/ip/Pampers-Swaddlers-Baby-Diapers-Size-Newborn-84-Count/454558491"
+       }
+      ],
+      "sku": "sku_pg_swd_nb_84",
+      "url": "https://www.pampers.com/en-us/products/pampers-swaddlers-diapers"
+     },
+     {
+      "@type": "Product",
+      "additionalProperty": [
+       {
+        "@type": "PropertyValue",
+        "name": "Weight range",
+        "value": {
+         "@type": "QuantitativeValue",
+         "maxValue": 14,
+         "minValue": 8,
+         "unitText": "lb"
+        }
+       },
+       {
+        "@type": "PropertyValue",
+        "name": "Pack count",
+        "value": 96
+       }
+      ],
+      "brand": {
+       "@type": "Brand",
+       "name": "Pampers"
+      },
+      "description": "Swaddlers diapers, size 1 (8-14 lb), with wetness indicator.",
+      "gtin": "037000828761",
+      "gtin12": "037000828761",
+      "name": "Pampers Swaddlers Pampers Swaddlers, Size 1, 96 ct",
+      "offers": [
+       {
+        "@type": "Offer",
+        "seller": {
+         "@type": "Organization",
+         "name": "amazon.com"
+        },
+        "url": "https://www.amazon.com/dp/B08VLCSTPC"
+       },
+       {
+        "@type": "Offer",
+        "seller": {
+         "@type": "Organization",
+         "name": "target.com"
+        },
+        "url": "https://www.target.com/p/-/-/A-14723176"
+       },
+       {
+        "@type": "Offer",
+        "seller": {
+         "@type": "Organization",
+         "name": "walmart.com"
+        },
+        "url": "https://www.walmart.com/ip/Pampers-Swaddlers-Baby-Diapers-Size-1-96-Count/606480268"
+       }
+      ],
+      "sku": "sku_pg_swd_s1_96",
+      "url": "https://www.pampers.com/en-us/products/pampers-swaddlers-diapers"
+     },
+     {
+      "@type": "Product",
+      "additionalProperty": [
+       {
+        "@type": "PropertyValue",
+        "name": "Weight range",
+        "value": {
+         "@type": "QuantitativeValue",
+         "maxValue": 34,
+         "minValue": 15,
+         "unitText": "lb"
+        }
+       },
+       {
+        "@type": "PropertyValue",
+        "name": "Pack count",
+        "value": 150
+       }
+      ],
+      "brand": {
+       "@type": "Brand",
+       "name": "Pampers"
+      },
+      "description": "Swaddlers diapers, size 4 (15-34 lb), with wetness indicator.",
+      "gtin": "037000799818",
+      "gtin12": "037000799818",
+      "name": "Pampers Swaddlers Pampers Swaddlers, Size 4, 150 ct",
+      "offers": [
+       {
+        "@type": "Offer",
+        "seller": {
+         "@type": "Organization",
+         "name": "amazon.com"
+        },
+        "url": "https://www.amazon.com/dp/B07DC8BR3B"
+       },
+       {
+        "@type": "Offer",
+        "seller": {
+         "@type": "Organization",
+         "name": "walmart.com"
+        },
+        "url": "https://www.walmart.com/ip/Pampers-Swaddlers-Baby-Diapers-Size-4-150-Count/209107239"
+       }
+      ],
+      "sku": "sku_pg_swd_s4_150",
+      "url": "https://www.pampers.com/en-us/products/pampers-swaddlers-diapers"
+     }
+    ],
+    "name": "Pampers Swaddlers",
+    "productGroupID": "feed:pampers-2u1:00037000749622",
+    "url": "https://www.pampers.com/en-us/products/pampers-swaddlers-diapers",
+    "variesBy": [
+     "size",
+     "count"
+    ]
+   },
+   "published_at": null,
+   "reason": "held_for_merchant",
+   "record_ref": "feed:pampers-2u1:00037000749622",
+   "spec_clause": null,
+   "spec_version": "schemaorg-merchant-listing-2026-08-18",
+   "status": "compiled_not_published",
+   "validation": {
+    "errors": [],
+    "ok": true
+   }
+  }
+ ],
+ "headers": {
+  "content-type": "application/json"
+ },
+ "status": 200
+}

@@ -167,8 +167,13 @@ def test_the_truesync_card_and_the_workspace_count_the_held_rows(http, db, upstr
     blocked = [r for r in rows if r['reason'] == 'blocked']
     records = {r['record_ref'] for r in rows}
     channels = {r['channel_slug'] for r in rows}
-    assert (ws['records'], ws['compiled'], ws['blocked'], ws['published']) == \
-        (len(records), {'n': len(held), 'of': len(records) * len(channels)}, len(blocked), 0)
+    # 2U-5 (B2): in SKUs (six in the four lines): each line's rows stand for its SKUs
+    per = rel.line_skus(rows)
+    skus = sum(per[r] for r in records)
+    assert (ws['records'], ws['lines']) == (skus, len(records)) == (6, 4)
+    assert (ws['compiled'], ws['blocked'], ws['published']) == \
+        ({'n': sum(per[r['record_ref']] for r in held), 'of': skus * len(channels)},
+         sum(per[r['record_ref']] for r in blocked), 0)
     # 2T-3 (7): distinct fields per record over its held channels (test_console_2t3's before and after)
     assert ws['fields'] == rel._fields(rel.hold(rows).values())
     assert (ws['next_check'], ws['walled']) == (None, {'n': 0, 'domains': []})
@@ -227,7 +232,7 @@ def test_a_record_its_readback_timeline_and_compiler(http, db, upstream):
     assert record['GTIN']['v'] == '037000833970 (feed)'
     assert record['Size and weight']['v'] == 'Size 4, 22 to 37 lb'
     assert (record['Price']['v'], record['Price']['prov']) == ('Not set. Retailers price it', 'parleo')
-    assert record['Claims']['note'] == 'pampers.com, Oct 20' and record['Claims']['prov'] == 'brand'
+    assert record['Claims']['note'] == 'pampers.com, Oct 19' and record['Claims']['prov'] == 'brand'
     # #33 never read the retailer pages: listed, not read, and never "not carried"
     assert record['Where to buy']['v'] == 'Amazon, Target and Walmart listed. Not read yet'
     assert record["Couldn't read"]['v'] == 'Amazon, Target and Walmart: not read yet'
@@ -258,9 +263,9 @@ def test_the_release_releases_and_destinations(http, db, upstream):
     ts = _read(http, 'truesync')
     release = ts['release']
     assert (release['name'], release['status'], release['approved_by'], release['requested'], release['rules_on']) == \
-        ('Four records, Manufacturer Center first', 'Compiled, held', None, 'parleo', {'on': 0, 'of': 6})
+        ('Six records, Manufacturer Center first', 'Compiled, held', None, 'parleo', {'on': 0, 'of': 6})
     assert [(s['channel'], s['status']) for s in release['surfaces']] == [
-        ('schema_org', 'Compiled, held · Oct 25'), ('merchant_center', "Not for a brand · a seller's channel (rule r3)"),
+        ('schema_org', 'Compiled, held · Oct 25 · site still drifts (read Oct 19)'), ('merchant_center', "Not for a brand · a seller's channel (rule r3)"),
         ('manufacturer_center', 'Compiled, held · Oct 25'), ('acp', 'Blocked · Oct 25'),
         ('ucp_uip', 'Not in this pass'), ('deals_api', 'Next release · after rule r4'), ('mcp', 'Not in this pass'),
         ('deal_directory', "Not for a brand · a seller's channel (rule r3)")]
@@ -343,7 +348,7 @@ def test_strip_week_agents_and_labels(http, db, upstream):
     chatgpt = next(a for a in overview['by_surface']['all']['agents'] if a['agent'] == 'chatgpt')
     assert chatgpt['deals_line'] == f"Named {chatgpt['deals']['named']} of {chatgpt['deals']['of']} live deals"
     assert (overview['vs_label'], overview['vs_cycle']) == ('vs Oct 14', f2p1.CYCLE_1)
-    assert overview['header'] == {'skus': 6, 'records': 4, 'retailers_checked': 2,
+    assert overview['header'] == {'skus': 6, 'records': 6, 'lines': 4, 'retailers_checked': 2,
                                   'retailers': ['walmart.com', 'amazon.com'], 'brand_domain': 'pampers.com'}
     stages = [e['stage'] for e in overview['activity']]
     # the pair's runs share one stamp: complete still reads above started

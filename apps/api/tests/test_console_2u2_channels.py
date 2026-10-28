@@ -113,15 +113,19 @@ def test_workspace_release_card_and_overview_read_the_same_list(http, db, upstre
     ws = ts['workspace']
     assert [(s['channel'], s['state'], s['line']) for s in ws['surfaces']] == [(c, s, line) for c, s, _l, line, *_ in
                                                                              EIGHT]
-    assert ws['surfaces'] == [{k: v for k, v in c.items()} for c in rel.channel_list(
+    # 2U-5 (B4): the list with the live site's markup read beside it (site_markup) qualifies schema_org's words
+    site_keys = ('held_text', 'site_drift')
+    assert ws['surfaces'][0]['held_text'] == 'Oct 27 · site still drifts (read Oct 19)'
+    assert [{k: v for k, v in c.items() if k not in site_keys} for c in ws['surfaces']] == [
+        {k: v for k, v in c.items() if k not in site_keys} for c in rel.channel_list(
         pubs=_mine(), channels=recorded('channels'), plan=next(
             m for m in recorded('tenant-held')['merchants'] if m['slug'] == SLUG)['channels'],
         held=next(m for m in recorded('tenant-held')['merchants'] if m['slug'] == SLUG)['held'])]
     assert ws['channels'] == {'held': 2, 'blocked': 2, 'live': 1, 'next': 1, 'not_for_brand': 2, 'not_compiled': 0}
-    assert (ws['published'], ws['live']) == (4, 4)
+    assert (ws['published'], ws['live']) == (6, 6), '2U-5 (B2): SKUs, the four lines\' six'
     release = ts['release']
     assert [(s['channel'], s['state'], s['status']) for s in release['surfaces']] == [
-        ('schema_org', 'held', 'Compiled, held · Oct 27'),
+        ('schema_org', 'held', 'Compiled, held · Oct 27 · site still drifts (read Oct 19)'),
         ('merchant_center', 'not_for_brand', "Not for a brand · a seller's channel (rule r3)"),
         ('manufacturer_center', 'held', 'Compiled, held · Oct 27'),
         ('acp', 'blocked', 'Blocked · rule r1 · Oct 27'),

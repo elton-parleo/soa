@@ -1,0 +1,389 @@
+{
+ "body": {
+  "counts": {
+   "lines": {
+    "mcp": 7
+   },
+   "records": {
+    "mcp": 10
+   }
+  },
+  "kind": "brand",
+  "merchant": "pampers-2u1",
+  "mode": "manufacturer",
+  "readback": null,
+  "rows": [
+   {
+    "channel": "mcp",
+    "channel_slug": "mcp",
+    "compiled_at": "2026-10-28T03:28:27",
+    "error": "PARLEO_MCP_PUBLIC_URL must be a full URL, e.g. https://mcp.parleo.io",
+    "expressiveness": [],
+    "external_ref": null,
+    "held": false,
+    "id": 39,
+    "journal": [
+     {
+      "at": "2026-10-28T03:28:27+00:00",
+      "by": "parleo",
+      "event": "compiled",
+      "note": null
+     }
+    ],
+    "listing_id": null,
+    "mode": null,
+    "payload": {
+     "held_publication_id": 1,
+     "line": "Pampers Swaddlers",
+     "merchant": "pampers-2u1",
+     "record_ref": "feed:pampers-2u1:00037000749622",
+     "served": 3,
+     "server": null,
+     "skus": [
+      {
+       "gtin": "037000749622",
+       "product": "Pampers Swaddlers Pampers Swaddlers, Newborn, 84 ct",
+       "query": "037000749622",
+       "resolved": true
+      },
+      {
+       "gtin": "037000828761",
+       "product": "Pampers Swaddlers Pampers Swaddlers, Size 1, 96 ct",
+       "query": "037000828761",
+       "resolved": true
+      },
+      {
+       "gtin": "037000799818",
+       "product": "Pampers Swaddlers Pampers Swaddlers, Size 4, 150 ct",
+       "query": "037000799818",
+       "resolved": true
+      }
+     ],
+     "tool": "get_product_facts"
+    },
+    "published_at": null,
+    "reason": null,
+    "record_ref": "feed:pampers-2u1:00037000749622",
+    "spec_clause": null,
+    "spec_version": "parleo-internal",
+    "status": "failed",
+    "validation": {
+     "errors": [],
+     "ok": true
+    }
+   },
+   {
+    "channel": "mcp",
+    "channel_slug": "mcp",
+    "compiled_at": "2026-10-28T03:28:27",
+    "error": "PARLEO_MCP_PUBLIC_URL must be a full URL, e.g. https://mcp.parleo.io",
+    "expressiveness": [],
+    "external_ref": null,
+    "held": false,
+    "id": 40,
+    "journal": [
+     {
+      "at": "2026-10-28T03:28:27+00:00",
+      "by": "parleo",
+      "event": "compiled",
+      "note": null
+     }
+    ],
+    "listing_id": null,
+    "mode": null,
+    "payload": {
+     "held_publication_id": 7,
+     "line": "Pampers Swaddlers Ultra Day + Night",
+     "merchant": "pampers-2u1",
+     "record_ref": "feed:pampers-2u1:sku:sku_pg_swultra_s3",
+     "served": 1,
+     "server": null,
+     "skus": [
+      {
+       "gtin": null,
+       "product": "Pampers Swaddlers Ultra Day + Night Pampers Swaddlers Ultra Day + Night, Size 3, 180 ct",
+       "query": "Pampers Swaddlers Ultra Day + Night Pampers Swaddlers Ultra Day + Night, Size 3, 180 ct",
+       "resolved": true
+      }
+     ],
+     "tool": "get_product_facts"
+    },
+    "published_at": null,
+    "reason": null,
+    "record_ref": "feed:pampers-2u1:sku:sku_pg_swultra_s3",
+    "spec_clause": null,
+    "spec_version": "parleo-internal",
+    "status": "failed",
+    "validation": {
+     "errors": [],
+     "ok": true
+    }
+   },
+   {
+    "channel": "mcp",
+    "channel_slug": "mcp",
+    "compiled_at": "2026-10-28T03:28:27",
+    "error": "PARLEO_MCP_PUBLIC_URL must be a full URL, e.g. https://mcp.parleo.io",
+    "expressiveness": [],
+    "external_ref": null,
+    "held": false,
+    "id": 41,
+    "journal": [
+     {
+      "at": "2026-10-28T03:28:27+00:00",
+      "by": "parleo",
+      "event": "compiled",
+      "note": null
+     }
+    ],
+    "listing_id": null,
+    "mode": null,
+    "payload": {
+     "held_publication_id": 11,
+     "line": "Pampers Pure Protection",
+     "merchant": "pampers-2u1",
+     "record_ref": "feed:pampers-2u1:sku:sku_pg_pure_s1",
+     "served": 1,
+     "server": null,
+     "skus": [
+      {
+       "gtin": null,
+       "product": "Pampers Pure Protection Pampers Pure Protection, Size 1 (retired)",
+       "query": "Pampers Pure Protection Pampers Pure Protection, Size 1 (retired)",
+       "resolved": true
+      }
+     ],
+     "tool": "get_product_facts"
+    },
+    "published_at": null,
+    "reason": null,
+    "record_ref": "feed:pampers-2u1:sku:sku_pg_pure_s1",
+    "spec_clause": null,
+    "spec_version": "parleo-internal",
+    "status": "failed",
+    "validation": {
+     "errors": [],
+     "ok": true
+    }
+   },
+   {
+    "channel": "mcp",
+    "channel_slug": "mcp",
+    "compiled_at": "2026-10-28T03:28:27",
+    "error": "PARLEO_MCP_PUBLIC_URL must be a full URL, e.g. https://mcp.parleo.io",
+    "expressiveness": [],
+    "external_ref": null,
+    "held": false,
+    "id": 42,
+    "journal": [
+     {
+      "at": "2026-10-28T03:28:27+00:00",
+      "by": "parleo",
+      "event": "compiled",
+      "note": null
+     }
+    ],
+    "listing_id": null,
+    "mode": null,
+    "payload": {
+     "held_publication_id": 15,
+     "line": "Pampers AMORE",
+     "merchant": "pampers-2u1",
+     "record_ref": "feed:pampers-2u1:sku:sku_pg_amore_s1_132",
+     "served": 1,
+     "server": null,
+     "skus": [
+      {
+       "gtin": null,
+       "product": "Pampers AMORE Pampers AMORE, Size 1, 132 ct",
+       "query": "Pampers AMORE Pampers AMORE, Size 1, 132 ct",
+       "resolved": true
+      }
+     ],
+     "tool": "get_product_facts"
+    },
+    "published_at": null,
+    "reason": null,
+    "record_ref": "feed:pampers-2u1:sku:sku_pg_amore_s1_132",
+    "spec_clause": null,
+    "spec_version": "parleo-internal",
+    "status": "failed",
+    "validation": {
+     "errors": [],
+     "ok": true
+    }
+   },
+   {
+    "channel": "mcp",
+    "channel_slug": "mcp",
+    "compiled_at": "2026-10-28T03:28:27",
+    "error": "PARLEO_MCP_PUBLIC_URL must be a full URL, e.g. https://mcp.parleo.io",
+    "expressiveness": [],
+    "external_ref": null,
+    "held": false,
+    "id": 43,
+    "journal": [
+     {
+      "at": "2026-10-28T03:28:27+00:00",
+      "by": "parleo",
+      "event": "compiled",
+      "note": null
+     }
+    ],
+    "listing_id": null,
+    "mode": null,
+    "payload": {
+     "held_publication_id": 19,
+     "line": "Pampers Baby-Dry",
+     "merchant": "pampers-2u1",
+     "record_ref": "feed:pampers-2u1:00037000783817",
+     "served": 1,
+     "server": null,
+     "skus": [
+      {
+       "gtin": "037000783817",
+       "product": "Pampers Baby-Dry Pampers Baby-Dry, Size 4, 186 ct",
+       "query": "037000783817",
+       "resolved": true
+      }
+     ],
+     "tool": "get_product_facts"
+    },
+    "published_at": null,
+    "reason": null,
+    "record_ref": "feed:pampers-2u1:00037000783817",
+    "spec_clause": null,
+    "spec_version": "parleo-internal",
+    "status": "failed",
+    "validation": {
+     "errors": [],
+     "ok": true
+    }
+   },
+   {
+    "channel": "mcp",
+    "channel_slug": "mcp",
+    "compiled_at": "2026-10-28T03:28:27",
+    "error": "PARLEO_MCP_PUBLIC_URL must be a full URL, e.g. https://mcp.parleo.io",
+    "expressiveness": [],
+    "external_ref": null,
+    "held": false,
+    "id": 44,
+    "journal": [
+     {
+      "at": "2026-10-28T03:28:27+00:00",
+      "by": "parleo",
+      "event": "compiled",
+      "note": null
+     }
+    ],
+    "listing_id": null,
+    "mode": null,
+    "payload": {
+     "held_publication_id": 23,
+     "line": "Pampers Cruisers 360",
+     "merchant": "pampers-2u1",
+     "record_ref": "feed:pampers-2u1:00037000717379",
+     "served": 2,
+     "server": null,
+     "skus": [
+      {
+       "gtin": "037000717379",
+       "product": "Pampers Cruisers 360 Pampers Cruisers 360, Size 3, 168 ct",
+       "query": "037000717379",
+       "resolved": true
+      },
+      {
+       "gtin": null,
+       "product": "Pampers Cruisers 360 Pampers Cruisers 360, Size 5, 128 ct",
+       "query": "Pampers Cruisers 360 Pampers Cruisers 360, Size 5, 128 ct",
+       "resolved": true
+      }
+     ],
+     "tool": "get_product_facts"
+    },
+    "published_at": null,
+    "reason": null,
+    "record_ref": "feed:pampers-2u1:00037000717379",
+    "spec_clause": null,
+    "spec_version": "parleo-internal",
+    "status": "failed",
+    "validation": {
+     "errors": [],
+     "ok": true
+    }
+   },
+   {
+    "channel": "mcp",
+    "channel_slug": "mcp",
+    "compiled_at": "2026-10-28T03:28:27",
+    "error": "PARLEO_MCP_PUBLIC_URL must be a full URL, e.g. https://mcp.parleo.io",
+    "expressiveness": [],
+    "external_ref": null,
+    "held": false,
+    "id": 45,
+    "journal": [
+     {
+      "at": "2026-10-28T03:28:27+00:00",
+      "by": "parleo",
+      "event": "compiled",
+      "note": null
+     }
+    ],
+    "listing_id": null,
+    "mode": null,
+    "payload": {
+     "held_publication_id": 28,
+     "line": "Pampers Zzz",
+     "merchant": "pampers-2u1",
+     "record_ref": "feed:pampers-2u1:00037000833970",
+     "served": 1,
+     "server": null,
+     "skus": [
+      {
+       "gtin": "037000833970",
+       "product": "Pampers Zzz Pampers Zzz overnight, Size 4, 104 ct",
+       "query": "037000833970",
+       "resolved": true
+      }
+     ],
+     "tool": "get_product_facts"
+    },
+    "published_at": null,
+    "reason": null,
+    "record_ref": "feed:pampers-2u1:00037000833970",
+    "spec_clause": null,
+    "spec_version": "parleo-internal",
+    "status": "failed",
+    "validation": {
+     "errors": [],
+     "ok": true
+    }
+   }
+  ],
+  "skipped": [
+   {
+    "channel": "merchant_center",
+    "note": "rule r3: a brand publishes product identity to Manufacturer Center, never to Merchant Center (a seller's channel)",
+    "reason": "not_for_brand",
+    "rule": "r3"
+   },
+   {
+    "channel": "deals_api",
+    "note": "not compiled in manufacturer mode (first pass)",
+    "reason": "after_rule",
+    "rule": "r4"
+   },
+   {
+    "channel": "deal_directory",
+    "note": "not compiled in manufacturer mode (first pass)",
+    "reason": "not_for_brand",
+    "rule": "r3"
+   }
+  ]
+ },
+ "headers": {
+  "content-type": "application/json"
+ },
+ "status": 200
+}

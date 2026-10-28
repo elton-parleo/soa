@@ -1,0 +1,224 @@
+{
+ "body": {
+  "listings": [
+   {
+    "brand": "Pampers",
+    "listing_id": 1,
+    "product_id": "feed:pampers-2u1:00037000749622",
+    "product_url": "https://www.pampers.com/en-us/products/pampers-swaddlers-diapers",
+    "published_at": "2026-10-28T03:28:14.107805",
+    "spec_version": "sku-feed",
+    "title": "Pampers Swaddlers",
+    "variants": [
+     {
+      "attributes": {},
+      "count": 84,
+      "currency": null,
+      "gtin": "037000749622",
+      "list_price": null,
+      "size": null,
+      "status": "active",
+      "successor": null,
+      "title": "Pampers Swaddlers, Newborn, 84 ct",
+      "variant_id": "00037000749622",
+      "weight_range": null
+     },
+     {
+      "attributes": {},
+      "count": 96,
+      "currency": null,
+      "gtin": "037000828761",
+      "list_price": null,
+      "size": null,
+      "status": "active",
+      "successor": null,
+      "title": "Pampers Swaddlers, Size 1, 96 ct",
+      "variant_id": "00037000828761",
+      "weight_range": null
+     },
+     {
+      "attributes": {},
+      "count": 150,
+      "currency": null,
+      "gtin": "037000799818",
+      "list_price": null,
+      "size": null,
+      "status": "active",
+      "successor": null,
+      "title": "Pampers Swaddlers, Size 4, 150 ct",
+      "variant_id": "00037000799818",
+      "weight_range": null
+     }
+    ]
+   },
+   {
+    "brand": "Pampers",
+    "listing_id": 4,
+    "product_id": "feed:pampers-2u1:sku:sku_pg_swultra_s3",
+    "product_url": "https://www.pampers.com/en-us/products/pampers-swaddlers-ultra-diapers",
+    "published_at": "2026-10-28T03:28:14.107805",
+    "spec_version": "sku-feed",
+    "title": "Pampers Swaddlers Ultra Day + Night",
+    "variants": [
+     {
+      "attributes": {},
+      "count": 180,
+      "currency": null,
+      "gtin": null,
+      "list_price": null,
+      "size": null,
+      "status": "active",
+      "successor": null,
+      "title": "Pampers Swaddlers Ultra Day + Night, Size 3, 180 ct",
+      "variant_id": "sku:sku_pg_swultra_s3",
+      "weight_range": null
+     }
+    ]
+   },
+   {
+    "brand": "Pampers",
+    "listing_id": 5,
+    "product_id": "feed:pampers-2u1:sku:sku_pg_pure_s1",
+    "product_url": "https://www.pampers.com/en-us/products/pampers-pure-protection-diapers",
+    "published_at": "2026-10-28T03:28:14.107805",
+    "spec_version": "sku-feed",
+    "title": "Pampers Pure Protection",
+    "variants": [
+     {
+      "attributes": {},
+      "count": 132,
+      "currency": null,
+      "gtin": null,
+      "list_price": null,
+      "size": null,
+      "status": "retired",
+      "successor": {
+       "gtin": null,
+       "product_name": "Pampers AMORE",
+       "sku": "sku_pg_amore_s1_132",
+       "title": "Pampers AMORE, Size 1, 132 ct",
+       "variant_id": "sku:sku_pg_amore_s1_132"
+      },
+      "title": "Pampers Pure Protection, Size 1 (retired)",
+      "variant_id": "sku:sku_pg_pure_s1",
+      "weight_range": null
+     }
+    ]
+   },
+   {
+    "brand": "Pampers",
+    "listing_id": 6,
+    "product_id": "feed:pampers-2u1:sku:sku_pg_amore_s1_132",
+    "product_url": "https://www.pampers.com/en-us/product/amore",
+    "published_at": "2026-10-28T03:28:14.107805",
+    "spec_version": "sku-feed",
+    "title": "Pampers AMORE",
+    "variants": [
+     {
+      "attributes": {},
+      "count": 132,
+      "currency": null,
+      "gtin": null,
+      "list_price": null,
+      "size": null,
+      "status": "active",
+      "successor": null,
+      "title": "Pampers AMORE, Size 1, 132 ct",
+      "variant_id": "sku:sku_pg_amore_s1_132",
+      "weight_range": null
+     }
+    ]
+   },
+   {
+    "brand": "Pampers",
+    "listing_id": 7,
+    "product_id": "feed:pampers-2u1:00037000783817",
+    "product_url": "https://www.pampers.com/en-us/products/pampers-baby-dry-diapers",
+    "published_at": "2026-10-28T03:28:14.107805",
+    "spec_version": "sku-feed",
+    "title": "Pampers Baby-Dry",
+    "variants": [
+     {
+      "attributes": {},
+      "count": 186,
+      "currency": null,
+      "gtin": "037000783817",
+      "list_price": null,
+      "size": null,
+      "status": "active",
+      "successor": null,
+      "title": "Pampers Baby-Dry, Size 4, 186 ct",
+      "variant_id": "00037000783817",
+      "weight_range": null
+     }
+    ]
+   },
+   {
+    "brand": "Pampers",
+    "listing_id": 8,
+    "product_id": "feed:pampers-2u1:00037000717379",
+    "product_url": "https://www.pampers.com/en-us/products/pampers-cruisers-360",
+    "published_at": "2026-10-28T03:28:14.107805",
+    "spec_version": "sku-feed",
+    "title": "Pampers Cruisers 360",
+    "variants": [
+     {
+      "attributes": {},
+      "count": 168,
+      "currency": null,
+      "gtin": "037000717379",
+      "list_price": null,
+      "size": null,
+      "status": "active",
+      "successor": null,
+      "title": "Pampers Cruisers 360, Size 3, 168 ct",
+      "variant_id": "00037000717379",
+      "weight_range": null
+     },
+     {
+      "attributes": {},
+      "count": 128,
+      "currency": null,
+      "gtin": null,
+      "list_price": null,
+      "size": null,
+      "status": "active",
+      "successor": null,
+      "title": "Pampers Cruisers 360, Size 5, 128 ct",
+      "variant_id": "sku:sku_pg_cr360_s5_128",
+      "weight_range": null
+     }
+    ]
+   },
+   {
+    "brand": "Pampers",
+    "listing_id": 10,
+    "product_id": "feed:pampers-2u1:00037000833970",
+    "product_url": "https://www.pampers.com/en-us/products/pampers-zzz",
+    "published_at": "2026-10-28T03:28:14.107805",
+    "spec_version": "sku-feed",
+    "title": "Pampers Zzz",
+    "variants": [
+     {
+      "attributes": {},
+      "count": 104,
+      "currency": null,
+      "gtin": "037000833970",
+      "list_price": null,
+      "size": null,
+      "status": "active",
+      "successor": null,
+      "title": "Pampers Zzz overnight, Size 4, 104 ct",
+      "variant_id": "00037000833970",
+      "weight_range": null
+     }
+    ]
+   }
+  ],
+  "merchant": "pampers-2u1"
+ },
+ "headers": {
+  "content-type": "application/json"
+ },
+ "status": 200
+}
