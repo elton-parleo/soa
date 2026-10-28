@@ -132,3 +132,50 @@ def test_forget_org_drops_only_that_org(monkeypatch):
     assert {k[0] for k in console_cache._entries} == {'supply', 'cycle'}
     assert all(k[1] != 12 for k in console_cache._entries if k[0] == 'supply')
     console_cache.clear()
+
+
+
+# ─── B2: counts in SKUs; B4: one Site markup label ────────────────────────
+
+def test_every_count_on_the_release_page_is_skus(http, db, upstream):
+    _shape(db, http, upstream)
+    ts = _read(http, 'truesync')
+    w = ts['workspace']
+    # ten SKUs in seven lines, on five channels in this pass (schema_org, Manufacturer Center, ACP, UCP, MCP)
+    assert (w['records'], w['lines']) == (10, 7)
+    assert w['compiled'] == {'n': 40, 'of': 50}
+    assert (w['published'], w['blocked']) == (10, 10), 'MCP serves 10; ACP blocks 4 SKUs, UCP 6'
+    assert (ts['release']['name'], ts['release']['products']) == ('Ten records, Manufacturer Center first', 10)
+    lines = {c['id']: c['line'] for c in ts['channels']}
+    assert lines['schema_org'] == lines['manufacturer_center'] == '10 of 10 SKUs held · Oct 27'
+    assert lines['acp'] == '6 of 10 SKUs held · 4 blocked · Oct 27'
+    assert lines['ucp_uip'] == '4 of 10 SKUs held · 6 blocked · Oct 27'
+    assert lines['mcp'] == '10 records served · verified Oct 27 at mcp.parleo.example'
+    release = {s['channel']: s['status'] for s in ts['release']['surfaces']}
+    assert release['acp'] == 'Compiled, held · 6 of 10 SKUs held · 4 blocked · Oct 27'
+    assert release['manufacturer_center'] == 'Compiled, held · 10 of 10 SKUs held · Oct 27'
+
+
+def test_publishing_counts_skus_and_says_what_valid_counted(http, db, upstream):
+    _shape(db, http, upstream)
+    pub = _read(http, 'publishing')
+    _dump('publishing-2u5.json', pub)
+    assert pub['preview']['title'] == 'Ten Pampers records, Manufacturer Center first'
+    mfc = next(s for s in pub['surfaces'] if s['channel'] == 'manufacturer_center')
+    # before 2U-5: valid *lines* (3: a Manufacturer Center file without a GTIN does not validate) over supply's SKUs
+    assert (mfc['lines_valid'], mfc['records_valid'], mfc['records_total']) == (3, 6, 10)
+    assert mfc['records'] == '6 of 10 valid'
+    assert '6 of 10 valid' in pub['preview']['note']
+
+
+def test_site_markup_reads_held_first_and_the_drift_as_its_qualifier(http, db, upstream):
+    _shape(db, http, upstream)
+    words = 'Compiled, held · 10 of 10 SKUs held · Oct 27 · site still drifts (read Oct 19)'
+    ts = _read(http, 'truesync')
+    assert next(s['status'] for s in ts['release']['surfaces'] if s['channel'] == 'schema_org') == words
+    pub = _read(http, 'publishing')
+    markup = next(s for s in pub['surfaces'] if s['channel'] == 'schema_org')
+    assert (markup['status'], markup['site_status']) == ('held', 'drift')
+    assert f"Compiled, held · {markup['last']}" == words, 'Publishing and the release card never disagree'
+    assert markup['note'] and 'markup' in markup['note'], 'the drift is still explained'
+

@@ -122,6 +122,9 @@ RELEASE_TEMPLATES = {
     'release.status.held': 'Compiled, held',
     'release.status.sent': 'Compiled, sent by {who}',
     'release.surface.held': 'Compiled, held · {day}',
+    # 2U-5 (B2, B4): a held channel's words, the release card's and Publishing's row alike
+    'release.surface.held.text': 'Compiled, held · {text}',
+    'channel.held.site_drift': '{line} · site still drifts (read {day})',
     'release.surface.blocked': 'Blocked · {day}',
     'release.surface.published': 'Published · {day}',
     'release.surface.out': 'Not in this pass',
@@ -142,6 +145,7 @@ RELEASE_TEMPLATES = {
     'channel.line.held': '{n} of {of} compiled · {day}',
     'channel.line.published': '{n} of {of} published · {day}',
     'channel.line.held.skus': '{n} of {of} SKUs held · {day}',
+    'channel.line.held.skus.blocked': '{n} of {of} SKUs held · {k} blocked · {day}',
     'cell.skus': '{n} of {of} SKUs held',
     'channel.line.blocked': 'rule {rule}',
     'channel.line.blocked.none': 'its spec refuses the record',
@@ -284,6 +288,25 @@ def hold(pubs: List[dict]) -> Dict[str, Dict[str, dict]]:
     return dict(sorted(out.items(), key=lambda kv: min(r.get('id') or 0 for r in kv[1].values())))
 
 
+def line_skus(pubs: List[dict]) -> Counter:
+    """2U-5 (B2): {record ref: its SKUs} (sku_records); a record supply's payload names no SKU of counts one."""
+    return Counter(sku_records(pubs).values())
+
+
+def skus_of(row: dict, per: Counter) -> List[tuple]:
+    """[(a SKU's row, how many SKUs it stands for)]: a per-SKU channel's folded row its SKUs' rows, one each;
+    a line's row its line's SKUs."""
+    if row.get('sku_rows'):
+        return [(x, 1) for x in row['sku_rows']]
+    return [(row, per.get(row.get('record_ref'), 1) or 1)]
+
+
+def sku_total(pubs: List[dict]) -> int:
+    """The SKUs of the merchant's held records: what every count of the release page counts."""
+    per = line_skus(pubs)
+    return sum(per.get(ref, 1) or 1 for ref in hold(pubs))
+
+
 def cell_state(row: Optional[dict]) -> str:
     if row is None:
         return 'na'
@@ -320,7 +343,7 @@ def _blocked_rule(rows: List[dict], planned: Optional[str]) -> Optional[str]:
 
 
 def channel_list(*, pubs: List[dict], channels: List[dict], plan: Optional[List[dict]],
-                 held: Optional[dict]) -> List[dict]:
+                 held: Optional[dict], site: Optional[dict] = None) -> List[dict]:
     """
     Every channel supply has, in supply's order, as a brand's compile left it:
     {id, channel, name, short, spec, state, label, line, reason, rule, note,
@@ -339,6 +362,12 @@ def channel_list(*, pubs: List[dict], channels: List[dict], plan: Optional[List[
       next             supply's reason after_rule: "after rule r4"
       not_for_brand    supply's reason not_for_brand: "a seller's channel (rule r3)"
       not_compiled     anything else: supply's note
+
+    2U-5 (B2): a held channel's line names its blocked SKUs ("9 of 10 SKUs
+    held · 1 blocked · Oct 27"). (B4) `held_text` is a held channel's words
+    after "Compiled, held", the release card's and Publishing's alike; on
+    schema_org, with `site` ({drifts, read_at}: the live site's markup read)
+    drifting, "· site still drifts (read Oct 24)" qualifies it.
     """
     by_slug = _channel_names(channels)
     plan_by = {p.get('channel'): p for p in plan or [] if p.get('channel')}
@@ -391,12 +420,16 @@ def channel_list(*, pubs: List[dict], channels: List[dict], plan: Optional[List[
             note = served.get('external_ref') or note
         elif valid and slug in PER_SKU:
             state = 'held'
-            line = T['channel.line.held.skus'].format(n=sum(1 for x in skus if manu.is_held(x)), of=len(skus), day=day)
+            n, k = sum(1 for x in skus if manu.is_held(x)), sum(1 for x in skus if manu.is_blocked(x))
+            line = (T['channel.line.held.skus.blocked'].format(n=n, of=len(skus), k=k, day=day) if k
+                    else T['channel.line.held.skus'].format(n=n, of=len(skus), day=day))
         elif valid and in_skus:
             state = 'held'
             n = sum(line_skus.get(r.get('record_ref'), 1) for r in held_rows)
             of = ((held or {}).get('by_channel') or {}).get(slug) or sum(line_skus.get(r.get('record_ref'), 1) for r in rows)
-            line = T['channel.line.held.skus'].format(n=n, of=of, day=day)
+            k = sum(line_skus.get(r.get('record_ref'), 1) for r in rows if manu.is_blocked(r))
+            line = (T['channel.line.held.skus.blocked'].format(n=n, of=of, k=k, day=day) if k
+                    else T['channel.line.held.skus'].format(n=n, of=of, day=day))
         elif valid:
             state, line = 'held', T['channel.line.held'].format(n=len(held_rows), of=records, day=day)
         elif blocked_rows:
@@ -421,6 +454,14 @@ def channel_list(*, pubs: List[dict], channels: List[dict], plan: Optional[List[
         c = by_slug.get(slug) or {}
         check = mcp_check(published.get(slug) or {}) if state == 'live' and slug in PARLEO_PUBLISHED else None
         label = T[f'channel.check.{check}'] if check in ('not_reachable', 'not_served') else T[f'channel.{state}']
+        held_text, site_day = None, None
+        if state == 'held':
+            # in SKUs the line is the count ("10 of 10 SKUs held · Oct 27"); a supply before 2U-4 counts lines
+            # ("4 of 4 compiled"), and "Compiled, held" already says that: the day alone
+            held_text = line if (in_skus or slug in PER_SKU) else day
+            if slug == 'schema_org' and (site or {}).get('drifts'):
+                site_day = manu.short_day((site or {}).get('read_at')) or '—'
+                held_text = T['channel.held.site_drift'].format(line=held_text, day=site_day)
         out.append({
             'id': slug, 'channel': slug, 'name': SURFACE_SHORT.get(slug) or c.get('name') or slug,
             'short': SURFACE_SHORT.get(slug) or c.get('name') or slug, 'spec': c.get('spec_version') or '',
@@ -428,6 +469,7 @@ def channel_list(*, pubs: List[dict], channels: List[dict], plan: Optional[List[
             'reason': entry.get('reason'), 'rule': rule, 'note': note,
             # 2U-4: why supply's readback did not approve (its words), for the cell's detail
             'check_reason': (published.get(slug) or {}).get('reason') if check else None,
+            'held_text': held_text, 'site_drift': site_day,
             'in_pass': state in ('held', 'blocked', 'live'),
             'compiled': sum(1 for x in states if x in ('held', 'published', 'live')) if rows else 0,
             'of': records, 'blocked': sum(1 for x in states if x == 'blocked'),
@@ -1117,13 +1159,18 @@ def build_workspace(*, pubs: List[dict], records: List[dict], prices: Optional[L
         s['line'] = f"{s['compiled']} of {s['of']} compiled"
     if channel_states is not None:
         per_surface = [dict(c) for c in channel_states]
+    # 2U-5 (B2): every count in SKUs: a line's row stands for its SKUs, a per-SKU channel's for each of its rows
+    per = line_skus(pubs)
+    units = [u for r in rows for u in skus_of(r, per)]
+    skus = sku_total(pubs) or len(records)
     return {
-        'records': len(records),
-        'compiled': {'n': sum(1 for r in rows if manu.is_held(r) or r.get('status') == manu.LIVE_STATUS),
-                     'of': len(records) * len(slugs)},
-        'published': sum(1 for r in rows if r.get('status') == manu.LIVE_STATUS),
-        'live': sum(1 for r in rows if cell_state(r) == 'live'),
-        'blocked': sum(1 for r in rows if manu.is_blocked(r)),
+        'records': skus,
+        'lines': len(records),
+        'compiled': {'n': sum(w for r, w in units if manu.is_held(r) or r.get('status') == manu.LIVE_STATUS),
+                     'of': skus * len(slugs)},
+        'published': sum(w for r, w in units if r.get('status') == manu.LIVE_STATUS),
+        'live': sum(w for r, w in units if cell_state(r) == 'live'),
+        'blocked': sum(w for r, w in units if manu.is_blocked(r)),
         'channels': {state: sum(1 for c in channel_states or [] if c['state'] == state) for state in CHANNEL_STATES}
         if channel_states is not None else None,
         'fields': _fields(hold(pubs).values()),
@@ -1188,7 +1235,8 @@ def build_release(*, pubs: List[dict], records: List[dict], channels: List[dict]
         surfaces = [{'channel': c['channel'], 'name': c['name'], 'spec_version': (by_slug.get(c['channel']) or {}).get(
                          'spec_version'), 'status': release_status(c, day), 'state': c['state'],
                      'in_pass': c['in_pass']} for c in channel_states]
-    count = len(records)
+    # 2U-5 (B2): the release counts SKUs (ten in seven lines), as the preview's title does
+    count = sku_total(pubs) or len(records)
     return {
         'name': T['release.name'].format(count=manu._NUMBER_WORDS.get(count, str(count))),
         'named': False,
@@ -1208,6 +1256,8 @@ def build_release(*, pubs: List[dict], records: List[dict], channels: List[dict]
 def release_status(channel: dict, day: Optional[str]) -> str:
     """The release card's words for one channel of channel_list."""
     state = channel['state']
+    if state == 'held' and channel.get('held_text'):
+        return T['release.surface.held.text'].format(text=channel['held_text'])
     if state == 'held':
         return T['release.surface.held'].format(day=day)
     if state == 'blocked' and channel.get('rule'):

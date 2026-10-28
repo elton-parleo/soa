@@ -57,6 +57,7 @@ MANUFACTURER_TEMPLATES = {
     'mfc.last.sent': 'File compiled {day}, sent {sent}',
     'mfc.note': "The brand's own team sends it. Parleo never writes into its account",
     'mfc.records': '{valid} of {total} valid',
+    'held.sent': ' · sent {sent}',
     'mfc.no_image': '{n} with no image yet: the brand page served none',
     'oai.name': 'OpenAI product feed (brand)',
     'oai.last': 'Compiled {day}',
@@ -489,6 +490,11 @@ def build_surfaces(*, pubs: List[dict], channels: List[dict], drift: List[dict],
     day = short_day(compiled_at)
     sent = sent_on.get('manufacturer_center')
     total = (held.get('by_channel') or {}).get('manufacturer_center', len(held_mc))
+    # 2U-5 (B2): "4 of 10 valid" counted valid lines over supply's SKUs; both sides count SKUs now
+    from app.services import console_release as rel
+    per = rel.line_skus(pubs)
+    # a supply before 2U-4 (no `lines` in held) counts lines in by_channel: valid lines there
+    valid_skus = sum(per.get(p.get('record_ref'), 1) or 1 for p in valid) if 'lines' in held else len(valid)
     first_error = next((e for p in held_mc if not is_valid(p) for e in _errors(p)), None)
     missing_image = sum(1 for p in held_mc if no_image(p))
     note = first_error if status == 'blocked' and first_error else T['mfc.note']
@@ -504,8 +510,8 @@ def build_surfaces(*, pubs: List[dict], channels: List[dict], drift: List[dict],
                 'fields': ', '.join(_fields_of(valid or held_mc)), 'note': note,
                 # beside the typed fields
                 'channel': 'manufacturer_center', 'connected': (by_slug.get('manufacturer_center') or {}).get('connected'),
-                'compiled_at': compiled_at, 'records': T['mfc.records'].format(valid=len(valid), total=total) if total else None,
-                'records_total': total, 'records_valid': len(valid), 'errors': [e for p in held_mc for e in _errors(p)],
+                'compiled_at': compiled_at, 'records': T['mfc.records'].format(valid=valid_skus, total=total) if total else None,
+                'records_total': total, 'records_valid': valid_skus, 'lines_valid': len(valid), 'errors': [e for p in held_mc for e in _errors(p)],
                 'images_from_brand_page': sum(1 for p in held_mc if 'image_from_brand_page' in _flags(p)),
                 'no_image': missing_image, 'sent': sent,
                 'publication_ids': [p['id'] for p in held_mc if p.get('id') is not None]})
@@ -598,7 +604,14 @@ def with_channel_states(surfaces: List[dict], channel_states: List[dict]) -> Lis
         elif s is None:
             s = {'name': c['name'], 'fields': '', 'note': c.get('note') or c['line']}
         s = dict(s)
-        if slug in ('manufacturer_center', 'acp'):
+        if state == 'held' and c.get('held_text') and (slug == 'schema_org' or 'SKUs' in c['line']):
+            # 2U-5 (B2, B4): a held channel reads as the release card does: "Compiled, held" and its words. Site
+            # markup is held first; the live site's drift is the qualifier, its reason still the note
+            if slug == 'schema_org':
+                s['site_status'] = s.get('status')
+            s.update(status='held', last=c['held_text'] + (T['held.sent'].format(sent=short_day(s['sent']))
+                                                           if s.get('sent') else ''))
+        elif slug in ('manufacturer_center', 'acp'):
             s['status'] = state
         elif slug == 'ucp_uip' and state in ('held', 'blocked'):
             # supply 2U-1 compiles UCP per SKU for a brand: the list's state, line and clause

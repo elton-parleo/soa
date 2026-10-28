@@ -95,8 +95,9 @@ def test_the_surfaces_from_33(http, db, upstream):
     oai = surfaces['oai']
     assert (oai['status'], oai['last'], oai['note'], oai['blocked']) == ('blocked', 'Compiled Oct 25', CLAUSE, 4)
     markup = surfaces['markup']
-    assert (markup['name'], markup['status'], markup['last'], markup['pages']) == \
-        ('Site markup (pampers.com)', 'drift', 'Read Oct 19', 2)
+    # 2U-5 (B4): held first, the live site's drift its qualifier (the release card's words)
+    assert (markup['name'], markup['status'], markup['site_status'], markup['last'], markup['pages']) == \
+        ('Site markup (pampers.com)', 'held', 'drift', 'Oct 25 · site still drifts (read Oct 19)', 2)
     # the weight rows are the pair's (/reference attributes); the brand pages' GTINs are all GTINs as written
     assert markup['note'] == 'Cruisers 360, Zzz and Swaddlers markup carry the wrong Size 3, Size 4 and Size 5 weights'
     assert markup['gtin_flags'] == 0

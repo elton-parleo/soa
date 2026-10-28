@@ -145,6 +145,22 @@ async def brand_reads(scope: CustomerScope, merchant: str) -> dict:
             'errors': errors}
 
 
+def site_markup(reads: dict, record: Optional[dict], catalog: Optional[dict], reference: Optional[dict],
+                drift: Optional[List[dict]] = None) -> dict:
+    """2U-5 (B4): the live site's markup as Publishing reads it: {drifts, read_at, reason}. The release card and
+    Publishing's Site markup row both qualify the held channel with it."""
+    own = _own_domain(reads['retailers'], record)
+    pages = manu.brand_pages(reads['prices'], [own] if own else [])
+    feed_rows = (reads['feed'] or {}).get('rows') if reads['feed'] is not None else None
+    flags = manu.gtin_flags(pages, feed_rows, brand=_brand(catalog))
+    if drift is None:
+        drift = rm.build_weight_drift(reference, brand=_brand(catalog))
+    reason = manu.markup_reason(drift, reference, flags)
+    read_at = manu.brand_page_read_at(reads['prices']) or \
+        max((str(p['observed_at']) for p in pages if p.get('observed_at')), default=None)
+    return {'drifts': bool(reason), 'read_at': read_at, 'reason': reason}
+
+
 async def publishing_view(scope: CustomerScope, ms: MerchantScope, merchant: str, *, channels: List[dict],
                           publications: List[dict], catalog: Optional[dict], reference: Optional[dict],
                           drift: List[dict], reads: Optional[dict] = None) -> dict:
@@ -166,7 +182,8 @@ async def publishing_view(scope: CustomerScope, ms: MerchantScope, merchant: str
     flags = manu.gtin_flags(pages, feed_rows, brand=_brand(catalog))
     held = (record or {}).get('held')
     # 2U-2: every channel supply has, one list (console_release.channel_list), as /truesync reads it
-    channel_states = rel.channel_list(pubs=pubs, channels=channels, plan=(record or {}).get('channels'), held=held)
+    channel_states = rel.channel_list(pubs=pubs, channels=channels, plan=(record or {}).get('channels'), held=held,
+                                      site=site_markup(reads, record, catalog, reference, drift))
     surfaces = manu.build_surfaces(pubs=pubs, channels=channels, drift=drift, reference=reference, pages=pages,
                                    flags=flags, own_domain=own, held=held, read_at=read_at, rules=reads['rules'],
                                    channel_states=channel_states)
@@ -247,7 +264,8 @@ async def release_view(scope: CustomerScope, ms: MerchantScope, merchant: str, *
     # 2U-2: every channel supply has, with its state and line: the matrix's columns, the workspace's and the
     # release card's surfaces, the Overview's card and Publishing all read this one list
     channel_states = rel.channel_list(pubs=pubs, channels=channels, plan=(record or {}).get('channels'),
-                                      held=(record or {}).get('held'))
+                                      held=(record or {}).get('held'),
+                                      site=site_markup(reads, record, catalog, reference))
     records = rel.build_records(
         pubs=pubs, catalog=catalog, feed_rows=feed.get('rows'), prices=reads['prices'],
         retailers=(reads['retailers'] or {}).get('domains') or [], own_domains=own_domains, channels=channels,
@@ -392,6 +410,7 @@ async def brand_overview(scope: CustomerScope, ms: MerchantScope, merchant: str,
     checked = [c['id'] for c in true_value.get('retailer_columns') or true_value.get('columns') or []
                if not c.get('you') and c.get('id') not in own_domains]
     body['header'] = {'skus': len(feed_rows) if feed_rows is not None else None, 'records': (workspace or {}).get('records'),
+                      'lines': (workspace or {}).get('lines'),
                       'retailers_checked': len(checked), 'retailers': checked, 'brand_domain': domain}
     # 2T-7 (2): the one cycle label (rm.cycle_label) in the merchant's zone
     body['vs_label'] = (rm.cycle_label(prev, body.get('timezone')) or {}).get('vs')
