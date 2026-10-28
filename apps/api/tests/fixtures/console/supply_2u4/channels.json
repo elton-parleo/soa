@@ -1,0 +1,96 @@
+{
+ "body": [
+  {
+   "connected": null,
+   "depth_label": "Fully live on demo store",
+   "extension_status": null,
+   "extension_status_reason": null,
+   "is_active": true,
+   "name": "Schema.org Product/Offer",
+   "slug": "schema_org",
+   "spec_version": "schemaorg-merchant-listing-2026-08-18",
+   "verification_surface": "fetch_probe"
+  },
+  {
+   "connected": null,
+   "depth_label": "Live at API layer; accepted + passing diagnostics (not \"surfaced\")",
+   "extension_status": null,
+   "extension_status_reason": null,
+   "is_active": true,
+   "name": "Google Merchant Center feed",
+   "slug": "merchant_center",
+   "spec_version": "gmc-products-v1-2026-08-18",
+   "verification_surface": "acceptance"
+  },
+  {
+   "connected": false,
+   "depth_label": "Built, API delivery, acceptance read-back \u2014 identity and descriptive data only; no incentives, no price but MSRP",
+   "extension_status": null,
+   "extension_status_reason": null,
+   "is_active": true,
+   "name": "Google Manufacturer Center",
+   "slug": "manufacturer_center",
+   "spec_version": "manufacturers-v1-2026-10-05",
+   "verification_surface": "acceptance"
+  },
+  {
+   "connected": null,
+   "depth_label": "Live, self-hosted, spec-validated \u2014 feed only, not enrolled with any platform",
+   "extension_status": "deferred",
+   "extension_status_reason": "ACP promotions (specs \u00a72) is a second payload beside the product feed. The material is sufficient; the feed was the demo-relevant column and promotions were cut by choice, not by any obstacle.",
+   "is_active": true,
+   "name": "Agentic Commerce Protocol",
+   "slug": "acp",
+   "spec_version": "acp-feed-stable-2026-08-18",
+   "verification_surface": "fetch_probe"
+  },
+  {
+   "connected": null,
+   "depth_label": "Live, self-hosted, schema-validated \u2014 discovery + catalog only; no checkout; not enrolled",
+   "extension_status": "not_applicable",
+   "extension_status_reason": "loyalty extension carries buyer-resolved eligibility claims (membership id); a static catalog artifact cannot populate them without fabricating a buyer; separately, the standard carries no member-price field",
+   "is_active": true,
+   "name": "UCP / Universal Incentive Protocol",
+   "slug": "ucp_uip",
+   "spec_version": "ucp-2026-08-25",
+   "verification_surface": "fetch_probe"
+  },
+  {
+   "connected": null,
+   "depth_label": "Live today",
+   "extension_status": null,
+   "extension_status_reason": null,
+   "is_active": true,
+   "name": "Parleo Deals API",
+   "slug": "deals_api",
+   "spec_version": "parleo-internal",
+   "verification_surface": "none"
+  },
+  {
+   "connected": null,
+   "depth_label": "Live today",
+   "extension_status": null,
+   "extension_status_reason": null,
+   "is_active": true,
+   "name": "Model Context Protocol server",
+   "slug": "mcp",
+   "spec_version": "parleo-internal",
+   "verification_surface": "none"
+  },
+  {
+   "connected": null,
+   "depth_label": "Exists",
+   "extension_status": null,
+   "extension_status_reason": null,
+   "is_active": true,
+   "name": "Deal directory / affiliate listing",
+   "slug": "deal_directory",
+   "spec_version": "parleo-internal",
+   "verification_surface": "none"
+  }
+ ],
+ "headers": {
+  "content-type": "application/json"
+ },
+ "status": 200
+}

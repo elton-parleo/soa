@@ -439,7 +439,9 @@ async def post_compile(merchant: str = Query(...), dry_run: bool = Query(False),
     Nothing is sent anywhere, to Google or a retailer. `dry_run` writes
     nothing. The answer is the re-read Publishing with `compile`: {dry_run,
     rows, by_channel, not_compiled: supply's notes (and 2U-2 reasons) per
-    channel it did not compile, readback: supply's mcp readback or None}."""
+    channel it did not compile, readback: supply's mcp readback or None,
+    counts: 2U-4, supply's {records: {channel: SKUs}, lines: {channel: lines}}
+    — every channel counted in SKUs, as the preview counts them}."""
     await _manufacturer(scope, merchant)
     body = _unwrap(*await full_loop._client(scope).publish_merchant(merchant, dry_run=dry_run))
     rows = (body or {}).get('rows') or []
@@ -453,7 +455,8 @@ async def post_compile(merchant: str = Query(...), dry_run: bool = Query(False),
                         by=by)
     out = await get_publishing(merchant=merchant, scope=scope)
     out['compile'] = {'dry_run': dry_run, 'rows': len(rows), 'by_channel': by_channel,
-                      'not_compiled': (body or {}).get('skipped') or [], 'readback': (body or {}).get('readback')}
+                      'not_compiled': (body or {}).get('skipped') or [], 'readback': (body or {}).get('readback'),
+                      'counts': (body or {}).get('counts')}
     return out
 
 
