@@ -331,6 +331,20 @@ def blocked_rule_channels(pubs: List[dict]) -> Dict[str, List[str]]:
     return dict(sorted(out.items()))
 
 
+def signed_rules(rules: Optional[List[dict]]) -> List[dict]:
+    """2U-5 (B5): one row per rule that is approved, in rule order: {code, title, on, by, at, day}. `by` is who
+    approved it as supply's rule row records it (the operator's sign-in, the PUT's `actor`), "TrueSync" when the
+    seed approved it; `day` the workspace-local day. Requests (what waits) are unchanged: this is what was signed."""
+    out = []
+    for rule in sorted(rules or [], key=lambda r: (len(str(r.get('code') or '')), str(r.get('code') or ''))):
+        if rule.get('approval') != 'approved':
+            continue
+        out.append({'code': rule.get('code'), 'title': rule.get('name') or rule.get('code'), 'on': bool(rule.get('on')),
+                    'by': rule.get('approved_by') or 'TrueSync', 'at': rule.get('approved_at'),
+                    'day': manu.short_day(rule.get('approved_at'))})
+    return out
+
+
 def build_approvals(*, fixes: List[dict], rules: Optional[List[dict]], pubs: List[dict], records: int,
                     skus: Optional[int], brand: str) -> dict:
     """B5: {requests, summary, chains}. One request per rule that gates a fix (r5, r6, r4, r2, in the fixes'
@@ -398,6 +412,7 @@ def build_approvals(*, fixes: List[dict], rules: Optional[List[dict]], pubs: Lis
         pending = next((r for r in out if r['state'] == 'pending'), None)
         hero += T['approvals.hero.first'].format(title=pending['title']) if pending else ''
     return {'requests': out,
+            'signed': signed_rules(rules),
             # 2T-11 (B2): the waiting requests that gate a fix, the screen's why-line count ("0 approvals stand
             # between ..." read the demo's list beside "3 of 4 requests waiting")
             'summary': {'hero': hero, 'waiting': len(waiting), 'total': len(out),

@@ -179,3 +179,28 @@ def test_site_markup_reads_held_first_and_the_drift_as_its_qualifier(http, db, u
     assert f"Compiled, held · {markup['last']}" == words, 'Publishing and the release card never disagree'
     assert markup['note'] and 'markup' in markup['note'], 'the drift is still explained'
 
+
+
+# ─── B5: signed rules on Approvals ────────────────────────────────────────
+
+def test_approvals_list_every_signed_rule_beside_what_waits(http, db, upstream):
+    _shape(db, http, upstream)
+    body = _read(http, 'approvals')
+    _dump('approvals-2u5.json', body)
+    signed = [(r['code'], r['on'], r['by'], r['day']) for r in body['signed']]
+    assert signed == [(c, True, 'elton@parleo.io', 'Oct 27') for c in ('r1', 'r2', 'r5', 'r6')]
+    assert all(r['at'] for r in body['signed'])
+    # what waits is unchanged: r4, and the release
+    waiting = [r['code'] for r in body['requests'] if r['state'] == 'pending']
+    assert waiting == ['r4']
+    assert body['summary']['hero'].startswith(f"1 of {body['summary']['total']} requests waiting")
+    assert body['requests'][-1]['code'] == 'release'
+
+
+def test_a_rule_the_seed_approved_is_signed_by_truesync():
+    from app.services import console_fixes as fx
+    rows = fx.signed_rules([{'code': 'r10', 'approval': 'approved', 'on': True},
+                            {'code': 'r2', 'approval': 'approved', 'on': True, 'approved_by': 'op@parleo.io',
+                             'approved_at': '2026-10-28T03:05:00'},
+                            {'code': 'r4', 'approval': 'needs_approval'}])
+    assert [(r['code'], r['by'], r['day']) for r in rows] == [('r2', 'op@parleo.io', 'Oct 27'), ('r10', 'TrueSync', None)]
