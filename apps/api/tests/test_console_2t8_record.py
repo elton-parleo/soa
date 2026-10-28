@@ -136,7 +136,7 @@ def test_the_swaddlers_size_4_record_and_its_issues(http, db, upstream):
     assert list(fields)[:5] == ['Name on pampers.com', 'GTIN', 'Weight range', 'Claims', 'Price']
     assert fields['Name on pampers.com']['v'] == 'Pampers® Swaddlers™'
     assert (fields['GTIN']['v'], fields['GTIN']['mono'], fields['GTIN']['diff']) == ('037000799818', True, False)
-    assert (fields['Weight range']['v'], fields['Weight range']['note']) == ('15 to 34 lb', 'pampers.com size chart, Oct 20')
+    assert (fields['Weight range']['v'], fields['Weight range']['note']) == ('15 to 34 lb', 'pampers.com size chart, Oct 19')
     assert fields['Price']['v'] == 'Not set. Retailers price it'
     assert body['differences'] == []
     kinds = [i['kind'] for i in body['issues']]

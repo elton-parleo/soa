@@ -221,7 +221,7 @@ def test_with_no_page_read_the_record_is_the_reference_and_says_so():
         reads=[{'variant_ref': 'catalog_variant:9', 'variant_label': 'v2', 'price': '9.99', 'verifiable': True}])
     cell = tv['rows'][0]['cells']['shop.test']
     assert (cell['live'], cell['live_basis']) == ('$24.99', 'record')
-    assert parity._live_text(cell, 'shop.test') == '$24.99 at shop.test, the record of Sep 4, no page read yet'
+    assert parity._live_text(cell, 'shop.test') == '$24.99 at shop.test, the record of Sep 3, no page read yet'
 
 
 # ═══ 8. The week in short never repeats a count ══════════════════════════

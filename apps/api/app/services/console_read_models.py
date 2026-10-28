@@ -3127,13 +3127,9 @@ def _listing_source(mix: dict, has_publication: bool, *, from_feed: bool = False
 
 
 def _short_day(value) -> str:
-    text_ = (_iso(value) or '')[:10]
-    try:
-        from datetime import date as _date
-        d = _date.fromisoformat(text_)
-        return f"{d.strftime('%b')} {d.day}"
-    except ValueError:
-        return 'an unrecorded date'
+    """2U-5 (B3): the workspace-local day (console_days), as every console label reads it."""
+    from app.services import console_days
+    return console_days.short_day(_iso(value) if not isinstance(value, str) else value) or 'an unrecorded date'
 
 
 def _newest_member_read(rows: List[dict]) -> Optional[dict]:

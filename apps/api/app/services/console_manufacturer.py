@@ -22,6 +22,7 @@ import re
 from datetime import date, datetime
 from typing import Dict, Iterable, List, Optional
 
+from app.services import console_days
 from app.services import console_read_models as rm
 from soa_shared import attribute_accuracy, retailers as retailer_names
 from soa_shared.possessive import possessive
@@ -129,19 +130,9 @@ def is_manufacturer(merchant_record: Optional[dict]) -> bool:
 
 
 def short_day(value) -> Optional[str]:
-    """"Oct 4" from a date or a stamp, None when there is none."""
-    if value in (None, ''):
-        return None
-    if isinstance(value, datetime):
-        d = value.date()
-    elif isinstance(value, date):
-        d = value
-    else:
-        try:
-            d = date.fromisoformat(str(value)[:10])
-        except ValueError:
-            return None
-    return f"{d.strftime('%b')} {d.day}"
+    """"Oct 4" from a date or a stamp, None when there is none. 2U-5 (B3): a stamp's day in the workspace's
+    timezone (console_days)."""
+    return console_days.short_day(value)
 
 
 def _and(items: List[str]) -> str:

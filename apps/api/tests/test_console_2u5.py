@@ -1,0 +1,87 @@
+"""
+2U-5 (B): what the Oct 27 evening compiles showed.
+
+On 2U-2's harness with supply's answers RECORDED from parleo-supply-app on
+the Pampers feed as committed to production (tests/fixtures/console/
+supply_2u5/, PROVENANCE.md there): ten SKUs in seven lines, the recorded
+reads of Oct 19, rules r1, r2, r5 and r6 on and approved, r3 off, r4
+waiting. The recording's merchant is `pampers-2u1`; it is served here as
+the harness's `pampers-2r1` (`_rename`), so 2P-1's pair and its cycles read it.
+"""
+import json
+import os
+
+from tests import console_fixture_2r2 as f2r2
+from tests.test_console_2c3a import db  # noqa: F401  (fixture)
+from tests.test_console_2p1_two_cycles import _pair
+from tests.test_console_read_models import TOKEN_A, as_, http, upstream  # noqa: F401  (pytest fixtures)
+
+SLUG = f2r2.SLUG
+RECORDED_SLUG = 'pampers-2u1'
+HERE = os.path.join(os.path.dirname(__file__), 'fixtures', 'console', 'supply_2u5')
+
+
+def _rename(value):
+    return json.loads(json.dumps(value).replace(RECORDED_SLUG, SLUG))
+
+
+def recorded(name):
+    with open(os.path.join(HERE, f'{name}.json')) as fh:
+        return _rename(json.load(fh)['body'])
+
+
+def _shape(db, http, upstream, *, publish='publish'):
+    _pair(db, http, upstream)
+    f2r2.retag(db)
+    f2r2.alias(upstream)
+    f2r2.answer(upstream)
+    for name in ('feed', 'catalog', 'retailers', 'retailer-prices', 'rules'):
+        upstream.answer('GET', f'{f2r2.BASE}/{name}', body=recorded(name), token=TOKEN_A)
+    upstream.answer('GET', '/api/truesync/tenant', body=recorded('tenant-held'), token=TOKEN_A)
+    upstream.answer('GET', '/api/truesync/publications', body=recorded('publications-held'), token=TOKEN_A)
+    upstream.answer('GET', '/api/truesync/channels', body=recorded('channels'), token=TOKEN_A)
+    upstream.answer('POST', f'{f2r2.BASE}/publish', body=recorded(publish), token=TOKEN_A)
+
+
+def _read(http, endpoint, status=200, **params):
+    as_('op')
+    r = http.get(f'/api/console/{endpoint}', params={'merchant': SLUG, 'org': 10, **params})
+    assert r.status_code == status, r.text
+    return r.json()
+
+
+def _dump(name, body):
+    """SOA_2U5_SAMPLE_DUMP=<dir>: the console's samples, unedited."""
+    out = os.environ.get('SOA_2U5_SAMPLE_DUMP')
+    if out:
+        os.makedirs(out, exist_ok=True)
+        with open(os.path.join(out, name), 'w') as fh:
+            json.dump(body, fh, indent=1, sort_keys=True)
+
+
+# ─── B3: dates in the workspace's timezone ────────────────────────────────
+
+def test_a_compile_at_night_in_los_angeles_reads_its_local_day(http, db, upstream):
+    _shape(db, http, upstream)
+    compiled_at = recorded('tenant-held')['merchants'][0]['held']['compiled_at']
+    assert compiled_at.startswith('2026-10-28T03:'), 'the press was the evening of Oct 27 in Los Angeles'
+    ts = _read(http, 'truesync')
+    _dump('truesync-2u5.json', ts)
+    assert ts['release']['day'] == 'Oct 27'
+    assert {c['id']: c['line'] for c in ts['channels']}['manufacturer_center'].endswith('· Oct 27')
+    pub = _read(http, 'publishing')
+    assert 'Oct 28' not in json.dumps(pub['surfaces']) + json.dumps(pub['preview'])
+    assert pub['preview']['note'].startswith('Compiled Oct 27 ')
+
+
+def test_the_day_formatter_reads_stamps_in_the_zone_and_dates_as_they_are(monkeypatch):
+    from app.services import console_days
+    monkeypatch.delenv('SOA_DEFAULT_TIMEZONE', raising=False)
+    console_days.use_zone(None)
+    assert console_days.zone() == 'America/Los_Angeles'
+    assert console_days.short_day('2026-10-28T03:05:00') == 'Oct 27', 'naive stamps are UTC'
+    assert console_days.short_day('2026-10-28T03:05:00+00:00') == 'Oct 27'
+    assert console_days.short_day('2026-10-24') == 'Oct 24', 'a date has no time to convert'
+    console_days.use_zone('Europe/London')
+    assert console_days.short_day('2026-10-28T03:05:00') == 'Oct 28'
+    console_days.use_zone(None)

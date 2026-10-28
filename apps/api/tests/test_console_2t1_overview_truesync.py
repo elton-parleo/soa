@@ -227,7 +227,7 @@ def test_a_record_its_readback_timeline_and_compiler(http, db, upstream):
     assert record['GTIN']['v'] == '037000833970 (feed)'
     assert record['Size and weight']['v'] == 'Size 4, 22 to 37 lb'
     assert (record['Price']['v'], record['Price']['prov']) == ('Not set. Retailers price it', 'parleo')
-    assert record['Claims']['note'] == 'pampers.com, Oct 20' and record['Claims']['prov'] == 'brand'
+    assert record['Claims']['note'] == 'pampers.com, Oct 19' and record['Claims']['prov'] == 'brand'
     # #33 never read the retailer pages: listed, not read, and never "not carried"
     assert record['Where to buy']['v'] == 'Amazon, Target and Walmart listed. Not read yet'
     assert record["Couldn't read"]['v'] == 'Amazon, Target and Walmart: not read yet'

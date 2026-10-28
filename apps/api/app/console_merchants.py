@@ -65,7 +65,11 @@ def resolve(scope: CustomerScope, merchants: List[dict], error: Optional[str], m
     primary = slugs[0] if slugs else None
     if merchant and slugs and merchant not in slugs:
         raise HTTPException(status_code=404, detail=f"merchant {merchant!r} not found")
-    return MerchantScope(scope=scope, slug=merchant or primary, primary=primary, merchants=merchants, error=error)
+    slug = merchant or primary
+    # 2U-5 (B3): every dated label of this request in the merchant's (else the org's) timezone
+    from app.services import console_days
+    console_days.use_zone_for(scope.org.id, slug)
+    return MerchantScope(scope=scope, slug=slug, primary=primary, merchants=merchants, error=error)
 
 
 async def merchant_scope(merchant: Optional[str] = Query(None, description="2H: one of the org's merchants; absent, the primary"),
