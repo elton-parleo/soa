@@ -69,6 +69,19 @@ def clear() -> None:
         _stamps.clear()
 
 
+def forget_org(org) -> int:
+    """2U-5 (B1): drop every supply read kept for the org (and the merchant's
+    kind, read from its /tenant): a compile or a stated send changes what
+    supply serves, and a read kept from before it must not outlive it. The
+    number of entries dropped."""
+    with _lock:
+        stale = [k for k in _entries if (k[0] == 'supply' and k[1] == org)
+                 or (k[:2] == ('value', 'kind') and len(k) > 2 and k[2] == org)]
+        for k in stale:
+            del _entries[k]
+    return len(stale)
+
+
 def digest(value: Any) -> str:
     return hashlib.sha256(json.dumps(value, sort_keys=True, default=str).encode()).hexdigest()[:16]
 

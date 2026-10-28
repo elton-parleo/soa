@@ -441,7 +441,10 @@ async def post_compile(merchant: str = Query(...), dry_run: bool = Query(False),
     rows, by_channel, not_compiled: supply's notes (and 2U-2 reasons) per
     channel it did not compile, readback: supply's mcp readback or None,
     counts: 2U-4, supply's {records: {channel: SKUs}, lines: {channel: lines}}
-    — every channel counted in SKUs, as the preview counts them}."""
+    — every channel counted in SKUs, as the preview counts them}. 2U-5 (B1):
+    a press (not a dry run) drops the org's kept supply reads first, and the
+    answer carries `tenant` (the merchant's fresh /tenant record) and
+    `truesync` (the re-read /truesync body)."""
     await _manufacturer(scope, merchant)
     body = _unwrap(*await full_loop._client(scope).publish_merchant(merchant, dry_run=dry_run))
     rows = (body or {}).get('rows') or []
@@ -451,12 +454,21 @@ async def post_compile(merchant: str = Query(...), dry_run: bool = Query(False),
         reason = r.get('reason') or r.get('status')
         counts[reason] = counts.get(reason, 0) + 1
     by = user.get('email') or user.get('sub')
+    # 2U-5 (B1): a press changes what supply serves; nothing read before it is kept past it
+    dropped = 0 if dry_run else console_cache.forget_org(scope.org.id)
     score_svc.log_event('publishing.compile', org=scope.org.id, merchant=merchant, dry_run=dry_run, rows=len(rows),
-                        by=by)
+                        by=by, cache_dropped=dropped)
     out = await get_publishing(merchant=merchant, scope=scope)
     out['compile'] = {'dry_run': dry_run, 'rows': len(rows), 'by_channel': by_channel,
                       'not_compiled': (body or {}).get('skipped') or [], 'readback': (body or {}).get('readback'),
                       'counts': (body or {}).get('counts')}
+    if not dry_run:
+        # 2U-5 (B1): the fresh /tenant record and TrueSync re-read after the press, so the console paints the
+        # release card from this answer at once
+        from app.routers.console import get_truesync
+        ms = await check_merchant(scope, merchant)
+        out['tenant'] = _record(ms)
+        out['truesync'] = await get_truesync(merchant=merchant, scope=scope)
     return out
 
 
@@ -600,6 +612,7 @@ async def post_sent(body: SentStatement = Body(...), merchant: str = Query(...),
     statement = {'channel': body.channel, 'sent_at': body.sent_at, 'stated_by': body.stated_by, 'actor': actor,
                  'note': body.note, **({'publication_ids': body.publication_ids} if body.publication_ids else {})}
     answer = _unwrap(*await full_loop._client(scope).post_sent(merchant, statement))
+    console_cache.forget_org(scope.org.id)   # 2U-5 (B1): the held rows' journal changed
     score_svc.log_event('publishing.sent', org=scope.org.id, merchant=merchant, channel=body.channel,
                         sent_at=body.sent_at, actor=actor, recorded=(answer or {}).get('recorded'))
     out = await get_publishing(merchant=merchant, scope=scope)

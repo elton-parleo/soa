@@ -85,3 +85,50 @@ def test_the_day_formatter_reads_stamps_in_the_zone_and_dates_as_they_are(monkey
     console_days.use_zone('Europe/London')
     assert console_days.short_day('2026-10-28T03:05:00') == 'Oct 28'
     console_days.use_zone(None)
+
+
+# ─── B1: a press clears the org's supply cache ────────────────────────────
+
+def _supply_reads(upstream, path):
+    return sum(1 for c in upstream.calls if c['method'] == 'GET' and c['path'].endswith(path))
+
+
+def test_a_compile_drops_the_org_s_kept_supply_reads(http, db, upstream, monkeypatch):
+    from app.services import console_cache
+    monkeypatch.setenv('SOA_CONSOLE_CACHE', '1')
+    console_cache.clear()
+    _shape(db, http, upstream)
+    retailers = f'{f2r2.BASE}/retailers'
+    _read(http, 'truesync')
+    first = _supply_reads(upstream, retailers)
+    assert first >= 1
+    _read(http, 'truesync')
+    assert _supply_reads(upstream, retailers) == first, 'warm: kept per org (2Q-1)'
+    assert any(k[0] == 'supply' and k[1] == 10 for k in console_cache._entries)
+    as_('op')
+    r = http.post('/api/console/publishing/compile', params={'merchant': SLUG, 'org': 10})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    _dump('publishing-2u5-compile.json', body)
+    # the answer carries the fresh /tenant record and TrueSync re-read after the press
+    assert body['tenant']['slug'] == SLUG and body['tenant']['held']['compiled_at']
+    assert body['truesync']['release']['day'] == 'Oct 27' and body['truesync']['workspace']
+    after_press = _supply_reads(upstream, retailers)
+    assert after_press > first, 'the re-read after the press asked supply again'
+    _read(http, 'truesync')
+    assert _supply_reads(upstream, retailers) == after_press, 'and is kept again from there'
+    console_cache.clear()
+
+
+def test_forget_org_drops_only_that_org(monkeypatch):
+    from app.services import console_cache
+    monkeypatch.setenv('SOA_CONSOLE_CACHE', '1')
+    console_cache.clear()
+    console_cache._put(('supply', 12, 'get_retailers', ('pampers',), ()), (200, {}, None), 300)
+    console_cache._put(('supply', 13, 'get_retailers', ('other',), ()), (200, {}, None), 300)
+    console_cache._put(('value', 'kind', 12, 'pampers'), 'brand', 300)
+    console_cache._put(('cycle', 'visibility', (1,), 'x'), {}, 300)
+    assert console_cache.forget_org(12) == 2
+    assert {k[0] for k in console_cache._entries} == {'supply', 'cycle'}
+    assert all(k[1] != 12 for k in console_cache._entries if k[0] == 'supply')
+    console_cache.clear()
