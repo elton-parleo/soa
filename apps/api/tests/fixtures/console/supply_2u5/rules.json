@@ -1,0 +1,173 @@
+{
+ "body": {
+  "kind": "brand",
+  "merchant": "pampers-2u1",
+  "mode": "manufacturer",
+  "rules": [
+   {
+    "approval": "approved",
+    "approved_at": "2026-10-28T03:28:26.891293",
+    "approved_by": "elton@parleo.io",
+    "audience": "All agents",
+    "code": "r1",
+    "compiled": true,
+    "detail": "Retailer prices appear only as what a retailer charges, labeled with the retailer and dated. Every retailer read that day, never a chosen one.",
+    "history": [
+     {
+      "actor": "elton@parleo.io",
+      "at": "2026-10-28T03:28:26",
+      "changes": {
+       "approval": [
+        "needs_approval",
+        "approved"
+       ],
+       "on": [
+        false,
+        true
+       ]
+      },
+      "token_id": "d6fb891253f75e5e"
+     }
+    ],
+    "name": "Never publish a retail price as Pampers'",
+    "note": null,
+    "on": true,
+    "outcome": "No price set by Pampers, anywhere",
+    "scope": "All records",
+    "stored": true
+   },
+   {
+    "approval": "approved",
+    "approved_at": "2026-10-28T03:28:26.896111",
+    "approved_by": "elton@parleo.io",
+    "audience": "All agents",
+    "code": "r2",
+    "compiled": true,
+    "detail": "Alphabetical, every retailer that carries the product, no favorites.",
+    "history": [
+     {
+      "actor": "elton@parleo.io",
+      "at": "2026-10-28T03:28:26",
+      "changes": {
+       "approval": [
+        "needs_approval",
+        "approved"
+       ],
+       "on": [
+        false,
+        true
+       ]
+      },
+      "token_id": "d6fb891253f75e5e"
+     }
+    ],
+    "name": "Retailers in the same order every time",
+    "note": null,
+    "on": true,
+    "outcome": "Every carrier listed, clubs included",
+    "scope": "All records",
+    "stored": true
+   },
+   {
+    "approval": "needs_approval",
+    "approved_at": null,
+    "approved_by": null,
+    "audience": "Google agents",
+    "code": "r3",
+    "compiled": false,
+    "detail": "Pampers publishes product content. Offers flow through retailers' own feeds.",
+    "history": [],
+    "name": "Manufacturer Center, not Merchant Center",
+    "note": null,
+    "on": false,
+    "outcome": "Content live, prices from retailers",
+    "scope": "Google",
+    "stored": true
+   },
+   {
+    "approval": "needs_approval",
+    "approved_at": null,
+    "approved_by": null,
+    "audience": "Verified shopping agents",
+    "code": "r4",
+    "compiled": false,
+    "detail": "A deal Pampers funds attaches to the product with its terms and end date, every honoring retailer listed the same way. Ships in the next release.",
+    "history": [],
+    "name": "Pampers-funded deals publish retailer-neutral",
+    "note": null,
+    "on": false,
+    "outcome": "Needs Legal",
+    "scope": "Pampers-funded deals",
+    "stored": true
+   },
+   {
+    "approval": "approved",
+    "approved_at": "2026-10-28T03:28:26.899383",
+    "approved_by": "elton@parleo.io",
+    "audience": "All agents",
+    "code": "r5",
+    "compiled": true,
+    "detail": "Each line carries its own chart from pampers.com. Size 4 is 15 to 34 lb for Swaddlers, and 22 to 37 lb for Cruisers 360 and Zzz. No attribute changes without counsel.",
+    "history": [
+     {
+      "actor": "elton@parleo.io",
+      "at": "2026-10-28T03:28:26",
+      "changes": {
+       "approval": [
+        "needs_approval",
+        "approved"
+       ],
+       "on": [
+        false,
+        true
+       ]
+      },
+      "token_id": "d6fb891253f75e5e"
+     }
+    ],
+    "name": "One size chart per line",
+    "note": null,
+    "on": true,
+    "outcome": "Swaddlers Size 4 resolves to 15 to 34 lb everywhere",
+    "scope": "6 lines",
+    "stored": true
+   },
+   {
+    "approval": "approved",
+    "approved_at": "2026-10-28T03:28:26.902477",
+    "approved_by": "elton@parleo.io",
+    "audience": "All agents",
+    "code": "r6",
+    "compiled": true,
+    "detail": "Pure Protection points at AMORE, the way pampers.com already redirects it. Agents get the live product, and the record notes leftover retailer stock.",
+    "history": [
+     {
+      "actor": "elton@parleo.io",
+      "at": "2026-10-28T03:28:26",
+      "changes": {
+       "approval": [
+        "needs_approval",
+        "approved"
+       ],
+       "on": [
+        false,
+        true
+       ]
+      },
+      "token_id": "d6fb891253f75e5e"
+     }
+    ],
+    "name": "Retired products carry a successor",
+    "note": null,
+    "on": true,
+    "outcome": "Pure Protection stops being sold as current",
+    "scope": "2 records",
+    "stored": true
+   }
+  ]
+ },
+ "headers": {
+  "content-type": "application/json"
+ },
+ "status": 200
+}

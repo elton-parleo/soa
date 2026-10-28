@@ -1,0 +1,19 @@
+{
+ "body": {
+  "comparison_domains": [],
+  "domains": [
+   "amazon.com",
+   "target.com",
+   "walmart.com"
+  ],
+  "merchant": "pampers-2u1",
+  "own_domain": "pampers.com",
+  "own_domains": [
+   "pampers.com"
+  ]
+ },
+ "headers": {
+  "content-type": "application/json"
+ },
+ "status": 200
+}

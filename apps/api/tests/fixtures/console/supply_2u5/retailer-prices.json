@@ -1,0 +1,2804 @@
+{
+ "body": {
+  "as_of": "2026-10-28T03:28:26.919687+00:00",
+  "brand_line_sources": {
+   "Pampers AMORE": [
+    "feed"
+   ],
+   "Pampers Baby-Dry": [
+    "feed"
+   ],
+   "Pampers Cruisers 360": [
+    "feed",
+    "page"
+   ],
+   "Pampers Easy Ups": [
+    "page_link"
+   ],
+   "Pampers Pure Protection": [
+    "feed"
+   ],
+   "Pampers Sensitive": [
+    "page_link"
+   ],
+   "Pampers Swaddlers": [
+    "feed",
+    "page",
+    "page_link"
+   ],
+   "Pampers Swaddlers 360": [
+    "page_link"
+   ],
+   "Pampers Swaddlers Ultra Day + Night": [
+    "feed"
+   ],
+   "Pampers Zzz": [
+    "feed",
+    "page",
+    "page_link"
+   ]
+  },
+  "brand_lines": [
+   "Pampers Swaddlers",
+   "Pampers Swaddlers Ultra Day + Night",
+   "Pampers Pure Protection",
+   "Pampers AMORE",
+   "Pampers Baby-Dry",
+   "Pampers Cruisers 360",
+   "Pampers Zzz",
+   "Pampers Swaddlers 360",
+   "Pampers Sensitive",
+   "Pampers Easy Ups"
+  ],
+  "brand_lines_complete": false,
+  "kind": "brand",
+  "merchant": "pampers-2u1",
+  "prices": [
+   {
+    "attribute": {
+     "conflict": null,
+     "evidence": "Amazon.com: Pampers Swaddlers Diapers, Size 0 (up to 10 lbs), 84 Count, Fragrance Free, Hypoallergenic, Absorbent, Pediatrician Recommended, Skin Safe",
+     "evidence_from": "title",
+     "stated": {
+      "max": 10.0,
+      "min": null
+     },
+     "truth": {
+      "max": 10.0,
+      "min": null
+     },
+     "truth_source": "brand_page",
+     "verdict": "match"
+    },
+    "availability": null,
+    "bullets": null,
+    "currency": "USD",
+    "deals": [],
+    "extraction_evidence": {
+     "confidence": "high",
+     "evidence": "This item: Pampers Swaddlers Diapers, Size 0 (up to 10 lbs), 84 Count, Fragrance Free, Hypoallergenic, Absorbent, Pediatrician Recommended, Skin Safe $27.97",
+     "list_price": null,
+     "model": "gpt-5.4-nano",
+     "price": "27.97",
+     "priced_pack": "84 Count",
+     "seller": null
+    },
+    "final_url": "https://www.amazon.com/dp/B07CVBTN3N",
+    "gtin": "037000749622",
+    "incentive_in_markup": {
+     "code": false,
+     "json_ld_scanned": false,
+     "member_price": false,
+     "promo": false,
+     "subscription": false
+    },
+    "incentive_in_text": {
+     "code": false,
+     "member_price": false,
+     "promo": false,
+     "sentence": null,
+     "site_wide": false,
+     "subscription": false
+    },
+    "json_ld": null,
+    "list_price": null,
+    "member_price": null,
+    "method": "llm",
+    "observed_at": "2026-10-20T04:23:16.142155+00:00",
+    "offer_text": null,
+    "page_title": "Amazon.com: Pampers Swaddlers Diapers, Size 0 (up to 10 lbs), 84 Count, Fragrance Free, Hypoallergenic, Absorbent, Pediatrician Recommended, Skin Safe",
+    "price": "27.97",
+    "read_status": "ok",
+    "reference_read_id": 31,
+    "reference_run_id": 3,
+    "reference_source": "honest_fetch",
+    "retailer_domain": "amazon.com",
+    "role": "retailer",
+    "size_chart": null,
+    "sku": "sku_pg_swd_nb_84",
+    "status": "active",
+    "successor": null,
+    "unverifiable_reason": null,
+    "url": "https://www.amazon.com/dp/B07CVBTN3N",
+    "variant_label": "Pampers Swaddlers, Newborn, 84 ct",
+    "variant_ref": "feed_sku:1",
+    "verifiable": true,
+    "weight_range": null
+   },
+   {
+    "attribute": {
+     "conflict": null,
+     "evidence": "Preemie <6 lb Newborn <10 lbs 1 8 - 14 lbs",
+     "evidence_from": "model",
+     "stated": {
+      "max": 10.0,
+      "min": null
+     },
+     "truth": {
+      "max": 10.0,
+      "min": null
+     },
+     "truth_source": "brand_page",
+     "verdict": "match"
+    },
+    "availability": null,
+    "bullets": [
+     "Perfect for Newborn",
+     "Fragrance Free",
+     "#1 Brand.* For Sleep",
+     "Wetness Indicator",
+     "Diapers",
+     "Dryness & Comfort",
+     "OEKO-TEX\u00ae STANDARD 100 Certification",
+     "Gentle on Delicate Skin",
+     "Babylist\u2019s Best Diaper for Sensitive Skin in 2024",
+     "Accredited as skin safe by the Skin Health Alliance",
+     "Pampers Swaddlers are designed to keep baby\u2019s skin dry and comfortable.",
+     "Pampers Swaddlers are designed to help create a snug, secure fit for newborns, reducing gaps that can lead to leaks. Soft leg cuffs gently seal around the legs, while the contoured shape hugs your baby\u2019s body for added protection. In sizes 1 and up, the Blowout Barrier helps stop messes from traveling up the back. When sized and fastened correctly, these features work together to provide up to 100% blowout and leak protection .",
+     "These hypoallergenic baby diapers feature an absorbent KeepDry\u2122 liner that locks away wetness and help keep your baby drier than the luxury diaper brand.",
+     "Free of fragrance, parabens and latex (no natural rubber), Pampers Swaddlers are trusted by experts and parents alike and are recognized by Best of Babylist and Newsweek Brandspark Most Trusted by American Shoppers 2024.",
+     "Pair Pampers Swaddlers with Pampers Sensitive Baby Wipes for clinically proven protection.",
+     "Pampers Swaddlers diapers were named Best Overall for Newborns by Parents in 2026.",
+     "Pampers Swaddlers were named Overall Best Diapers Available in Stores by The Bump in 2026.",
+     "Pampers Swaddlers were named a Babylist Pick for Best Disposable Diapers in 2026."
+    ],
+    "currency": "usd",
+    "deals": null,
+    "extraction_evidence": null,
+    "final_url": "https://www.pampers.com/en-us/products/pampers-swaddlers-diapers",
+    "gtin": "037000749622",
+    "incentive_in_markup": {
+     "code": false,
+     "json_ld_scanned": false,
+     "member_price": false,
+     "promo": false,
+     "subscription": false
+    },
+    "incentive_in_text": {
+     "code": false,
+     "member_price": false,
+     "promo": false,
+     "sentence": null,
+     "site_wide": false,
+     "subscription": false
+    },
+    "json_ld": {
+     "@type": "ProductGroup",
+     "additionalProperty": [
+      {
+       "@type": "PropertyValue",
+       "name": "Size Range",
+       "value": "Preemie, Newborn, 1, 2, 3, 4, 5, 6, 7, 8"
+      },
+      {
+       "@type": "PropertyValue",
+       "name": "Age Range",
+       "value": "Newborn, Baby"
+      },
+      {
+       "@type": "PropertyValue",
+       "name": "Baby Weight",
+       "value": "<6 lbs, <10 lbs, 8 - 14 lbs, 10 - 22 lbs, 13 - 26 lbs, 15 - 34 lbs, 27+ lbs, 35+ lbs, 41+ lbs, 46+ lbs"
+      },
+      {
+       "@type": "PropertyValue",
+       "name": "Pack Count",
+       "value": "19, 27, 29, 38, 44, 58, 60, 70, 72, 84, 88, 100, 104, 108, 112, 120, 132, 136, 140, 148, 150, 164, 168, 186, 198"
+      }
+     ],
+     "category": "Taped Diapers",
+     "description": "Pampers Swaddlers\u2122 for babies and newborns offer gentle care for sensitive skin and stop blowouts with trusted leak protection. Find out and shop now!",
+     "hasVariant": [
+      {
+       "@type": "Product",
+       "description": "<6 lb",
+       "gtin13": "037000863403",
+       "name": "Preemie",
+       "size": "Preemie",
+       "sku": "037000863403"
+      },
+      {
+       "@type": "Product",
+       "description": "<10 lbs",
+       "gtin13": "037000772552",
+       "name": "Newborn",
+       "size": "Newborn",
+       "sku": "037000772552"
+      },
+      {
+       "@type": "Product",
+       "description": "8 - 14 lbs",
+       "gtin13": "037000799788",
+       "name": "1",
+       "size": "1",
+       "sku": "037000799788"
+      },
+      {
+       "@type": "Product",
+       "description": "10-22 lbs",
+       "gtin13": "037000833109",
+       "name": "2",
+       "size": "2",
+       "sku": "037000833109"
+      },
+      {
+       "@type": "Product",
+       "description": "13-26 lbs",
+       "gtin13": "037000833178",
+       "name": "3",
+       "size": "3",
+       "sku": "037000833178"
+      },
+      {
+       "@type": "Product",
+       "description": "15-34 lbs",
+       "gtin13": "037000799818",
+       "name": "4",
+       "size": "4",
+       "sku": "037000799818"
+      },
+      {
+       "@type": "Product",
+       "description": "20-37 lbs",
+       "gtin13": "037000799825",
+       "name": "5",
+       "size": "5",
+       "sku": "037000799825"
+      },
+      {
+       "@type": "Product",
+       "description": "23-44 lbs",
+       "gtin13": "037000833086",
+       "name": "6",
+       "size": "6",
+       "sku": "037000833086"
+      },
+      {
+       "@type": "Product",
+       "description": "26-50 lbs",
+       "gtin13": "030772098141",
+       "name": "7",
+       "size": "7",
+       "sku": "030772098141"
+      },
+      {
+       "@type": "Product",
+       "description": "30+ lbs",
+       "gtin13": "030772098639",
+       "name": "8",
+       "size": "8",
+       "sku": "030772098639"
+      }
+     ],
+     "name": "Pampers\u00ae Swaddlers\u2122 Diapers for Babies and Newborns",
+     "url": "https://www.pampers.com/en-us/products/pampers-swaddlers-diapers"
+    },
+    "list_price": null,
+    "member_price": null,
+    "method": "none_by_design",
+    "observed_at": "2026-10-20T04:23:16.142155+00:00",
+    "offer_text": null,
+    "page_title": "Pampers\u00ae Swaddlers\u2122 Diapers for Babies and Newborns",
+    "price": null,
+    "read_status": "ok",
+    "reference_read_id": 32,
+    "reference_run_id": 3,
+    "reference_source": "honest_fetch",
+    "retailer_domain": "pampers.com",
+    "role": "own",
+    "size_chart": [
+     {
+      "evidence": "Preemie <6 lb",
+      "max": 6.0,
+      "min": null,
+      "size": "preemie"
+     },
+     {
+      "evidence": "Newborn <10 lbs",
+      "max": 10.0,
+      "min": null,
+      "size": "newborn"
+     },
+     {
+      "evidence": "1 8 - 14 lbs",
+      "max": 14.0,
+      "min": 8.0,
+      "size": "1"
+     },
+     {
+      "evidence": "2 10-22 lbs",
+      "max": 22.0,
+      "min": 10.0,
+      "size": "2"
+     },
+     {
+      "evidence": "3 13-26 lbs",
+      "max": 26.0,
+      "min": 13.0,
+      "size": "3"
+     },
+     {
+      "evidence": "4 15-34 lbs",
+      "max": 34.0,
+      "min": 15.0,
+      "size": "4"
+     },
+     {
+      "evidence": "5 20-37 lbs",
+      "max": 37.0,
+      "min": 20.0,
+      "size": "5"
+     },
+     {
+      "evidence": "6 23-44 lbs",
+      "max": 44.0,
+      "min": 23.0,
+      "size": "6"
+     },
+     {
+      "evidence": "7 26-50 lbs",
+      "max": 50.0,
+      "min": 26.0,
+      "size": "7"
+     },
+     {
+      "evidence": "8 30+ lbs",
+      "max": null,
+      "min": 30.0,
+      "size": "8"
+     }
+    ],
+    "sku": "sku_pg_swd_nb_84",
+    "status": "active",
+    "successor": null,
+    "unverifiable_reason": "brand site, no price set",
+    "url": "https://www.pampers.com/en-us/products/pampers-swaddlers-diapers",
+    "variant_label": "Pampers Swaddlers, Newborn, 84 ct",
+    "variant_ref": "feed_sku:1",
+    "verifiable": false,
+    "weight_range": null
+   },
+   {
+    "attribute": {
+     "conflict": null,
+     "evidence": null,
+     "evidence_from": null,
+     "stated": null,
+     "truth": {
+      "max": 10.0,
+      "min": null
+     },
+     "truth_source": "brand_page",
+     "verdict": "absent"
+    },
+    "availability": null,
+    "bullets": null,
+    "currency": "USD",
+    "deals": [],
+    "extraction_evidence": null,
+    "final_url": "https://www.target.com/p/-/-/A-14723178",
+    "gtin": "037000749622",
+    "incentive_in_markup": {
+     "code": false,
+     "json_ld_scanned": false,
+     "member_price": false,
+     "promo": false,
+     "subscription": false
+    },
+    "incentive_in_text": {
+     "code": false,
+     "member_price": false,
+     "promo": false,
+     "sentence": null,
+     "site_wide": false,
+     "subscription": false
+    },
+    "json_ld": null,
+    "list_price": null,
+    "member_price": null,
+    "method": "none",
+    "observed_at": "2026-10-20T04:23:16.142155+00:00",
+    "offer_text": null,
+    "page_title": "Pampers Swaddlers Sensitive Disposable Diapers - Size 0 - 84ct : Target",
+    "price": null,
+    "read_status": "empty",
+    "reference_read_id": 33,
+    "reference_run_id": 3,
+    "reference_source": "honest_fetch",
+    "retailer_domain": "target.com",
+    "role": "retailer",
+    "size_chart": null,
+    "sku": "sku_pg_swd_nb_84",
+    "status": "active",
+    "successor": null,
+    "unverifiable_reason": "page read, but it states no price for this SKU",
+    "url": "https://www.target.com/p/-/-/A-14723178",
+    "variant_label": "Pampers Swaddlers, Newborn, 84 ct",
+    "variant_ref": "feed_sku:1",
+    "verifiable": false,
+    "weight_range": null
+   },
+   {
+    "attribute": {
+     "conflict": null,
+     "evidence": "Preemie (<6 lb), N (<10 lb), 1 (8-14 lb), 2 (10-22 lb), 3 (13-26 lb), 4 (15-34 lb)",
+     "evidence_from": "model",
+     "stated": {
+      "max": 10.0,
+      "min": null
+     },
+     "truth": {
+      "max": 10.0,
+      "min": null
+     },
+     "truth_source": "brand_page",
+     "verdict": "match"
+    },
+    "availability": null,
+    "bullets": null,
+    "currency": "USD",
+    "deals": [],
+    "extraction_evidence": {
+     "confidence": "high",
+     "evidence": "84, $27.97 84 $27.97 33.3 \u00a2/count",
+     "list_price": null,
+     "model": "gpt-5.4-nano",
+     "price": "27.97",
+     "priced_pack": "84 Count",
+     "seller": null
+    },
+    "final_url": "https://www.walmart.com/ip/Pampers-Swaddlers-Baby-Diapers-Size-Newborn-84-Count/454558491",
+    "gtin": "037000749622",
+    "incentive_in_markup": {
+     "code": false,
+     "json_ld_scanned": false,
+     "member_price": false,
+     "promo": false,
+     "subscription": false
+    },
+    "incentive_in_text": {
+     "code": false,
+     "member_price": false,
+     "promo": false,
+     "sentence": null,
+     "site_wide": false,
+     "subscription": false
+    },
+    "json_ld": null,
+    "list_price": null,
+    "member_price": null,
+    "method": "llm_rendered",
+    "observed_at": "2026-10-20T04:23:16.142155+00:00",
+    "offer_text": null,
+    "page_title": "Pampers Swaddlers Baby Diapers Size Newborn, 84 Ct, Hypoallergenic - Walmart.com",
+    "price": "27.97",
+    "read_status": "ok",
+    "reference_read_id": 36,
+    "reference_run_id": 3,
+    "reference_source": "hosted_render",
+    "retailer_domain": "walmart.com",
+    "role": "retailer",
+    "size_chart": null,
+    "sku": "sku_pg_swd_nb_84",
+    "status": "active",
+    "successor": null,
+    "unverifiable_reason": null,
+    "url": "https://www.walmart.com/ip/Pampers-Swaddlers-Baby-Diapers-Size-Newborn-84-Count/454558491",
+    "variant_label": "Pampers Swaddlers, Newborn, 84 ct",
+    "variant_ref": "feed_sku:1",
+    "verifiable": true,
+    "weight_range": null
+   },
+   {
+    "attribute": {
+     "conflict": null,
+     "evidence": "Pampers Pampers Swaddlers Diapers, Size 1 (8-14 lbs), 96 Count",
+     "evidence_from": "model",
+     "stated": {
+      "max": 14.0,
+      "min": 8.0
+     },
+     "truth": {
+      "max": 14.0,
+      "min": 8.0
+     },
+     "truth_source": "brand_page",
+     "verdict": "match"
+    },
+    "availability": null,
+    "bullets": null,
+    "currency": "USD",
+    "deals": [],
+    "extraction_evidence": null,
+    "final_url": "https://www.amazon.com/clp/B08VLCSTPC",
+    "gtin": "037000828761",
+    "incentive_in_markup": {
+     "code": false,
+     "json_ld_scanned": false,
+     "member_price": false,
+     "promo": false,
+     "subscription": false
+    },
+    "incentive_in_text": {
+     "code": false,
+     "member_price": false,
+     "promo": false,
+     "sentence": null,
+     "site_wide": false,
+     "subscription": false
+    },
+    "json_ld": null,
+    "list_price": null,
+    "member_price": null,
+    "method": "none",
+    "observed_at": "2026-10-20T04:23:16.142155+00:00",
+    "offer_text": null,
+    "page_title": null,
+    "price": null,
+    "read_status": "empty",
+    "reference_read_id": 37,
+    "reference_run_id": 3,
+    "reference_source": "honest_fetch",
+    "retailer_domain": "amazon.com",
+    "role": "retailer",
+    "size_chart": null,
+    "sku": "sku_pg_swd_s1_96",
+    "status": "active",
+    "successor": null,
+    "unverifiable_reason": "page read, but it states no price for this SKU",
+    "url": "https://www.amazon.com/dp/B08VLCSTPC",
+    "variant_label": "Pampers Swaddlers, Size 1, 96 ct",
+    "variant_ref": "feed_sku:2",
+    "verifiable": false,
+    "weight_range": null
+   },
+   {
+    "attribute": {
+     "conflict": null,
+     "evidence": "1 8 - 14 lbs",
+     "evidence_from": "model",
+     "stated": {
+      "max": 14.0,
+      "min": 8.0
+     },
+     "truth": {
+      "max": 14.0,
+      "min": 8.0
+     },
+     "truth_source": "brand_page",
+     "verdict": "match"
+    },
+    "availability": null,
+    "bullets": [
+     "Perfect for Newborn",
+     "Fragrance Free",
+     "#1 Brand.* For Sleep",
+     "Wetness Indicator",
+     "Diapers",
+     "Dryness & Comfort",
+     "OEKO-TEX\u00ae STANDARD 100 Certification",
+     "Gentle on Delicate Skin",
+     "Babylist\u2019s Best Diaper for Sensitive Skin in 2024",
+     "Accredited as skin safe by the Skin Health Alliance",
+     "Pampers Swaddlers are designed to keep baby\u2019s skin dry and comfortable.",
+     "Pampers Swaddlers are designed to help create a snug, secure fit for newborns, reducing gaps that can lead to leaks. Soft leg cuffs gently seal around the legs, while the contoured shape hugs your baby\u2019s body for added protection. In sizes 1 and up, the Blowout Barrier helps stop messes from traveling up the back. When sized and fastened correctly, these features work together to provide up to 100% blowout and leak protection .",
+     "These hypoallergenic baby diapers feature an absorbent KeepDry\u2122 liner that locks away wetness and help keep your baby drier than the luxury diaper brand.",
+     "Free of fragrance, parabens and latex (no natural rubber), Pampers Swaddlers are trusted by experts and parents alike and are recognized by Best of Babylist and Newsweek Brandspark Most Trusted by American Shoppers 2024.",
+     "Pair Pampers Swaddlers with Pampers Sensitive Baby Wipes for clinically proven protection.",
+     "Pampers Swaddlers diapers were named Best Overall for Newborns by Parents in 2026.",
+     "Pampers Swaddlers were named Overall Best Diapers Available in Stores by The Bump in 2026.",
+     "Pampers Swaddlers were named a Babylist Pick for Best Disposable Diapers in 2026."
+    ],
+    "currency": "usd",
+    "deals": null,
+    "extraction_evidence": null,
+    "final_url": "https://www.pampers.com/en-us/products/pampers-swaddlers-diapers",
+    "gtin": "037000828761",
+    "incentive_in_markup": {
+     "code": false,
+     "json_ld_scanned": false,
+     "member_price": false,
+     "promo": false,
+     "subscription": false
+    },
+    "incentive_in_text": {
+     "code": false,
+     "member_price": false,
+     "promo": false,
+     "sentence": null,
+     "site_wide": false,
+     "subscription": false
+    },
+    "json_ld": {
+     "@type": "ProductGroup",
+     "additionalProperty": [
+      {
+       "@type": "PropertyValue",
+       "name": "Size Range",
+       "value": "Preemie, Newborn, 1, 2, 3, 4, 5, 6, 7, 8"
+      },
+      {
+       "@type": "PropertyValue",
+       "name": "Age Range",
+       "value": "Newborn, Baby"
+      },
+      {
+       "@type": "PropertyValue",
+       "name": "Baby Weight",
+       "value": "<6 lbs, <10 lbs, 8 - 14 lbs, 10 - 22 lbs, 13 - 26 lbs, 15 - 34 lbs, 27+ lbs, 35+ lbs, 41+ lbs, 46+ lbs"
+      },
+      {
+       "@type": "PropertyValue",
+       "name": "Pack Count",
+       "value": "19, 27, 29, 38, 44, 58, 60, 70, 72, 84, 88, 100, 104, 108, 112, 120, 132, 136, 140, 148, 150, 164, 168, 186, 198"
+      }
+     ],
+     "category": "Taped Diapers",
+     "description": "Pampers Swaddlers\u2122 for babies and newborns offer gentle care for sensitive skin and stop blowouts with trusted leak protection. Find out and shop now!",
+     "hasVariant": [
+      {
+       "@type": "Product",
+       "description": "<6 lb",
+       "gtin13": "037000863403",
+       "name": "Preemie",
+       "size": "Preemie",
+       "sku": "037000863403"
+      },
+      {
+       "@type": "Product",
+       "description": "<10 lbs",
+       "gtin13": "037000772552",
+       "name": "Newborn",
+       "size": "Newborn",
+       "sku": "037000772552"
+      },
+      {
+       "@type": "Product",
+       "description": "8 - 14 lbs",
+       "gtin13": "037000799788",
+       "name": "1",
+       "size": "1",
+       "sku": "037000799788"
+      },
+      {
+       "@type": "Product",
+       "description": "10-22 lbs",
+       "gtin13": "037000833109",
+       "name": "2",
+       "size": "2",
+       "sku": "037000833109"
+      },
+      {
+       "@type": "Product",
+       "description": "13-26 lbs",
+       "gtin13": "037000833178",
+       "name": "3",
+       "size": "3",
+       "sku": "037000833178"
+      },
+      {
+       "@type": "Product",
+       "description": "15-34 lbs",
+       "gtin13": "037000799818",
+       "name": "4",
+       "size": "4",
+       "sku": "037000799818"
+      },
+      {
+       "@type": "Product",
+       "description": "20-37 lbs",
+       "gtin13": "037000799825",
+       "name": "5",
+       "size": "5",
+       "sku": "037000799825"
+      },
+      {
+       "@type": "Product",
+       "description": "23-44 lbs",
+       "gtin13": "037000833086",
+       "name": "6",
+       "size": "6",
+       "sku": "037000833086"
+      },
+      {
+       "@type": "Product",
+       "description": "26-50 lbs",
+       "gtin13": "030772098141",
+       "name": "7",
+       "size": "7",
+       "sku": "030772098141"
+      },
+      {
+       "@type": "Product",
+       "description": "30+ lbs",
+       "gtin13": "030772098639",
+       "name": "8",
+       "size": "8",
+       "sku": "030772098639"
+      }
+     ],
+     "name": "Pampers\u00ae Swaddlers\u2122 Diapers for Babies and Newborns",
+     "url": "https://www.pampers.com/en-us/products/pampers-swaddlers-diapers"
+    },
+    "list_price": null,
+    "member_price": null,
+    "method": "none_by_design",
+    "observed_at": "2026-10-20T04:23:16.142155+00:00",
+    "offer_text": null,
+    "page_title": "Pampers\u00ae Swaddlers\u2122 Diapers for Babies and Newborns",
+    "price": null,
+    "read_status": "ok",
+    "reference_read_id": 32,
+    "reference_run_id": 3,
+    "reference_source": "honest_fetch",
+    "retailer_domain": "pampers.com",
+    "role": "own",
+    "size_chart": [
+     {
+      "evidence": "Preemie <6 lb",
+      "max": 6.0,
+      "min": null,
+      "size": "preemie"
+     },
+     {
+      "evidence": "Newborn <10 lbs",
+      "max": 10.0,
+      "min": null,
+      "size": "newborn"
+     },
+     {
+      "evidence": "1 8 - 14 lbs",
+      "max": 14.0,
+      "min": 8.0,
+      "size": "1"
+     },
+     {
+      "evidence": "2 10-22 lbs",
+      "max": 22.0,
+      "min": 10.0,
+      "size": "2"
+     },
+     {
+      "evidence": "3 13-26 lbs",
+      "max": 26.0,
+      "min": 13.0,
+      "size": "3"
+     },
+     {
+      "evidence": "4 15-34 lbs",
+      "max": 34.0,
+      "min": 15.0,
+      "size": "4"
+     },
+     {
+      "evidence": "5 20-37 lbs",
+      "max": 37.0,
+      "min": 20.0,
+      "size": "5"
+     },
+     {
+      "evidence": "6 23-44 lbs",
+      "max": 44.0,
+      "min": 23.0,
+      "size": "6"
+     },
+     {
+      "evidence": "7 26-50 lbs",
+      "max": 50.0,
+      "min": 26.0,
+      "size": "7"
+     },
+     {
+      "evidence": "8 30+ lbs",
+      "max": null,
+      "min": 30.0,
+      "size": "8"
+     }
+    ],
+    "sku": "sku_pg_swd_s1_96",
+    "status": "active",
+    "successor": null,
+    "unverifiable_reason": "brand site, no price set",
+    "url": "https://www.pampers.com/en-us/products/pampers-swaddlers-diapers",
+    "variant_label": "Pampers Swaddlers, Size 1, 96 ct",
+    "variant_ref": "feed_sku:2",
+    "verifiable": false,
+    "weight_range": null
+   },
+   {
+    "attribute": {
+     "conflict": null,
+     "evidence": "size 1 diapers (8-14 lbs.)",
+     "evidence_from": "model",
+     "stated": {
+      "max": 14.0,
+      "min": 8.0
+     },
+     "truth": {
+      "max": 14.0,
+      "min": 8.0
+     },
+     "truth_source": "brand_page",
+     "verdict": "match"
+    },
+    "availability": null,
+    "bullets": null,
+    "currency": "USD",
+    "deals": [],
+    "extraction_evidence": null,
+    "final_url": "https://www.target.com/p/-/-/A-14723176",
+    "gtin": "037000828761",
+    "incentive_in_markup": {
+     "code": false,
+     "json_ld_scanned": false,
+     "member_price": false,
+     "promo": false,
+     "subscription": false
+    },
+    "incentive_in_text": {
+     "code": false,
+     "member_price": false,
+     "promo": false,
+     "sentence": null,
+     "site_wide": false,
+     "subscription": false
+    },
+    "json_ld": null,
+    "list_price": null,
+    "member_price": null,
+    "method": "none",
+    "observed_at": "2026-10-20T04:23:16.142155+00:00",
+    "offer_text": null,
+    "page_title": "Pampers Swaddlers Sensitive Disposable Diapers - Size 1 - 96ct : Target",
+    "price": null,
+    "read_status": "empty",
+    "reference_read_id": 38,
+    "reference_run_id": 3,
+    "reference_source": "honest_fetch",
+    "retailer_domain": "target.com",
+    "role": "retailer",
+    "size_chart": null,
+    "sku": "sku_pg_swd_s1_96",
+    "status": "active",
+    "successor": null,
+    "unverifiable_reason": "page read, but it states no price for this SKU",
+    "url": "https://www.target.com/p/-/-/A-14723176",
+    "variant_label": "Pampers Swaddlers, Size 1, 96 ct",
+    "variant_ref": "feed_sku:2",
+    "verifiable": false,
+    "weight_range": null
+   },
+   {
+    "attribute": {
+     "conflict": null,
+     "evidence": "Use weight range guidance by size and size up if you're experiencing leaks: Preemie (<6 lb), N (<10 lb), 1 (8-14 lb)",
+     "evidence_from": "model",
+     "stated": {
+      "max": 14.0,
+      "min": 8.0
+     },
+     "truth": {
+      "max": 14.0,
+      "min": 8.0
+     },
+     "truth_source": "brand_page",
+     "verdict": "match"
+    },
+    "availability": null,
+    "bullets": null,
+    "currency": "USD",
+    "deals": [],
+    "extraction_evidence": {
+     "confidence": "high",
+     "evidence": "$27.97",
+     "list_price": null,
+     "model": "gpt-5.4-nano",
+     "price": "27.97",
+     "priced_pack": "96 Count",
+     "seller": null
+    },
+    "final_url": "https://www.walmart.com/ip/Pampers-Swaddlers-Baby-Diapers-Size-1-96-Count/606480268",
+    "gtin": "037000828761",
+    "incentive_in_markup": {
+     "code": false,
+     "json_ld_scanned": false,
+     "member_price": false,
+     "promo": false,
+     "subscription": false
+    },
+    "incentive_in_text": {
+     "code": false,
+     "member_price": false,
+     "promo": false,
+     "sentence": null,
+     "site_wide": false,
+     "subscription": false
+    },
+    "json_ld": null,
+    "list_price": null,
+    "member_price": null,
+    "method": "llm_rendered",
+    "observed_at": "2026-10-20T04:23:16.142155+00:00",
+    "offer_text": null,
+    "page_title": "Pampers Swaddlers Diapers, Size 1, 96 Count for Newborns and Infants - Walmart.com",
+    "price": "27.97",
+    "read_status": "ok",
+    "reference_read_id": 41,
+    "reference_run_id": 3,
+    "reference_source": "hosted_render",
+    "retailer_domain": "walmart.com",
+    "role": "retailer",
+    "size_chart": null,
+    "sku": "sku_pg_swd_s1_96",
+    "status": "active",
+    "successor": null,
+    "unverifiable_reason": null,
+    "url": "https://www.walmart.com/ip/Pampers-Swaddlers-Baby-Diapers-Size-1-96-Count/606480268",
+    "variant_label": "Pampers Swaddlers, Size 1, 96 ct",
+    "variant_ref": "feed_sku:2",
+    "verifiable": true,
+    "weight_range": null
+   },
+   {
+    "attribute": null,
+    "availability": null,
+    "bullets": null,
+    "currency": null,
+    "deals": null,
+    "extraction_evidence": null,
+    "final_url": null,
+    "gtin": "037000799818",
+    "incentive_in_markup": null,
+    "incentive_in_text": null,
+    "json_ld": null,
+    "list_price": null,
+    "member_price": null,
+    "method": null,
+    "observed_at": null,
+    "offer_text": null,
+    "page_title": null,
+    "price": null,
+    "read_status": null,
+    "reference_read_id": null,
+    "reference_run_id": null,
+    "reference_source": null,
+    "retailer_domain": "amazon.com",
+    "role": "retailer",
+    "size_chart": null,
+    "sku": "sku_pg_swd_s4_150",
+    "status": "active",
+    "successor": null,
+    "unverifiable_reason": "not read yet",
+    "url": "https://www.amazon.com/dp/B07DC8BR3B",
+    "variant_label": "Pampers Swaddlers, Size 4, 150 ct",
+    "variant_ref": "feed_sku:3",
+    "verifiable": false,
+    "weight_range": null
+   },
+   {
+    "attribute": null,
+    "availability": null,
+    "bullets": [
+     "Perfect for Newborn",
+     "Fragrance Free",
+     "#1 Brand.* For Sleep",
+     "Wetness Indicator",
+     "Diapers",
+     "Dryness & Comfort",
+     "OEKO-TEX\u00ae STANDARD 100 Certification",
+     "Gentle on Delicate Skin",
+     "Babylist\u2019s Best Diaper for Sensitive Skin in 2024",
+     "Accredited as skin safe by the Skin Health Alliance",
+     "Pampers Swaddlers are designed to keep baby\u2019s skin dry and comfortable.",
+     "Pampers Swaddlers are designed to help create a snug, secure fit for newborns, reducing gaps that can lead to leaks. Soft leg cuffs gently seal around the legs, while the contoured shape hugs your baby\u2019s body for added protection. In sizes 1 and up, the Blowout Barrier helps stop messes from traveling up the back. When sized and fastened correctly, these features work together to provide up to 100% blowout and leak protection .",
+     "These hypoallergenic baby diapers feature an absorbent KeepDry\u2122 liner that locks away wetness and help keep your baby drier than the luxury diaper brand.",
+     "Free of fragrance, parabens and latex (no natural rubber), Pampers Swaddlers are trusted by experts and parents alike and are recognized by Best of Babylist and Newsweek Brandspark Most Trusted by American Shoppers 2024.",
+     "Pair Pampers Swaddlers with Pampers Sensitive Baby Wipes for clinically proven protection.",
+     "Pampers Swaddlers diapers were named Best Overall for Newborns by Parents in 2026.",
+     "Pampers Swaddlers were named Overall Best Diapers Available in Stores by The Bump in 2026.",
+     "Pampers Swaddlers were named a Babylist Pick for Best Disposable Diapers in 2026."
+    ],
+    "currency": "usd",
+    "deals": null,
+    "extraction_evidence": null,
+    "final_url": "https://www.pampers.com/en-us/products/pampers-swaddlers-diapers",
+    "gtin": "037000799818",
+    "incentive_in_markup": {
+     "code": false,
+     "json_ld_scanned": false,
+     "member_price": false,
+     "promo": false,
+     "subscription": false
+    },
+    "incentive_in_text": {
+     "code": false,
+     "member_price": false,
+     "promo": false,
+     "sentence": null,
+     "site_wide": false,
+     "subscription": false
+    },
+    "json_ld": {
+     "@type": "ProductGroup",
+     "additionalProperty": [
+      {
+       "@type": "PropertyValue",
+       "name": "Size Range",
+       "value": "Preemie, Newborn, 1, 2, 3, 4, 5, 6, 7, 8"
+      },
+      {
+       "@type": "PropertyValue",
+       "name": "Age Range",
+       "value": "Newborn, Baby"
+      },
+      {
+       "@type": "PropertyValue",
+       "name": "Baby Weight",
+       "value": "<6 lbs, <10 lbs, 8 - 14 lbs, 10 - 22 lbs, 13 - 26 lbs, 15 - 34 lbs, 27+ lbs, 35+ lbs, 41+ lbs, 46+ lbs"
+      },
+      {
+       "@type": "PropertyValue",
+       "name": "Pack Count",
+       "value": "19, 27, 29, 38, 44, 58, 60, 70, 72, 84, 88, 100, 104, 108, 112, 120, 132, 136, 140, 148, 150, 164, 168, 186, 198"
+      }
+     ],
+     "category": "Taped Diapers",
+     "description": "Pampers Swaddlers\u2122 for babies and newborns offer gentle care for sensitive skin and stop blowouts with trusted leak protection. Find out and shop now!",
+     "hasVariant": [
+      {
+       "@type": "Product",
+       "description": "<6 lb",
+       "gtin13": "037000863403",
+       "name": "Preemie",
+       "size": "Preemie",
+       "sku": "037000863403"
+      },
+      {
+       "@type": "Product",
+       "description": "<10 lbs",
+       "gtin13": "037000772552",
+       "name": "Newborn",
+       "size": "Newborn",
+       "sku": "037000772552"
+      },
+      {
+       "@type": "Product",
+       "description": "8 - 14 lbs",
+       "gtin13": "037000799788",
+       "name": "1",
+       "size": "1",
+       "sku": "037000799788"
+      },
+      {
+       "@type": "Product",
+       "description": "10-22 lbs",
+       "gtin13": "037000833109",
+       "name": "2",
+       "size": "2",
+       "sku": "037000833109"
+      },
+      {
+       "@type": "Product",
+       "description": "13-26 lbs",
+       "gtin13": "037000833178",
+       "name": "3",
+       "size": "3",
+       "sku": "037000833178"
+      },
+      {
+       "@type": "Product",
+       "description": "15-34 lbs",
+       "gtin13": "037000799818",
+       "name": "4",
+       "size": "4",
+       "sku": "037000799818"
+      },
+      {
+       "@type": "Product",
+       "description": "20-37 lbs",
+       "gtin13": "037000799825",
+       "name": "5",
+       "size": "5",
+       "sku": "037000799825"
+      },
+      {
+       "@type": "Product",
+       "description": "23-44 lbs",
+       "gtin13": "037000833086",
+       "name": "6",
+       "size": "6",
+       "sku": "037000833086"
+      },
+      {
+       "@type": "Product",
+       "description": "26-50 lbs",
+       "gtin13": "030772098141",
+       "name": "7",
+       "size": "7",
+       "sku": "030772098141"
+      },
+      {
+       "@type": "Product",
+       "description": "30+ lbs",
+       "gtin13": "030772098639",
+       "name": "8",
+       "size": "8",
+       "sku": "030772098639"
+      }
+     ],
+     "name": "Pampers\u00ae Swaddlers\u2122 Diapers for Babies and Newborns",
+     "url": "https://www.pampers.com/en-us/products/pampers-swaddlers-diapers"
+    },
+    "list_price": null,
+    "member_price": null,
+    "method": "none_by_design",
+    "observed_at": "2026-10-20T04:23:16.142155+00:00",
+    "offer_text": null,
+    "page_title": "Pampers\u00ae Swaddlers\u2122 Diapers for Babies and Newborns",
+    "price": null,
+    "read_status": "ok",
+    "reference_read_id": 32,
+    "reference_run_id": 3,
+    "reference_source": "honest_fetch",
+    "retailer_domain": "pampers.com",
+    "role": "own",
+    "size_chart": [
+     {
+      "evidence": "Preemie <6 lb",
+      "max": 6.0,
+      "min": null,
+      "size": "preemie"
+     },
+     {
+      "evidence": "Newborn <10 lbs",
+      "max": 10.0,
+      "min": null,
+      "size": "newborn"
+     },
+     {
+      "evidence": "1 8 - 14 lbs",
+      "max": 14.0,
+      "min": 8.0,
+      "size": "1"
+     },
+     {
+      "evidence": "2 10-22 lbs",
+      "max": 22.0,
+      "min": 10.0,
+      "size": "2"
+     },
+     {
+      "evidence": "3 13-26 lbs",
+      "max": 26.0,
+      "min": 13.0,
+      "size": "3"
+     },
+     {
+      "evidence": "4 15-34 lbs",
+      "max": 34.0,
+      "min": 15.0,
+      "size": "4"
+     },
+     {
+      "evidence": "5 20-37 lbs",
+      "max": 37.0,
+      "min": 20.0,
+      "size": "5"
+     },
+     {
+      "evidence": "6 23-44 lbs",
+      "max": 44.0,
+      "min": 23.0,
+      "size": "6"
+     },
+     {
+      "evidence": "7 26-50 lbs",
+      "max": 50.0,
+      "min": 26.0,
+      "size": "7"
+     },
+     {
+      "evidence": "8 30+ lbs",
+      "max": null,
+      "min": 30.0,
+      "size": "8"
+     }
+    ],
+    "sku": "sku_pg_swd_s4_150",
+    "status": "active",
+    "successor": null,
+    "unverifiable_reason": "brand site, no price set",
+    "url": "https://www.pampers.com/en-us/products/pampers-swaddlers-diapers",
+    "variant_label": "Pampers Swaddlers, Size 4, 150 ct",
+    "variant_ref": "feed_sku:3",
+    "verifiable": false,
+    "weight_range": null
+   },
+   {
+    "attribute": null,
+    "availability": null,
+    "bullets": null,
+    "currency": null,
+    "deals": null,
+    "extraction_evidence": null,
+    "final_url": null,
+    "gtin": "037000799818",
+    "incentive_in_markup": null,
+    "incentive_in_text": null,
+    "json_ld": null,
+    "list_price": null,
+    "member_price": null,
+    "method": null,
+    "observed_at": null,
+    "offer_text": null,
+    "page_title": null,
+    "price": null,
+    "read_status": null,
+    "reference_read_id": null,
+    "reference_run_id": null,
+    "reference_source": null,
+    "retailer_domain": "walmart.com",
+    "role": "retailer",
+    "size_chart": null,
+    "sku": "sku_pg_swd_s4_150",
+    "status": "active",
+    "successor": null,
+    "unverifiable_reason": "not read yet",
+    "url": "https://www.walmart.com/ip/Pampers-Swaddlers-Baby-Diapers-Size-4-150-Count/209107239",
+    "variant_label": "Pampers Swaddlers, Size 4, 150 ct",
+    "variant_ref": "feed_sku:3",
+    "verifiable": false,
+    "weight_range": null
+   },
+   {
+    "attribute": null,
+    "availability": null,
+    "bullets": null,
+    "currency": null,
+    "deals": null,
+    "extraction_evidence": null,
+    "final_url": null,
+    "gtin": null,
+    "incentive_in_markup": null,
+    "incentive_in_text": null,
+    "json_ld": null,
+    "list_price": null,
+    "member_price": null,
+    "method": null,
+    "observed_at": null,
+    "offer_text": null,
+    "page_title": null,
+    "price": null,
+    "read_status": null,
+    "reference_read_id": null,
+    "reference_run_id": null,
+    "reference_source": null,
+    "retailer_domain": "pampers.com",
+    "role": "own",
+    "size_chart": null,
+    "sku": "sku_pg_swultra_s3",
+    "status": "active",
+    "successor": null,
+    "unverifiable_reason": "not read yet",
+    "url": "https://www.pampers.com/en-us/products/pampers-swaddlers-ultra-diapers",
+    "variant_label": "Pampers Swaddlers Ultra Day + Night, Size 3, 180 ct",
+    "variant_ref": "feed_sku:4",
+    "verifiable": false,
+    "weight_range": null
+   },
+   {
+    "attribute": null,
+    "availability": null,
+    "bullets": null,
+    "currency": null,
+    "deals": null,
+    "extraction_evidence": null,
+    "final_url": null,
+    "gtin": null,
+    "incentive_in_markup": null,
+    "incentive_in_text": null,
+    "json_ld": null,
+    "list_price": null,
+    "member_price": null,
+    "method": null,
+    "observed_at": null,
+    "offer_text": null,
+    "page_title": null,
+    "price": null,
+    "read_status": null,
+    "reference_read_id": null,
+    "reference_run_id": null,
+    "reference_source": null,
+    "retailer_domain": "walmart.com",
+    "role": "retailer",
+    "size_chart": null,
+    "sku": "sku_pg_swultra_s3",
+    "status": "active",
+    "successor": null,
+    "unverifiable_reason": "not read yet",
+    "url": "https://www.walmart.com/ip/Pampers-Swaddlers-Ultra-Diapers-Size-3-13-26-Pounds-180-Count/19252374926",
+    "variant_label": "Pampers Swaddlers Ultra Day + Night, Size 3, 180 ct",
+    "variant_ref": "feed_sku:4",
+    "verifiable": false,
+    "weight_range": null
+   },
+   {
+    "attribute": null,
+    "availability": null,
+    "bullets": null,
+    "currency": null,
+    "deals": null,
+    "extraction_evidence": null,
+    "final_url": null,
+    "gtin": null,
+    "incentive_in_markup": null,
+    "incentive_in_text": null,
+    "json_ld": null,
+    "list_price": null,
+    "member_price": null,
+    "method": null,
+    "observed_at": null,
+    "offer_text": null,
+    "page_title": null,
+    "price": null,
+    "read_status": null,
+    "reference_read_id": null,
+    "reference_run_id": null,
+    "reference_source": null,
+    "retailer_domain": "amazon.com",
+    "role": "retailer",
+    "size_chart": null,
+    "sku": "sku_pg_pure_s1",
+    "status": "retired",
+    "successor": {
+     "gtin": null,
+     "product_name": "Pampers AMORE",
+     "sku": "sku_pg_amore_s1_132",
+     "title": "Pampers AMORE, Size 1, 132 ct",
+     "variant_id": "sku:sku_pg_amore_s1_132"
+    },
+    "unverifiable_reason": "not read yet",
+    "url": "https://www.amazon.com/dp/B082QBFMSZ",
+    "variant_label": "Pampers Pure Protection, Size 1 (retired)",
+    "variant_ref": "feed_sku:5",
+    "verifiable": false,
+    "weight_range": null
+   },
+   {
+    "attribute": null,
+    "availability": null,
+    "bullets": null,
+    "currency": null,
+    "deals": null,
+    "extraction_evidence": null,
+    "final_url": null,
+    "gtin": null,
+    "incentive_in_markup": null,
+    "incentive_in_text": null,
+    "json_ld": null,
+    "list_price": null,
+    "member_price": null,
+    "method": null,
+    "observed_at": null,
+    "offer_text": null,
+    "page_title": null,
+    "price": null,
+    "read_status": null,
+    "reference_read_id": null,
+    "reference_run_id": null,
+    "reference_source": null,
+    "retailer_domain": "pampers.com",
+    "role": "own",
+    "size_chart": null,
+    "sku": "sku_pg_pure_s1",
+    "status": "retired",
+    "successor": {
+     "gtin": null,
+     "product_name": "Pampers AMORE",
+     "sku": "sku_pg_amore_s1_132",
+     "title": "Pampers AMORE, Size 1, 132 ct",
+     "variant_id": "sku:sku_pg_amore_s1_132"
+    },
+    "unverifiable_reason": "not read yet",
+    "url": "https://www.pampers.com/en-us/products/pampers-pure-protection-diapers",
+    "variant_label": "Pampers Pure Protection, Size 1 (retired)",
+    "variant_ref": "feed_sku:5",
+    "verifiable": false,
+    "weight_range": null
+   },
+   {
+    "attribute": null,
+    "availability": null,
+    "bullets": null,
+    "currency": null,
+    "deals": null,
+    "extraction_evidence": null,
+    "final_url": null,
+    "gtin": null,
+    "incentive_in_markup": null,
+    "incentive_in_text": null,
+    "json_ld": null,
+    "list_price": null,
+    "member_price": null,
+    "method": null,
+    "observed_at": null,
+    "offer_text": null,
+    "page_title": null,
+    "price": null,
+    "read_status": null,
+    "reference_read_id": null,
+    "reference_run_id": null,
+    "reference_source": null,
+    "retailer_domain": "target.com",
+    "role": "retailer",
+    "size_chart": null,
+    "sku": "sku_pg_pure_s1",
+    "status": "retired",
+    "successor": {
+     "gtin": null,
+     "product_name": "Pampers AMORE",
+     "sku": "sku_pg_amore_s1_132",
+     "title": "Pampers AMORE, Size 1, 132 ct",
+     "variant_id": "sku:sku_pg_amore_s1_132"
+    },
+    "unverifiable_reason": "not read yet",
+    "url": "https://www.target.com/p/-/-/A-79647304",
+    "variant_label": "Pampers Pure Protection, Size 1 (retired)",
+    "variant_ref": "feed_sku:5",
+    "verifiable": false,
+    "weight_range": null
+   },
+   {
+    "attribute": null,
+    "availability": null,
+    "bullets": null,
+    "currency": null,
+    "deals": null,
+    "extraction_evidence": null,
+    "final_url": null,
+    "gtin": null,
+    "incentive_in_markup": null,
+    "incentive_in_text": null,
+    "json_ld": null,
+    "list_price": null,
+    "member_price": null,
+    "method": null,
+    "observed_at": null,
+    "offer_text": null,
+    "page_title": null,
+    "price": null,
+    "read_status": null,
+    "reference_read_id": null,
+    "reference_run_id": null,
+    "reference_source": null,
+    "retailer_domain": "walmart.com",
+    "role": "retailer",
+    "size_chart": null,
+    "sku": "sku_pg_pure_s1",
+    "status": "retired",
+    "successor": {
+     "gtin": null,
+     "product_name": "Pampers AMORE",
+     "sku": "sku_pg_amore_s1_132",
+     "title": "Pampers AMORE, Size 1, 132 ct",
+     "variant_id": "sku:sku_pg_amore_s1_132"
+    },
+    "unverifiable_reason": "not read yet",
+    "url": "https://www.walmart.com/ip/Pampers-Pure-Baby-Diapers-Size-1-82-Count/906348357",
+    "variant_label": "Pampers Pure Protection, Size 1 (retired)",
+    "variant_ref": "feed_sku:5",
+    "verifiable": false,
+    "weight_range": null
+   },
+   {
+    "attribute": null,
+    "availability": null,
+    "bullets": null,
+    "currency": null,
+    "deals": null,
+    "extraction_evidence": null,
+    "final_url": null,
+    "gtin": null,
+    "incentive_in_markup": null,
+    "incentive_in_text": null,
+    "json_ld": null,
+    "list_price": null,
+    "member_price": null,
+    "method": null,
+    "observed_at": null,
+    "offer_text": null,
+    "page_title": null,
+    "price": null,
+    "read_status": null,
+    "reference_read_id": null,
+    "reference_run_id": null,
+    "reference_source": null,
+    "retailer_domain": "amazon.com",
+    "role": "retailer",
+    "size_chart": null,
+    "sku": "sku_pg_amore_s1_132",
+    "status": "active",
+    "successor": null,
+    "unverifiable_reason": "not read yet",
+    "url": "https://www.amazon.com/dp/B0FXYHC1MD",
+    "variant_label": "Pampers AMORE, Size 1, 132 ct",
+    "variant_ref": "feed_sku:6",
+    "verifiable": false,
+    "weight_range": null
+   },
+   {
+    "attribute": null,
+    "availability": null,
+    "bullets": null,
+    "currency": null,
+    "deals": null,
+    "extraction_evidence": null,
+    "final_url": null,
+    "gtin": null,
+    "incentive_in_markup": null,
+    "incentive_in_text": null,
+    "json_ld": null,
+    "list_price": null,
+    "member_price": null,
+    "method": null,
+    "observed_at": null,
+    "offer_text": null,
+    "page_title": null,
+    "price": null,
+    "read_status": null,
+    "reference_read_id": null,
+    "reference_run_id": null,
+    "reference_source": null,
+    "retailer_domain": "pampers.com",
+    "role": "own",
+    "size_chart": null,
+    "sku": "sku_pg_amore_s1_132",
+    "status": "active",
+    "successor": null,
+    "unverifiable_reason": "not read yet",
+    "url": "https://www.pampers.com/en-us/product/amore",
+    "variant_label": "Pampers AMORE, Size 1, 132 ct",
+    "variant_ref": "feed_sku:6",
+    "verifiable": false,
+    "weight_range": null
+   },
+   {
+    "attribute": null,
+    "availability": null,
+    "bullets": null,
+    "currency": null,
+    "deals": null,
+    "extraction_evidence": null,
+    "final_url": null,
+    "gtin": null,
+    "incentive_in_markup": null,
+    "incentive_in_text": null,
+    "json_ld": null,
+    "list_price": null,
+    "member_price": null,
+    "method": null,
+    "observed_at": null,
+    "offer_text": null,
+    "page_title": null,
+    "price": null,
+    "read_status": null,
+    "reference_read_id": null,
+    "reference_run_id": null,
+    "reference_source": null,
+    "retailer_domain": "target.com",
+    "role": "retailer",
+    "size_chart": null,
+    "sku": "sku_pg_amore_s1_132",
+    "status": "active",
+    "successor": null,
+    "unverifiable_reason": "not read yet",
+    "url": "https://www.target.com/p/-/-/A-94794093",
+    "variant_label": "Pampers AMORE, Size 1, 132 ct",
+    "variant_ref": "feed_sku:6",
+    "verifiable": false,
+    "weight_range": null
+   },
+   {
+    "attribute": null,
+    "availability": null,
+    "bullets": null,
+    "currency": null,
+    "deals": null,
+    "extraction_evidence": null,
+    "final_url": null,
+    "gtin": null,
+    "incentive_in_markup": null,
+    "incentive_in_text": null,
+    "json_ld": null,
+    "list_price": null,
+    "member_price": null,
+    "method": null,
+    "observed_at": null,
+    "offer_text": null,
+    "page_title": null,
+    "price": null,
+    "read_status": null,
+    "reference_read_id": null,
+    "reference_run_id": null,
+    "reference_source": null,
+    "retailer_domain": "walmart.com",
+    "role": "retailer",
+    "size_chart": null,
+    "sku": "sku_pg_amore_s1_132",
+    "status": "active",
+    "successor": null,
+    "unverifiable_reason": "not read yet",
+    "url": "https://www.walmart.com/ip/Pampers-Amore-Diapers-Size-1-132-Count/18916423987",
+    "variant_label": "Pampers AMORE, Size 1, 132 ct",
+    "variant_ref": "feed_sku:6",
+    "verifiable": false,
+    "weight_range": null
+   },
+   {
+    "attribute": null,
+    "availability": null,
+    "bullets": null,
+    "currency": null,
+    "deals": null,
+    "extraction_evidence": null,
+    "final_url": null,
+    "gtin": "037000783817",
+    "incentive_in_markup": null,
+    "incentive_in_text": null,
+    "json_ld": null,
+    "list_price": null,
+    "member_price": null,
+    "method": null,
+    "observed_at": null,
+    "offer_text": null,
+    "page_title": null,
+    "price": null,
+    "read_status": null,
+    "reference_read_id": null,
+    "reference_run_id": null,
+    "reference_source": null,
+    "retailer_domain": "amazon.com",
+    "role": "retailer",
+    "size_chart": null,
+    "sku": "sku_pg_bd_s4_186",
+    "status": "active",
+    "successor": null,
+    "unverifiable_reason": "not read yet",
+    "url": "https://www.amazon.com/dp/B07H34Q5S5",
+    "variant_label": "Pampers Baby-Dry, Size 4, 186 ct",
+    "variant_ref": "feed_sku:7",
+    "verifiable": false,
+    "weight_range": null
+   },
+   {
+    "attribute": null,
+    "availability": null,
+    "bullets": null,
+    "currency": null,
+    "deals": null,
+    "extraction_evidence": null,
+    "final_url": null,
+    "gtin": "037000783817",
+    "incentive_in_markup": null,
+    "incentive_in_text": null,
+    "json_ld": null,
+    "list_price": null,
+    "member_price": null,
+    "method": null,
+    "observed_at": null,
+    "offer_text": null,
+    "page_title": null,
+    "price": null,
+    "read_status": null,
+    "reference_read_id": null,
+    "reference_run_id": null,
+    "reference_source": null,
+    "retailer_domain": "pampers.com",
+    "role": "own",
+    "size_chart": null,
+    "sku": "sku_pg_bd_s4_186",
+    "status": "active",
+    "successor": null,
+    "unverifiable_reason": "not read yet",
+    "url": "https://www.pampers.com/en-us/products/pampers-baby-dry-diapers",
+    "variant_label": "Pampers Baby-Dry, Size 4, 186 ct",
+    "variant_ref": "feed_sku:7",
+    "verifiable": false,
+    "weight_range": null
+   },
+   {
+    "attribute": null,
+    "availability": null,
+    "bullets": null,
+    "currency": null,
+    "deals": null,
+    "extraction_evidence": null,
+    "final_url": null,
+    "gtin": "037000783817",
+    "incentive_in_markup": null,
+    "incentive_in_text": null,
+    "json_ld": null,
+    "list_price": null,
+    "member_price": null,
+    "method": null,
+    "observed_at": null,
+    "offer_text": null,
+    "page_title": null,
+    "price": null,
+    "read_status": null,
+    "reference_read_id": null,
+    "reference_run_id": null,
+    "reference_source": null,
+    "retailer_domain": "walmart.com",
+    "role": "retailer",
+    "size_chart": null,
+    "sku": "sku_pg_bd_s4_186",
+    "status": "active",
+    "successor": null,
+    "unverifiable_reason": "not read yet",
+    "url": "https://www.walmart.com/ip/Pampers-Baby-Dry-Baby-Diapers-Size-4-186-Count/782112197",
+    "variant_label": "Pampers Baby-Dry, Size 4, 186 ct",
+    "variant_ref": "feed_sku:7",
+    "verifiable": false,
+    "weight_range": null
+   },
+   {
+    "attribute": {
+     "conflict": null,
+     "evidence": null,
+     "evidence_from": "model",
+     "stated": null,
+     "truth": {
+      "max": 28.0,
+      "min": 16.0
+     },
+     "truth_source": "brand_page",
+     "verdict": "absent"
+    },
+    "availability": null,
+    "bullets": null,
+    "currency": "USD",
+    "deals": [],
+    "extraction_evidence": null,
+    "final_url": "https://www.amazon.com/clp/B08VLB4NVQ",
+    "gtin": "037000717379",
+    "incentive_in_markup": {
+     "code": false,
+     "json_ld_scanned": false,
+     "member_price": false,
+     "promo": false,
+     "subscription": false
+    },
+    "incentive_in_text": {
+     "code": false,
+     "member_price": false,
+     "promo": false,
+     "sentence": null,
+     "site_wide": false,
+     "subscription": false
+    },
+    "json_ld": null,
+    "list_price": null,
+    "member_price": null,
+    "method": "none",
+    "observed_at": "2026-10-20T04:23:16.142155+00:00",
+    "offer_text": null,
+    "page_title": null,
+    "price": null,
+    "read_status": "empty",
+    "reference_read_id": 42,
+    "reference_run_id": 3,
+    "reference_source": "honest_fetch",
+    "retailer_domain": "amazon.com",
+    "role": "retailer",
+    "size_chart": null,
+    "sku": "sku_pg_cr360_s3_168",
+    "status": "active",
+    "successor": null,
+    "unverifiable_reason": "page read, but it states no price for this SKU",
+    "url": "https://www.amazon.com/dp/B08VLB4NVQ",
+    "variant_label": "Pampers Cruisers 360, Size 3, 168 ct",
+    "variant_ref": "feed_sku:8",
+    "verifiable": false,
+    "weight_range": null
+   },
+   {
+    "attribute": {
+     "conflict": null,
+     "evidence": "3 16 - 28 lbs",
+     "evidence_from": "model",
+     "stated": {
+      "max": 28.0,
+      "min": 16.0
+     },
+     "truth": {
+      "max": 28.0,
+      "min": 16.0
+     },
+     "truth_source": "brand_page",
+     "verdict": "match"
+    },
+    "availability": null,
+    "bullets": [
+     "Active Fit",
+     "Worry-free Play",
+     "New EZ Off Tabs",
+     "Easy On",
+     "Pull-On Diapers",
+     "Active fit",
+     "Pediatrician Recommended",
+     "Gentle on Delicate Skin",
+     "Accredited by the Skin Health Alliance",
+     "Pampers Cruisers 360 Pull-On Diapers provide your baby with up to 100% leakproof fit, so they can play worry-free",
+     "Unlike ordinary diapers, Pampers Cruisers 360 pull-on diapers stretch comfortably around your baby's waist and adapt to their every move.",
+     "Pampers Cruisers 360 has a 360-degree stretchy waistband designed to quickly and easily pull up onto your wiggly baby.",
+     "New EZ-Off tabs help make changes quick & easy. Just pull-on the diaper like normal, pull off the new EZ-Off tabs completely on both sides, and wrap up the diaper using the tabs for secure and quick disposal.",
+     "Pampers Cruisers 360 are made for active babies, even bigger, fuller babies. Their 360\u00b0 Stretchy Waistband adapts to your baby\u2019s shape and movement, delivering a secure, stay-put fit without ordinary diaper tape. The flexible design helps reduce gaps and prevent leaks, even during busy playtimes."
+    ],
+    "currency": "USD",
+    "deals": null,
+    "extraction_evidence": null,
+    "final_url": "https://www.pampers.com/en-us/products/pampers-cruisers-360",
+    "gtin": "037000717379",
+    "incentive_in_markup": {
+     "code": false,
+     "json_ld_scanned": false,
+     "member_price": false,
+     "promo": false,
+     "subscription": false
+    },
+    "incentive_in_text": {
+     "code": false,
+     "member_price": false,
+     "promo": false,
+     "sentence": null,
+     "site_wide": false,
+     "subscription": false
+    },
+    "json_ld": {
+     "@type": "ProductGroup",
+     "additionalProperty": [
+      {
+       "@type": "PropertyValue",
+       "name": "Size Range",
+       "value": "3, 4, 5, 6, 7, 8"
+      },
+      {
+       "@type": "PropertyValue",
+       "name": "Age Range",
+       "value": "Toddler"
+      },
+      {
+       "@type": "PropertyValue",
+       "name": "Baby Weight",
+       "value": "13 - 26 lbs, 15 - 34 lbs, 27+ lbs, 35+ lbs, 41+ lbs, 46+ lbs"
+      },
+      {
+       "@type": "PropertyValue",
+       "name": "Pack Count",
+       "value": "21, 26, 56, 58, 60, 66, 70, 74, 76, 80, 88, 96, 100, 104, 108, 116, 132, 136"
+      }
+     ],
+     "category": "Pull-On Diapers",
+     "description": "Pull-on diapers made for active babies who crawl, stand, or walk, with a flexible fit and leak-proof protection. Shop Pampers Cruisers 360.",
+     "hasVariant": [
+      {
+       "@type": "Product",
+       "description": "16 - 28 lbs",
+       "gtin13": "037000716556",
+       "name": "3",
+       "size": "3",
+       "sku": "037000716556"
+      },
+      {
+       "@type": "Product",
+       "description": "22 - 37 lbs",
+       "gtin13": "037000716679",
+       "name": "4",
+       "size": "4",
+       "sku": "037000716679"
+      },
+      {
+       "@type": "Product",
+       "description": "27+ lbs",
+       "gtin13": "037000716549",
+       "name": "5",
+       "size": "5",
+       "sku": "037000716549"
+      },
+      {
+       "@type": "Product",
+       "description": "35+ lbs",
+       "gtin13": "030772046074",
+       "name": "6",
+       "size": "6",
+       "sku": "030772046074"
+      },
+      {
+       "@type": "Product",
+       "description": "41+ lbs",
+       "gtin13": "037000717072",
+       "name": "7",
+       "size": "7",
+       "sku": "037000717072"
+      },
+      {
+       "@type": "Product",
+       "description": "46+ lbs",
+       "gtin13": "80847562",
+       "name": "8",
+       "size": "8",
+       "sku": "80847562"
+      }
+     ],
+     "name": "Pampers\u00ae Cruisers 360\u00b0 Pull-on Diapers | Pampers",
+     "url": "https://www.pampers.com/en-us/products/pampers-cruisers-360"
+    },
+    "list_price": null,
+    "member_price": null,
+    "method": "none_by_design",
+    "observed_at": "2026-10-20T04:23:16.142155+00:00",
+    "offer_text": null,
+    "page_title": "3",
+    "price": null,
+    "read_status": "ok",
+    "reference_read_id": 43,
+    "reference_run_id": 3,
+    "reference_source": "honest_fetch",
+    "retailer_domain": "pampers.com",
+    "role": "own",
+    "size_chart": [
+     {
+      "evidence": "3 16 - 28 lbs",
+      "max": 28.0,
+      "min": 16.0,
+      "size": "3"
+     },
+     {
+      "evidence": "4 22 - 37 lbs",
+      "max": 37.0,
+      "min": 22.0,
+      "size": "4"
+     },
+     {
+      "evidence": "5 27+ lbs",
+      "max": null,
+      "min": 27.0,
+      "size": "5"
+     },
+     {
+      "evidence": "6 35+ lbs",
+      "max": null,
+      "min": 35.0,
+      "size": "6"
+     },
+     {
+      "evidence": "7 41+ lbs",
+      "max": null,
+      "min": 41.0,
+      "size": "7"
+     },
+     {
+      "evidence": "8 46+ lbs",
+      "max": null,
+      "min": 46.0,
+      "size": "8"
+     }
+    ],
+    "sku": "sku_pg_cr360_s3_168",
+    "status": "active",
+    "successor": null,
+    "unverifiable_reason": "brand site, no price set",
+    "url": "https://www.pampers.com/en-us/products/pampers-cruisers-360",
+    "variant_label": "Pampers Cruisers 360, Size 3, 168 ct",
+    "variant_ref": "feed_sku:8",
+    "verifiable": false,
+    "weight_range": null
+   },
+   {
+    "attribute": {
+     "conflict": null,
+     "evidence": null,
+     "evidence_from": null,
+     "stated": null,
+     "truth": {
+      "max": 28.0,
+      "min": 16.0
+     },
+     "truth_source": "brand_page",
+     "verdict": "absent"
+    },
+    "availability": null,
+    "bullets": null,
+    "currency": "USD",
+    "deals": [],
+    "extraction_evidence": {
+     "confidence": "high",
+     "evidence": "Pampers Cruisers 360 Disposable Diapers OMS Pack - Size 3 - 168ct 31 Questions $51.71 Add to cart",
+     "list_price": null,
+     "model": "gpt-5.4-nano",
+     "price": "51.71",
+     "priced_pack": "168ct",
+     "seller": null
+    },
+    "final_url": "https://www.target.com/p/-/-/A-95184568",
+    "gtin": "037000717379",
+    "incentive_in_markup": {
+     "code": false,
+     "json_ld_scanned": false,
+     "member_price": false,
+     "promo": false,
+     "subscription": false
+    },
+    "incentive_in_text": {
+     "code": false,
+     "member_price": false,
+     "promo": false,
+     "sentence": null,
+     "site_wide": false,
+     "subscription": false
+    },
+    "json_ld": null,
+    "list_price": null,
+    "member_price": null,
+    "method": "llm_rendered",
+    "observed_at": "2026-10-20T04:23:16.142155+00:00",
+    "offer_text": null,
+    "page_title": "Pampers Cruisers 360 Disposable Diapers OMS Pack - Size 3 - 168ct : Target",
+    "price": "51.71",
+    "read_status": "ok",
+    "reference_read_id": 45,
+    "reference_run_id": 3,
+    "reference_source": "hosted_render",
+    "retailer_domain": "target.com",
+    "role": "retailer",
+    "size_chart": null,
+    "sku": "sku_pg_cr360_s3_168",
+    "status": "active",
+    "successor": null,
+    "unverifiable_reason": null,
+    "url": "https://www.target.com/p/-/-/A-95184568",
+    "variant_label": "Pampers Cruisers 360, Size 3, 168 ct",
+    "variant_ref": "feed_sku:8",
+    "verifiable": true,
+    "weight_range": null
+   },
+   {
+    "attribute": {
+     "conflict": null,
+     "evidence": null,
+     "evidence_from": null,
+     "stated": null,
+     "truth": {
+      "max": 28.0,
+      "min": 16.0
+     },
+     "truth_source": "brand_page",
+     "verdict": "absent"
+    },
+    "availability": null,
+    "bullets": null,
+    "currency": "USD",
+    "deals": [],
+    "extraction_evidence": {
+     "confidence": "high",
+     "evidence": "168, $49.77 168 $49.77 29.6 \u00a2/count",
+     "list_price": null,
+     "model": "gpt-5.4-nano",
+     "price": "49.77",
+     "priced_pack": "168",
+     "seller": null
+    },
+    "final_url": "https://www.walmart.com/ip/Pampers-Cruisers-360-Pull-On-Baby-Diapers-Size-3-168-Count/283399865",
+    "gtin": "037000717379",
+    "incentive_in_markup": {
+     "code": false,
+     "json_ld_scanned": false,
+     "member_price": false,
+     "promo": false,
+     "subscription": false
+    },
+    "incentive_in_text": {
+     "code": false,
+     "member_price": false,
+     "promo": false,
+     "sentence": null,
+     "site_wide": false,
+     "subscription": false
+    },
+    "json_ld": null,
+    "list_price": null,
+    "member_price": null,
+    "method": "llm_rendered",
+    "observed_at": "2026-10-20T04:23:16.142155+00:00",
+    "offer_text": null,
+    "page_title": "Pampers, Diapers, Cruisers 360 degrees Size 3, Leakproof Fit - Walmart.com",
+    "price": "49.77",
+    "read_status": "ok",
+    "reference_read_id": 47,
+    "reference_run_id": 3,
+    "reference_source": "hosted_render",
+    "retailer_domain": "walmart.com",
+    "role": "retailer",
+    "size_chart": null,
+    "sku": "sku_pg_cr360_s3_168",
+    "status": "active",
+    "successor": null,
+    "unverifiable_reason": null,
+    "url": "https://www.walmart.com/ip/Pampers-Cruisers-360-Pull-On-Baby-Diapers-Size-3-168-Count/283399865",
+    "variant_label": "Pampers Cruisers 360, Size 3, 168 ct",
+    "variant_ref": "feed_sku:8",
+    "verifiable": true,
+    "weight_range": null
+   },
+   {
+    "attribute": null,
+    "availability": null,
+    "bullets": null,
+    "currency": null,
+    "deals": null,
+    "extraction_evidence": null,
+    "final_url": null,
+    "gtin": null,
+    "incentive_in_markup": null,
+    "incentive_in_text": null,
+    "json_ld": null,
+    "list_price": null,
+    "member_price": null,
+    "method": null,
+    "observed_at": null,
+    "offer_text": null,
+    "page_title": null,
+    "price": null,
+    "read_status": null,
+    "reference_read_id": null,
+    "reference_run_id": null,
+    "reference_source": null,
+    "retailer_domain": "amazon.com",
+    "role": "retailer",
+    "size_chart": null,
+    "sku": "sku_pg_cr360_s5_128",
+    "status": "active",
+    "successor": null,
+    "unverifiable_reason": "not read yet",
+    "url": "https://www.amazon.com/dp/B08PX2V7PG",
+    "variant_label": "Pampers Cruisers 360, Size 5, 128 ct",
+    "variant_ref": "feed_sku:9",
+    "verifiable": false,
+    "weight_range": null
+   },
+   {
+    "attribute": null,
+    "availability": null,
+    "bullets": [
+     "Active Fit",
+     "Worry-free Play",
+     "New EZ Off Tabs",
+     "Easy On",
+     "Pull-On Diapers",
+     "Active fit",
+     "Pediatrician Recommended",
+     "Gentle on Delicate Skin",
+     "Accredited by the Skin Health Alliance",
+     "Pampers Cruisers 360 Pull-On Diapers provide your baby with up to 100% leakproof fit, so they can play worry-free",
+     "Unlike ordinary diapers, Pampers Cruisers 360 pull-on diapers stretch comfortably around your baby's waist and adapt to their every move.",
+     "Pampers Cruisers 360 has a 360-degree stretchy waistband designed to quickly and easily pull up onto your wiggly baby.",
+     "New EZ-Off tabs help make changes quick & easy. Just pull-on the diaper like normal, pull off the new EZ-Off tabs completely on both sides, and wrap up the diaper using the tabs for secure and quick disposal.",
+     "Pampers Cruisers 360 are made for active babies, even bigger, fuller babies. Their 360\u00b0 Stretchy Waistband adapts to your baby\u2019s shape and movement, delivering a secure, stay-put fit without ordinary diaper tape. The flexible design helps reduce gaps and prevent leaks, even during busy playtimes."
+    ],
+    "currency": "USD",
+    "deals": null,
+    "extraction_evidence": null,
+    "final_url": "https://www.pampers.com/en-us/products/pampers-cruisers-360",
+    "gtin": null,
+    "incentive_in_markup": {
+     "code": false,
+     "json_ld_scanned": false,
+     "member_price": false,
+     "promo": false,
+     "subscription": false
+    },
+    "incentive_in_text": {
+     "code": false,
+     "member_price": false,
+     "promo": false,
+     "sentence": null,
+     "site_wide": false,
+     "subscription": false
+    },
+    "json_ld": {
+     "@type": "ProductGroup",
+     "additionalProperty": [
+      {
+       "@type": "PropertyValue",
+       "name": "Size Range",
+       "value": "3, 4, 5, 6, 7, 8"
+      },
+      {
+       "@type": "PropertyValue",
+       "name": "Age Range",
+       "value": "Toddler"
+      },
+      {
+       "@type": "PropertyValue",
+       "name": "Baby Weight",
+       "value": "13 - 26 lbs, 15 - 34 lbs, 27+ lbs, 35+ lbs, 41+ lbs, 46+ lbs"
+      },
+      {
+       "@type": "PropertyValue",
+       "name": "Pack Count",
+       "value": "21, 26, 56, 58, 60, 66, 70, 74, 76, 80, 88, 96, 100, 104, 108, 116, 132, 136"
+      }
+     ],
+     "category": "Pull-On Diapers",
+     "description": "Pull-on diapers made for active babies who crawl, stand, or walk, with a flexible fit and leak-proof protection. Shop Pampers Cruisers 360.",
+     "hasVariant": [
+      {
+       "@type": "Product",
+       "description": "16 - 28 lbs",
+       "gtin13": "037000716556",
+       "name": "3",
+       "size": "3",
+       "sku": "037000716556"
+      },
+      {
+       "@type": "Product",
+       "description": "22 - 37 lbs",
+       "gtin13": "037000716679",
+       "name": "4",
+       "size": "4",
+       "sku": "037000716679"
+      },
+      {
+       "@type": "Product",
+       "description": "27+ lbs",
+       "gtin13": "037000716549",
+       "name": "5",
+       "size": "5",
+       "sku": "037000716549"
+      },
+      {
+       "@type": "Product",
+       "description": "35+ lbs",
+       "gtin13": "030772046074",
+       "name": "6",
+       "size": "6",
+       "sku": "030772046074"
+      },
+      {
+       "@type": "Product",
+       "description": "41+ lbs",
+       "gtin13": "037000717072",
+       "name": "7",
+       "size": "7",
+       "sku": "037000717072"
+      },
+      {
+       "@type": "Product",
+       "description": "46+ lbs",
+       "gtin13": "80847562",
+       "name": "8",
+       "size": "8",
+       "sku": "80847562"
+      }
+     ],
+     "name": "Pampers\u00ae Cruisers 360\u00b0 Pull-on Diapers | Pampers",
+     "url": "https://www.pampers.com/en-us/products/pampers-cruisers-360"
+    },
+    "list_price": null,
+    "member_price": null,
+    "method": "none_by_design",
+    "observed_at": "2026-10-20T04:23:16.142155+00:00",
+    "offer_text": null,
+    "page_title": "3",
+    "price": null,
+    "read_status": "ok",
+    "reference_read_id": 43,
+    "reference_run_id": 3,
+    "reference_source": "honest_fetch",
+    "retailer_domain": "pampers.com",
+    "role": "own",
+    "size_chart": [
+     {
+      "evidence": "3 16 - 28 lbs",
+      "max": 28.0,
+      "min": 16.0,
+      "size": "3"
+     },
+     {
+      "evidence": "4 22 - 37 lbs",
+      "max": 37.0,
+      "min": 22.0,
+      "size": "4"
+     },
+     {
+      "evidence": "5 27+ lbs",
+      "max": null,
+      "min": 27.0,
+      "size": "5"
+     },
+     {
+      "evidence": "6 35+ lbs",
+      "max": null,
+      "min": 35.0,
+      "size": "6"
+     },
+     {
+      "evidence": "7 41+ lbs",
+      "max": null,
+      "min": 41.0,
+      "size": "7"
+     },
+     {
+      "evidence": "8 46+ lbs",
+      "max": null,
+      "min": 46.0,
+      "size": "8"
+     }
+    ],
+    "sku": "sku_pg_cr360_s5_128",
+    "status": "active",
+    "successor": null,
+    "unverifiable_reason": "brand site, no price set",
+    "url": "https://www.pampers.com/en-us/products/pampers-cruisers-360",
+    "variant_label": "Pampers Cruisers 360, Size 5, 128 ct",
+    "variant_ref": "feed_sku:9",
+    "verifiable": false,
+    "weight_range": null
+   },
+   {
+    "attribute": null,
+    "availability": null,
+    "bullets": null,
+    "currency": null,
+    "deals": null,
+    "extraction_evidence": null,
+    "final_url": null,
+    "gtin": null,
+    "incentive_in_markup": null,
+    "incentive_in_text": null,
+    "json_ld": null,
+    "list_price": null,
+    "member_price": null,
+    "method": null,
+    "observed_at": null,
+    "offer_text": null,
+    "page_title": null,
+    "price": null,
+    "read_status": null,
+    "reference_read_id": null,
+    "reference_run_id": null,
+    "reference_source": null,
+    "retailer_domain": "target.com",
+    "role": "retailer",
+    "size_chart": null,
+    "sku": "sku_pg_cr360_s5_128",
+    "status": "active",
+    "successor": null,
+    "unverifiable_reason": "not read yet",
+    "url": "https://www.target.com/p/-/-/A-95184565",
+    "variant_label": "Pampers Cruisers 360, Size 5, 128 ct",
+    "variant_ref": "feed_sku:9",
+    "verifiable": false,
+    "weight_range": null
+   },
+   {
+    "attribute": null,
+    "availability": null,
+    "bullets": null,
+    "currency": null,
+    "deals": null,
+    "extraction_evidence": null,
+    "final_url": null,
+    "gtin": null,
+    "incentive_in_markup": null,
+    "incentive_in_text": null,
+    "json_ld": null,
+    "list_price": null,
+    "member_price": null,
+    "method": null,
+    "observed_at": null,
+    "offer_text": null,
+    "page_title": null,
+    "price": null,
+    "read_status": null,
+    "reference_read_id": null,
+    "reference_run_id": null,
+    "reference_source": null,
+    "retailer_domain": "walmart.com",
+    "role": "retailer",
+    "size_chart": null,
+    "sku": "sku_pg_cr360_s5_128",
+    "status": "active",
+    "successor": null,
+    "unverifiable_reason": "not read yet",
+    "url": "https://www.walmart.com/ip/Pampers-Cruisers-360-Pull-On-Baby-Diapers-Size-5-128-Count/297702421",
+    "variant_label": "Pampers Cruisers 360, Size 5, 128 ct",
+    "variant_ref": "feed_sku:9",
+    "verifiable": false,
+    "weight_range": null
+   },
+   {
+    "attribute": {
+     "conflict": {
+      "evidence": "Incontinence Protector Size Size 4 Weight Range 22 lbs -37 lbs",
+      "weight_range": {
+       "max": 37.0,
+       "min": 22.0
+      }
+     },
+     "evidence": "Amazon.com: Pampers ZZZ Overnight Diapers, Size 4 (15-34 lbs), 104 Count, Nighttime Protection Disposable Baby Diaper : Baby",
+     "evidence_from": "title",
+     "stated": {
+      "max": 34.0,
+      "min": 15.0
+     },
+     "truth": {
+      "max": 37.0,
+      "min": 22.0
+     },
+     "truth_source": "brand_page",
+     "verdict": "mismatch"
+    },
+    "availability": null,
+    "bullets": null,
+    "currency": "USD",
+    "deals": [],
+    "extraction_evidence": {
+     "confidence": "high",
+     "evidence": "One-Time Price: $44.99 \u2026 One-Time Price: $44.99 $44.99 The 'One-time Price' refers to the current Featured Offer price for a one time purchase of the item.",
+     "list_price": null,
+     "model": "gpt-5.4-nano",
+     "price": "44.99",
+     "priced_pack": "104 Count",
+     "seller": null
+    },
+    "final_url": "https://www.amazon.com/dp/B08PX2V97T",
+    "gtin": "037000833970",
+    "incentive_in_markup": {
+     "code": false,
+     "json_ld_scanned": false,
+     "member_price": false,
+     "promo": false,
+     "subscription": false
+    },
+    "incentive_in_text": {
+     "code": false,
+     "member_price": false,
+     "promo": false,
+     "sentence": null,
+     "site_wide": false,
+     "subscription": false
+    },
+    "json_ld": null,
+    "list_price": null,
+    "member_price": null,
+    "method": "llm",
+    "observed_at": "2026-10-20T04:23:16.142155+00:00",
+    "offer_text": null,
+    "page_title": "Amazon.com: Pampers ZZZ Overnight Diapers, Size 4 (15-34 lbs), 104 Count, Nighttime Protection Disposable Baby Diaper : Baby",
+    "price": "44.99",
+    "read_status": "ok",
+    "reference_read_id": 48,
+    "reference_run_id": 3,
+    "reference_source": "honest_fetch",
+    "retailer_domain": "amazon.com",
+    "role": "retailer",
+    "size_chart": null,
+    "sku": "sku_pg_zzz_s4_104",
+    "status": "active",
+    "successor": null,
+    "unverifiable_reason": null,
+    "url": "https://www.amazon.com/dp/B08PX2V97T",
+    "variant_label": "Pampers Zzz overnight, Size 4, 104 ct",
+    "variant_ref": "feed_sku:10",
+    "verifiable": true,
+    "weight_range": null
+   },
+   {
+    "attribute": {
+     "conflict": null,
+     "evidence": "Select size Size guide What\u2019s my baby size? 3 16 - 28 lbs 4 22-37 lbs 5 27+ lbs 6 35+ lbs",
+     "evidence_from": "model",
+     "stated": {
+      "max": 37.0,
+      "min": 22.0
+     },
+     "truth": {
+      "max": 37.0,
+      "min": 22.0
+     },
+     "truth_source": "brand_page",
+     "verdict": "match"
+    },
+    "availability": null,
+    "bullets": [
+     "#1 Brand. For Sleep.",
+     "Peaceful Nights",
+     "All-Around LeakGuard",
+     "More Absorbent",
+     "Overnight Diapers",
+     "OEKO-TEX\u00ae STANDARD 100 Certification",
+     "Gentle on Delicate Skin",
+     "Accredited by the Skin Health Alliance",
+     "Experience the peace of mind that comes with Pampers ZZZ overnight diapers, designed with your baby's comfort in mind.",
+     "With 50% more absorbent zones vs. everyday-of-the-year brand, these diapers gently cradle your little one, ensuring that wetness is distributed evenly to keep their delicate skin dry. The Blowout Barrier and soft, gentle leg protection create a secure fit that shields your baby from leaks at every angle, allowing them to dream peacefully.",
+     "Recognized as the Best Overall Overnight Diaper in 2025 by What to Expect and proudly recommended by pediatricians, Pampers ZZZ is here to support your family\u2019s journey through the night, so you can focus on what truly matters\u2014creating beautiful memories with your baby."
+    ],
+    "currency": "USD",
+    "deals": null,
+    "extraction_evidence": null,
+    "final_url": "https://www.pampers.com/en-us/products/pampers-zzz",
+    "gtin": "037000833970",
+    "incentive_in_markup": {
+     "code": false,
+     "json_ld_scanned": false,
+     "member_price": false,
+     "promo": false,
+     "subscription": false
+    },
+    "incentive_in_text": {
+     "code": false,
+     "member_price": false,
+     "promo": false,
+     "sentence": null,
+     "site_wide": false,
+     "subscription": false
+    },
+    "json_ld": {
+     "@type": "ProductGroup",
+     "additionalProperty": [
+      {
+       "@type": "PropertyValue",
+       "name": "Size Range",
+       "value": "3, 4, 5, 6"
+      },
+      {
+       "@type": "PropertyValue",
+       "name": "Baby Weight",
+       "value": "13 - 26 lbs, 15 - 34 lbs, 27+ lbs, 35+ lbs"
+      },
+      {
+       "@type": "PropertyValue",
+       "name": "Pack Count",
+       "value": "72, 88, 104, 116"
+      }
+     ],
+     "category": "Taped Diapers",
+     "description": "Say goodnight to overnight wakeups and hello to Pampers ZZZ, the overnight diaper designed with extra absorbency for more peaceful nights. ",
+     "hasVariant": [
+      {
+       "@type": "Product",
+       "description": "16 - 28 lbs",
+       "gtin13": "037000833963",
+       "name": "3",
+       "size": "3",
+       "sku": "037000833963"
+      },
+      {
+       "@type": "Product",
+       "description": "22-37 lbs",
+       "gtin13": "037000833970",
+       "name": "4",
+       "size": "4",
+       "sku": "037000833970"
+      },
+      {
+       "@type": "Product",
+       "description": "27+ lbs",
+       "gtin13": "037000833987",
+       "name": "5",
+       "size": "5",
+       "sku": "037000833987"
+      },
+      {
+       "@type": "Product",
+       "description": "35+ lbs",
+       "gtin13": "037000834021",
+       "name": "6",
+       "size": "6",
+       "sku": "037000834021"
+      }
+     ],
+     "name": "Pampers\u00ae Zzz | Pampers",
+     "url": "https://www.pampers.com/en-us/products/pampers-zzz"
+    },
+    "list_price": null,
+    "member_price": null,
+    "method": "none_by_design",
+    "observed_at": "2026-10-20T04:23:16.142155+00:00",
+    "offer_text": null,
+    "page_title": "3",
+    "price": null,
+    "read_status": "ok",
+    "reference_read_id": 49,
+    "reference_run_id": 3,
+    "reference_source": "honest_fetch",
+    "retailer_domain": "pampers.com",
+    "role": "own",
+    "size_chart": [
+     {
+      "evidence": "3 16 - 28 lbs",
+      "max": 28.0,
+      "min": 16.0,
+      "size": "3"
+     },
+     {
+      "evidence": "4 22-37 lbs",
+      "max": 37.0,
+      "min": 22.0,
+      "size": "4"
+     },
+     {
+      "evidence": "5 27+ lbs",
+      "max": null,
+      "min": 27.0,
+      "size": "5"
+     },
+     {
+      "evidence": "6 35+ lbs",
+      "max": null,
+      "min": 35.0,
+      "size": "6"
+     }
+    ],
+    "sku": "sku_pg_zzz_s4_104",
+    "status": "active",
+    "successor": null,
+    "unverifiable_reason": "brand site, no price set",
+    "url": "https://www.pampers.com/en-us/products/pampers-zzz",
+    "variant_label": "Pampers Zzz overnight, Size 4, 104 ct",
+    "variant_ref": "feed_sku:10",
+    "verifiable": false,
+    "weight_range": null
+   },
+   {
+    "attribute": {
+     "conflict": null,
+     "evidence": "size 4 diapers (22-37 lbs)",
+     "evidence_from": "model",
+     "stated": {
+      "max": 37.0,
+      "min": 22.0
+     },
+     "truth": {
+      "max": 37.0,
+      "min": 22.0
+     },
+     "truth_source": "brand_page",
+     "verdict": "match"
+    },
+    "availability": null,
+    "bullets": null,
+    "currency": "USD",
+    "deals": [],
+    "extraction_evidence": null,
+    "final_url": "https://www.target.com/p/-/-/A-81041953",
+    "gtin": "037000833970",
+    "incentive_in_markup": {
+     "code": false,
+     "json_ld_scanned": false,
+     "member_price": false,
+     "promo": false,
+     "subscription": false
+    },
+    "incentive_in_text": {
+     "code": false,
+     "member_price": false,
+     "promo": false,
+     "sentence": null,
+     "site_wide": false,
+     "subscription": false
+    },
+    "json_ld": null,
+    "list_price": null,
+    "member_price": null,
+    "method": "none",
+    "observed_at": "2026-10-20T04:23:16.142155+00:00",
+    "offer_text": null,
+    "page_title": "Pampers Swaddlers Overnight Diapers - Size 4 - 104ct : Target",
+    "price": null,
+    "read_status": "empty",
+    "reference_read_id": 50,
+    "reference_run_id": 3,
+    "reference_source": "honest_fetch",
+    "retailer_domain": "target.com",
+    "role": "retailer",
+    "size_chart": null,
+    "sku": "sku_pg_zzz_s4_104",
+    "status": "active",
+    "successor": null,
+    "unverifiable_reason": "page read, but it states no price for this SKU",
+    "url": "https://www.target.com/p/-/-/A-81041953",
+    "variant_label": "Pampers Zzz overnight, Size 4, 104 ct",
+    "variant_ref": "feed_sku:10",
+    "verifiable": false,
+    "weight_range": null
+   },
+   {
+    "attribute": {
+     "conflict": null,
+     "evidence": null,
+     "evidence_from": null,
+     "stated": null,
+     "truth": {
+      "max": 37.0,
+      "min": 22.0
+     },
+     "truth_source": "brand_page",
+     "verdict": "absent"
+    },
+    "availability": null,
+    "bullets": null,
+    "currency": "USD",
+    "deals": [],
+    "extraction_evidence": null,
+    "final_url": "https://www.walmart.com/blocked?url=L2lwL1BhbXBlcnMtU3dhZGRsZXJzLU92ZXJuaWdodC1EaWFwZXJzLVNpemUtNC0xMDQtQ291bnQvOTg5OTk4NjI0&uuid=20333e2d-cc3f-11f1-852f-44861c71197c&vid=&g=b",
+    "gtin": "037000833970",
+    "incentive_in_markup": {
+     "code": false,
+     "json_ld_scanned": false,
+     "member_price": false,
+     "promo": false,
+     "subscription": false
+    },
+    "incentive_in_text": {
+     "code": false,
+     "member_price": false,
+     "promo": false,
+     "sentence": null,
+     "site_wide": false,
+     "subscription": false
+    },
+    "json_ld": null,
+    "list_price": null,
+    "member_price": null,
+    "method": "none",
+    "observed_at": "2026-10-20T04:23:16.142155+00:00",
+    "offer_text": null,
+    "page_title": "Pampers Swaddlers Overnight Nighttime Diapers, Size 4, 104 Count - Walmart.com",
+    "price": null,
+    "read_status": "empty",
+    "reference_read_id": 52,
+    "reference_run_id": 3,
+    "reference_source": "honest_fetch",
+    "retailer_domain": "walmart.com",
+    "role": "retailer",
+    "size_chart": null,
+    "sku": "sku_pg_zzz_s4_104",
+    "status": "active",
+    "successor": null,
+    "unverifiable_reason": "page read, but it states no price for this SKU",
+    "url": "https://www.walmart.com/ip/Pampers-Swaddlers-Overnight-Diapers-Size-4-104-Count/989998624",
+    "variant_label": "Pampers Zzz overnight, Size 4, 104 ct",
+    "variant_ref": "feed_sku:10",
+    "verifiable": false,
+    "weight_range": null
+   }
+  ]
+ },
+ "headers": {
+  "content-type": "application/json"
+ },
+ "status": 200
+}
