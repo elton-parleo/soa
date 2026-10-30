@@ -64,7 +64,7 @@ async def _manufacturer(scope: CustomerScope, merchant: str) -> tuple:
     ms = await check_merchant(scope, merchant)
     record = _record(ms)
     # 2V-2: a seller we do not host (seller_external) is compiled and held too
-    if not cs.is_held_mode(record):
+    if not cs.is_external(record):
         raise HTTPException(status_code=404, detail=f"merchant {merchant!r} is not in manufacturer mode")
     return ms, record
 
@@ -330,7 +330,7 @@ async def brand_overview(scope: CustomerScope, ms: MerchantScope, merchant: str,
     from app.services import console_revenue as revenue_svc
 
     record = _record(ms)
-    if not manu.is_manufacturer(record):
+    if cs.external_kind(record) != 'brand':
         return
     client = full_loop._client(scope)
     errors = body.setdefault('read_errors', {})
@@ -430,7 +430,7 @@ async def get_publishing(merchant: str = Query(...), scope: CustomerScope = Depe
     /truesync carries for the same merchant). 404 for a merchant not in
     manufacturer mode."""
     ms, record = await _manufacturer(scope, merchant)
-    if cs.is_seller_external(record):
+    if cs.external_kind(record) == 'seller':
         from app.routers import console_seller
         c_status, channels, c_err = await full_loop._client(scope).get_channels()
         if c_err is not None:
@@ -536,7 +536,7 @@ async def _rules_body(scope: CustomerScope, ms: MerchantScope, merchant: str) ->
     """The rules screen: every word of the rules is supply's (2R-2a A3); soa
     adds only the backtest."""
     record = _record(ms)
-    if cs.is_seller_external(record):
+    if cs.external_kind(record) == 'seller':
         from app.routers import console_seller
         return await console_seller.rules_body(scope, ms, merchant)
     client = full_loop._client(scope)
@@ -876,7 +876,7 @@ async def get_fixes(merchant: str = Query(...), scope: CustomerScope = Depends(c
     the sent journal: one fix per source, ranked by what it wins back. No owner or due date is recorded: None. 404
     for a merchant not in manufacturer mode."""
     ms, record = await _manufacturer(scope, merchant)
-    if cs.is_seller_external(record):
+    if cs.external_kind(record) == 'seller':
         from app.routers import console_seller
         return await console_seller.fixes(scope, ms, merchant)
     got = await _fix_inputs(scope, ms, merchant)
@@ -887,7 +887,7 @@ async def get_fixes(merchant: str = Query(...), scope: CustomerScope = Depends(c
 
 async def _approvals_body(scope: CustomerScope, ms: MerchantScope, merchant: str) -> dict:
     from app.services import console_fixes as fx
-    if cs.is_seller_external(_record(ms)):
+    if cs.external_kind(_record(ms)) == 'seller':
         from app.routers import console_seller
         return await console_seller.approvals(scope, ms, merchant)
     got = await _fix_inputs(scope, ms, merchant)
@@ -942,7 +942,7 @@ async def impact_block(scope: CustomerScope, ms: MerchantScope, errors: dict) ->
     first cycle scored after the send against the last before it, through
     the one comparability rule (_compared), Impact's baseline rows each."""
     record = _record(ms)
-    if not manu.is_manufacturer(record):
+    if cs.external_kind(record) != 'brand':
         return None
     meta = _merchant_meta(ms)
     (catalog, pubs, held_errors), (_, retailers, o_err) = await asyncio.gather(

@@ -1,0 +1,25 @@
+{
+ "brand_pampers_2u5": {
+  "accessibility": "c9c0c703e6871481428c571b7eda45fa415f955df47fdcf4b23ed6901cb3ac89",
+  "approvals": "e13cf1c5b4f5c72d8c9b89da7e27a97699da6049cead28ccdab6dfc4ffff2099",
+  "fixes": "574c4a6ab2deeb34ab4cc9b78ac64c99ea70d96612dd96522fafc52967bb3c98",
+  "overview": "0c1dc6be2e1a4d905227b26abd43f3bc58a7d81a8ac413b08480c469803cace2",
+  "prove": "343a4f6ee98139d7ad84da47a388fe9c0e746880a878f27b7c7cc8ebde450198",
+  "publishing": "455285437af687a426ff555d1f375c3a773ac3449e50720ae8864ffa3945145e",
+  "record": "6a1466afaef7d9e57688ba10361a1804ed1eb6b80cfa33c7017d85736d2dde80",
+  "record/list": "95a856d2519b5f60c50b074778b7caa11c311ebedc1ae11868ececb1cf6cfc72",
+  "revenue": "2a14a435e3e2dc55cee00f83755e425894fb31de2fe388fa003d10f5950b24f0",
+  "rules": "2b8bb6573f4c8c43eaec53ef6fcb4faaa4a37e7e2c1a11bc16482441944e7fa3",
+  "true-value": "c11bb7d396a10e421dee0c4994ca6ac43ab96df53f52bfd9cdfbb0e27caa7d48",
+  "truesync": "9dfd5b5eb8b009646cfba1f8d9e083aa1ee5627f38cf3a733621594b6837b4e8"
+ },
+ "hosted_wiggle_and_snug": {
+  "accessibility": "238e018623c32324bf100850444c9acfa8425abedb1ec85fa0864c171c4d1afe",
+  "overview": "30f2010e202db3a40f8ea99ff2199f92b5044fcf518bb9a7135d3ee65441654a",
+  "prove": "343a4f6ee98139d7ad84da47a388fe9c0e746880a878f27b7c7cc8ebde450198",
+  "record/list": "281f845ef6e78d41c45e756a9fa7650f35a30c5cca567201665eeec116f1fdfc",
+  "revenue": "69215ef585c685f014434e22452a8addebc1f676ff061d5de33ac355e19ed35c",
+  "true-value": "f4c2c84fe549966cb77ef71957b7d802873dc4be4da6eb1a1ec49c6cd496841a",
+  "truesync": "4795b2e2b9560b3d06a0ee125e0c5956ccb00535180d59de42d5b4b3daa15f0f"
+ }
+}

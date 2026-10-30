@@ -8,7 +8,7 @@
    {
     "channel": "merchant_center",
     "channel_slug": "merchant_center",
-    "compiled_at": "2026-10-30T07:05:05",
+    "compiled_at": "2026-10-30T15:10:37",
     "error": "sku:2579466: missing imageLink",
     "expressiveness": [
      {
@@ -47,19 +47,19 @@
     "id": 2,
     "journal": [
      {
-      "at": "2026-10-30T07:05:05+00:00",
+      "at": "2026-10-30T15:10:37+00:00",
       "by": "parleo",
       "event": "compiled",
       "note": null
      },
      {
-      "at": "2026-10-30T07:05:05+00:00",
+      "at": "2026-10-30T15:10:37+00:00",
       "by": "parleo",
       "event": "held_for_merchant",
       "note": "compiled; the brand's own team sends it"
      },
      {
-      "at": "2026-10-30T07:05:05+00:00",
+      "at": "2026-10-30T15:10:37+00:00",
       "by": "elton@parleo.io",
       "event": "sent_by_merchant",
       "note": null,
@@ -114,7 +114,7 @@
    {
     "channel": "merchant_center",
     "channel_slug": "merchant_center",
-    "compiled_at": "2026-10-30T07:05:05",
+    "compiled_at": "2026-10-30T15:10:37",
     "error": "sku:3089211: missing imageLink",
     "expressiveness": [
      {
@@ -153,19 +153,19 @@
     "id": 8,
     "journal": [
      {
-      "at": "2026-10-30T07:05:05+00:00",
+      "at": "2026-10-30T15:10:37+00:00",
       "by": "parleo",
       "event": "compiled",
       "note": null
      },
      {
-      "at": "2026-10-30T07:05:05+00:00",
+      "at": "2026-10-30T15:10:37+00:00",
       "by": "parleo",
       "event": "held_for_merchant",
       "note": "compiled; the brand's own team sends it"
      },
      {
-      "at": "2026-10-30T07:05:05+00:00",
+      "at": "2026-10-30T15:10:37+00:00",
       "by": "elton@parleo.io",
       "event": "sent_by_merchant",
       "note": null,
@@ -220,7 +220,7 @@
    {
     "channel": "merchant_center",
     "channel_slug": "merchant_center",
-    "compiled_at": "2026-10-30T07:05:05",
+    "compiled_at": "2026-10-30T15:10:37",
     "error": "sku:2174511: missing imageLink",
     "expressiveness": [
      {
@@ -249,19 +249,19 @@
     "id": 14,
     "journal": [
      {
-      "at": "2026-10-30T07:05:05+00:00",
+      "at": "2026-10-30T15:10:37+00:00",
       "by": "parleo",
       "event": "compiled",
       "note": null
      },
      {
-      "at": "2026-10-30T07:05:05+00:00",
+      "at": "2026-10-30T15:10:37+00:00",
       "by": "parleo",
       "event": "held_for_merchant",
       "note": "compiled; the brand's own team sends it"
      },
      {
-      "at": "2026-10-30T07:05:05+00:00",
+      "at": "2026-10-30T15:10:37+00:00",
       "by": "elton@parleo.io",
       "event": "sent_by_merchant",
       "note": null,
@@ -313,7 +313,7 @@
    {
     "channel": "merchant_center",
     "channel_slug": "merchant_center",
-    "compiled_at": "2026-10-30T07:05:05",
+    "compiled_at": "2026-10-30T15:10:37",
     "error": "sku:3879911: missing imageLink",
     "expressiveness": [
      {
@@ -332,19 +332,19 @@
     "id": 20,
     "journal": [
      {
-      "at": "2026-10-30T07:05:05+00:00",
+      "at": "2026-10-30T15:10:37+00:00",
       "by": "parleo",
       "event": "compiled",
       "note": null
      },
      {
-      "at": "2026-10-30T07:05:05+00:00",
+      "at": "2026-10-30T15:10:37+00:00",
       "by": "parleo",
       "event": "held_for_merchant",
       "note": "compiled; the brand's own team sends it"
      },
      {
-      "at": "2026-10-30T07:05:05+00:00",
+      "at": "2026-10-30T15:10:37+00:00",
       "by": "elton@parleo.io",
       "event": "sent_by_merchant",
       "note": null,

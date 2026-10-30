@@ -2,7 +2,7 @@
 2V-2 (B): an externally hosted seller (supply's `mode` seller_external).
 
 On 2U-2's harness with supply's answers RECORDED from parleo-supply-app on
-the Petco fixture (tests/fixtures/console/supply_2v2/, PROVENANCE.md there):
+the Petco fixture (tests/fixtures/console/supply_2v4/, PROVENANCE.md there):
 four SKUs, Autoship with Purina's ladder, Perks Premier, NexGard PLUS Rx;
 rules s1-s5 on and approved, s6 waiting; every channel compiled and held,
 mcp published and read back. The recording's merchant is `petco`; it is
@@ -20,7 +20,8 @@ from tests.test_console_read_models import TOKEN_A, as_, http, upstream  # noqa:
 
 SLUG = f2r2.SLUG
 RECORDED_SLUG = 'petco'
-HERE = os.path.join(os.path.dirname(__file__), 'fixtures', 'console', 'supply_2v2')
+#: 2V-4: re-recorded from parleo-supply-app main at 13c9c80 (2V-1 and 2V-2 merged; supply_2v4/PROVENANCE.md)
+HERE = os.path.join(os.path.dirname(__file__), 'fixtures', 'console', 'supply_2v4')
 
 
 def _rename(value):
@@ -135,7 +136,7 @@ def test_mark_as_sent_records_the_sellers_statement(http, db, upstream):
     _shape(db, http, upstream)
     as_('op')
     r = http.post('/api/console/publishing/sent', params={'merchant': SLUG, 'org': 10},
-                  json={'channel': 'merchant_center', 'sent_at': '2026-10-30T07:10:00Z', 'stated_by': 'Gabe L.'})
+                  json={'channel': 'merchant_center', 'sent_at': '2026-10-30T15:20:00Z', 'stated_by': 'Gabe L.'})   # after the 2V-4 recording's compile
     assert r.status_code == 200, r.text
     sent = [c for c in upstream.calls if c['method'] == 'POST' and c['path'].endswith('/publications/sent')]
     assert sent and sent[-1]['json']['stated_by'] == 'Gabe L.'
@@ -200,7 +201,7 @@ def test_a_retired_program_name_in_answers_is_a_fix_while_s4_is_off():
                           name='Petco', program='Autoship')
     (fix,) = body['fixes']
     assert fix['id'] == 'retired_name' and fix['gate'] == 's4'
-    assert fix['title'] == 'Retire Vital Care everywhere agents read'
+    assert fix['title'] == 'Fix "Vital Care" copy'   # 2V-4 (B5): the demo's copy fix
     assert fix['detail'] == '1 of 2 answers this cycle still said Vital Care. The program is Petco Perks.'
     rules = [{'code': 's4', 'on': True, 'approval': 'approved'}]
     assert cs.build_fixes(rules=rules, paths=[], answers=answers, price_answers=[], loyalty=loyalty, pubs=[],

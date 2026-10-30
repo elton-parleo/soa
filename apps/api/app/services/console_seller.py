@@ -22,6 +22,7 @@ answers applied a funded ladder, and the agents that quoted a program price.
 Copy: SELLER_TEMPLATES. Pure; no read, no model.
 """
 import re
+from collections import Counter
 from decimal import Decimal, InvalidOperation
 from typing import Dict, Iterable, List, Optional
 
@@ -69,7 +70,8 @@ SELLER_TEMPLATES = {
     'fix.first_order.title': 'Publish first-order {program} prices on {n} SKUs',
     'fix.first_order.detail': ('{funded} funded by a brand, {standard} standard first-order, {rx} Rx held by rule. '
                                '{missed} of {asked} price answers left the first-order price out.'),
-    'fix.retired.title': 'Retire {names} everywhere agents read',
+    # 2V-4 (B5): the demo's copy fix, named for the former name answers say most
+    'fix.retired.title': 'Fix "{former}" copy',
     'fix.retired.detail': '{k} of {n} answers this cycle still said {names}. The program is {current}.',
     'fix.release.title': 'Send the held {name} files',
     'fix.release.detail': '{n} SKUs compiled for {surfaces} surfaces and held. {name_s} own team sends them.',
@@ -110,6 +112,26 @@ def is_seller_external(merchant_record: Optional[dict]) -> bool:
 def is_held_mode(merchant_record: Optional[dict]) -> bool:
     """A merchant whose records supply compiles and holds: a brand at retail, or a seller we do not host."""
     return (merchant_record or {}).get('mode') in HELD_MODES
+
+
+#: 2V-4 (B1): the kinds an external merchant can be; the content branches on them, the gate does not.
+EXTERNAL_KINDS = ('brand', 'seller')
+
+
+def is_external(merchant_record: Optional[dict]) -> bool:
+    """
+    2V-4 (B1): the one gate every held-mode read model takes. An external
+    merchant, hosting `external`, a brand or a seller: supply holds its
+    compile for its own team either way (seller_mode.holds). A record from a
+    supply before 2R-1 states no mode and holds nothing, so it is not one.
+    """
+    r = merchant_record or {}
+    return r.get('hosting') == 'external' and r.get('kind') in EXTERNAL_KINDS and r.get('mode') is not None
+
+
+def external_kind(merchant_record: Optional[dict]) -> Optional[str]:
+    """'brand' or 'seller' for an external merchant (is_external), else None: where the content differs."""
+    return (merchant_record or {}).get('kind') if is_external(merchant_record) else None
 
 
 def _possessive(name: str) -> str:
@@ -425,8 +447,10 @@ def build_fixes(*, rules: Optional[List[dict]], paths: List[dict], answers: List
     former = list((loyalty or {}).get('former_names') or [])
     saying = [a for a in answers if says_former(a, former)]
     if former and saying and not (s4 or {}).get('on'):
-        names = manu._and(sorted({n for a in saying for n in says_former(a, former)}))
-        fixes.append({'id': 'retired_name', 'gate': 's4', 'title': T['fix.retired.title'].format(names=names),
+        said = Counter(n for a in saying for n in says_former(a, former))
+        names = manu._and(sorted(said))
+        top = sorted(said.items(), key=lambda kv: (-kv[1], former.index(kv[0])))[0][0]
+        fixes.append({'id': 'retired_name', 'gate': 's4', 'title': T['fix.retired.title'].format(former=top),
                       'detail': T['fix.retired.detail'].format(k=len(saying), n=len(answers), names=names,
                                                                current=(loyalty or {}).get('name')),
                       'status': _state(s4, False), 'scope': 'Program record', 'tags': ['UCP', 'Site markup'],
