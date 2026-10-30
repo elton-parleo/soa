@@ -75,8 +75,9 @@ def _scored_cycles(ms: MerchantScope) -> List[dict]:
 
 
 def cycle_answers(cycle: Optional[dict]) -> tuple:
-    """(answers, price answers) of a cycle: every answered run {run_id, agent, intent, text}, and those asking where
-    to buy or where it is cheapest (rm.VALUE_INTENTS)."""
+    """(answers, price answers) of a cycle: every answered run {run_id, agent, intent, text, keys}, and those asking
+    where to buy or where it is cheapest (rm.VALUE_INTENTS). 2V-5 (W4): `keys` the product its question is coded to
+    (cs.subject_keys)."""
     if cycle is None:
         return [], []
     with _engine().connect() as conn:
@@ -91,7 +92,7 @@ def cycle_answers(cycle: Optional[dict]) -> tuple:
         # 2V-3 (Q6): a where-to-buy or cheapest-place answer by its row's source, never its tier label
         answers.append({'run_id': r['id'], 'agent': surface_names.agent_of(r['platform']) or r['platform'],
                         'intent': rm.catalog_intent(r['source_ref'], r['provenance'], r['tier']),
-                        'text': r['raw_response'] or ''})
+                        'text': r['raw_response'] or '', 'keys': cs.subject_keys(rm._json(r['source_ref']))})
     return answers, [a for a in answers if a['intent'] in rm.VALUE_INTENTS]
 
 
@@ -254,6 +255,10 @@ async def true_value(scope: CustomerScope, ms: MerchantScope, merchant: str, bod
                  'programs': cs.build_programs(owned=reads['owned'], paths=reads['paths'], answers=answers,
                                                merchant=name),
                  'ladder': cs.build_ladder(paths=reads['paths'], answers=answers, name=name),
+                 # 2V-5 (V3): each SKU's own price path, for a screen that selects one
+                 'ladders': {str(r.get('sku')): cs.build_ladder(paths=reads['paths'], answers=answers, name=name,
+                                                                sku=r.get('sku'))
+                             for r in reads['paths'] if cs._stepped(r)},
                  'receipt': cs.build_receipt(paths=reads['paths'], merchant=name)})
     body.setdefault('read_errors', {}).update(reads['errors'])
 
@@ -355,8 +360,7 @@ async def release_page(scope: CustomerScope, ms: MerchantScope, merchant: str, c
         release = {**release, **{k: v for k, v in card.items() if k != 'surfaces'},
                    'surfaces': [{**sf, **by.get(sf['channel'], {})} for sf in release['surfaces']]}
     return {
-        'workspace': rt.build_workspace(records=records, states=states, held=held, held_paths=reads['held_paths'],
-                                        paths=reads['paths'], name=name),
+        'workspace': rt.build_workspace(records=records, states=states, held=held, name=name),
         'release': release if release is not None else card,
         'releases': rt.build_releases(pubs=reads['pubs'], feed_version=(feed or {}).get('version'), rules=reads['rules'],
                                       held=held),

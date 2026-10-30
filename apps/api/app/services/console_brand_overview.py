@@ -790,8 +790,16 @@ def name_products(products: List[dict], feed_rows: Optional[List[dict]]) -> List
                     f"sku:{code}" if code else None, f"feed_sku:{code}" if code else None):
             if key:
                 names.setdefault(str(key), name)
-    return [{**p, 'name': record_name(names[str(p.get('sku'))], p.get('name'))} if str(p.get('sku')) in names else p
-            for p in products]
+
+    def found(p: dict) -> Optional[str]:
+        # 2V-5 (W1): a GTIN row's sku is the reference read's GTIN as supply states it (12 or 13 digits,
+        # build_true_value), the feed's is keyed GTIN-14: compare both as GTIN-14, or only the GTIN-less row matched
+        for key in (p.get('sku'), rm._gtin14(p.get('sku')), rm._gtin14(p.get('gtin'))):
+            if key and str(key) in names:
+                return names[str(key)]
+        return None
+
+    return [{**p, 'name': record_name(found(p), p.get('name'))} if found(p) else p for p in products]
 
 
 # ─── first picks ──────────────────────────────────────────────────────────

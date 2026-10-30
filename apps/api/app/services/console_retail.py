@@ -84,6 +84,13 @@ RETAIL_TEMPLATES = {
     'workspace.mode_note': ("Offer records compiled from {name_s} feed and its own programs. Nothing an agent reads "
                             "changes until {name_s} team sends the files. Parleo serves get_product_true_cost itself."),
     'release.name': '{n} {name} SKUs, {surfaces} surfaces',
+    # 2V-5 (W3): what the tiles count. compiled: one file per SKU per surface in the pass (held and live)
+    'workspace.compiled': 'SKU files compiled ({skus} SKUs × {surfaces} surfaces)',
+    'workspace.fields.carried': 'compiler lines carried, across the held channels',
+    'workspace.fields.approximated': 'approximated',
+    'workspace.fields.dropped': 'dropped by spec',
+    # 2V-5 (W5): who approved the release: the signer of every seller rule, or how many are signed
+    'release.signed': '{k} of {n} signed',
     'release.status.held': 'Compiled, held',
     'release.status.sent': 'Compiled, sent by {who}',
     'release.surface.held': 'Compiled, held · {day}',
@@ -357,8 +364,11 @@ def path_prices(path: Optional[dict]) -> set:
 
 def drift_lines(row: dict, price_answers: List[dict], program: str) -> List[dict]:
     """
-    The price answers about one SKU (console_seller.mentions), each against its
-    path: {agent, fact, run, said, truth, surface, variant, verdict}. right:
+    The price answers about one SKU, each against its path: {agent, fact, run,
+    said, truth, surface, variant, verdict}. 2V-5 (W4): an answer is about the
+    SKU when its question is coded to it (console_seller.coded_to), not when
+    its text names the product's first words: "Purina Pro Plan" joined every
+    Pro Plan bag's and every comparison's prices to the 30 lb row. right:
     quoted the first-order price (or, with no step, the list price); partial:
     the list price, the first order left out; wrong: a price on no step; missed:
     no price.
@@ -370,7 +380,7 @@ def drift_lines(row: dict, price_answers: List[dict], program: str) -> List[dict
         else T['drift.truth.list'].format(lst=cs.money(lst))
     out = []
     for a in price_answers:
-        if not cs.mentions(a, row):
+        if not cs.coded_to(a, row):
             continue
         quoted = _prices(a.get('text') or '')
         if first and _dec(first['price']) in quoted or not first and lst in quoted:
@@ -539,26 +549,23 @@ def build_records(*, paths: List[dict], held_paths: List[dict], pubs: List[dict]
     return out
 
 
-def fields_count(records: List[dict], held_paths: List[dict], paths: List[dict], states: List[dict]) -> dict:
-    """{carried, approximated, dropped}: each SKU's price-path elements (with its list price, always carried), by
-    the best any of its held channels does, summed over SKUs (console_release._fields' rule, over the path)."""
-    held_on = [c['channel'] for c in states if c['state'] == 'held' and c['channel'] in CARRIAGE]
-    held_by_sku = {str(h.get('sku')): h for h in held_paths or []}
+def fields_count(records: List[dict], states: List[dict]) -> dict:
+    """{carried, approximated, dropped}: 2V-5 (W3) the compiler block's own lines, counted on every SKU's panel of
+    every channel held for the seller's team (build_records' `compiler`, the lines the screen renders), so a line
+    marked dropped is a dropped count. Before, each SKU's path elements were counted by the best any held channel
+    did, which read "0 dropped by spec" above GMC's `price_path.later_steps · dropped`."""
+    held_on = {c['channel'] for c in states if c['state'] == 'held'}
     counts = {'carried': 0, 'approximated': 0, 'dropped': 0}
-    if not held_on:
-        return counts
-    for row in paths:
-        path = (held_by_sku.get(str(row.get('sku'))) or {}).get('price_path') or row.get('price_path') or {}
-        counts['carried'] += 1
-        for element in elements(path):
-            marks = {carriage(s, element) for s in held_on}
-            best = 'carried' if 'carried' in marks else 'approximated' if 'approximated' in marks else 'dropped'
-            counts[best] += 1
+    for r in records:
+        for panel in r.get('compiler') or []:
+            if panel['channel'] in held_on:
+                for line in panel['lines']:
+                    if line['mark'] in counts:
+                        counts[line['mark']] += 1
     return counts
 
 
-def build_workspace(*, records: List[dict], states: List[dict], held: Optional[dict], held_paths: List[dict],
-                    paths: List[dict], name: str) -> dict:
+def build_workspace(*, records: List[dict], states: List[dict], held: Optional[dict], name: str) -> dict:
     """The demo's "This workspace today" in SKUs: compiled of SKUs x channels compiled, published (served by
     Parleo), blocked, the path's fields carried / approximated / dropped, SKUs where agents disagree, last
     verified (the MCP readback), next check (no schedule exists: None)."""
@@ -573,7 +580,9 @@ def build_workspace(*, records: List[dict], states: List[dict], held: Optional[d
         'blocked': sum(c['blocked'] for c in states),
         'channels': {s: sum(1 for c in states if c['state'] == s)
                      for s in ('held', 'live', 'blocked', 'not_for_seller', 'not_compiled')},
-        'fields': fields_count(records, held_paths, paths, states),
+        'fields': fields_count(records, states),
+        'fields_label': {k: T[f'workspace.fields.{k}'] for k in ('carried', 'approximated', 'dropped')},
+        'compiled_label': T['workspace.compiled'].format(skus=len(records), surfaces=len(in_pass)),
         'disagree': sum(1 for r in records if r['disagree']['agents']),
         'walled': {'n': 0, 'domains': []},
         'last_verified': verified, 'last_verified_day': manu.short_day(verified),
@@ -600,7 +609,7 @@ def release_status(c: dict, day: Optional[str]) -> str:
 def build_release(*, pubs: List[dict], states: List[dict], rules: Optional[List[dict]], name: str, skus: int,
                   held: Optional[dict]) -> Optional[dict]:
     """The newest compile and hold as the current release, in the brand page's shape (console_release.build_release):
-    {name, compiled_at, day, rules_on, products, surfaces_held, approved_by (None: a compile is not approved),
+    {name, compiled_at, day, rules_on, products, surfaces_held, approved_by (2V-5: approved_by()),
     requested, status, surfaces[] with spec versions, notes, channels}."""
     compiles = rel._compiles(pubs)
     if not compiles:
@@ -616,7 +625,7 @@ def build_release(*, pubs: List[dict], states: List[dict], rules: Optional[List[
         'compiled_at': newest['compiled_at'], 'day': day,
         'rules_on': {'on': sum(1 for r in rules or [] if r.get('on')), 'of': len(rules or [])} if rules is not None else None,
         'products': skus, 'surfaces_held': sum(1 for c in states if c['state'] == 'held'),
-        'approved_by': None, 'requested': newest['by'],
+        'approved_by': approved_by(rules), 'requested': newest['by'],
         'status': T['release.status.sent'].format(who=sent.get('stated_by')) if sent else T['release.status.held'],
         'surfaces': [{'channel': c['channel'], 'name': c['name'], 'spec_version': c['spec'],
                       'status': release_status(c, day), 'state': c['state'], 'in_pass': c['in_pass']} for c in states],
@@ -625,6 +634,20 @@ def build_release(*, pubs: List[dict], states: List[dict], rules: Optional[List[
                   else T['release.note.verify.none']],
         'channels': {c['channel']: c['spec'] for c in states if c['in_pass']},
     }
+
+
+def approved_by(rules: Optional[List[dict]]) -> Optional[str]:
+    """2V-5 (W5): the release's approver. A seller's release is gated by its rules s1..s6, each signed on supply's
+    record (`approved_by`): the signer when every rule is signed by one person, else "{k} of {n} signed"; None
+    (the screen's dash) only when nothing is signed."""
+    gating = [r for r in rules or [] if r.get('code') in SELLER_RULES]
+    signed = [r for r in gating if r.get('approval') == 'approved']
+    if not signed:
+        return None
+    signers = {r.get('approved_by') for r in signed}
+    if len(signed) == len(gating) and len(signers) == 1 and None not in signers:
+        return signers.pop()
+    return T['release.signed'].format(k=len(signed), n=len(gating))
 
 
 def build_releases(*, pubs: List[dict], feed_version: Optional[dict], rules: Optional[List[dict]],

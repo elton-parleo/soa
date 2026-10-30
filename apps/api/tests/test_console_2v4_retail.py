@@ -116,6 +116,8 @@ def test_the_drift_rows_judge_each_price_answer_against_the_path():
                {'run_id': 2, 'agent': 'gemini', 'text': 'Purina Pro Plan Sensitive Skin is $77.99 at Petco'},
                {'run_id': 3, 'agent': 'claude', 'text': 'Purina Pro Plan Sensitive Skin runs $77.48'},
                {'run_id': 4, 'agent': 'copilot', 'text': 'Purina Pro Plan Sensitive Skin varies by store'}]
+    # 2V-5 (W4): each question coded to the SKU, as its source_ref carries it
+    answers = [{**a, 'keys': ['sku:2579466']} for a in answers]
     lines = rt.drift_lines(row, answers, 'Autoship')
     assert [(l['agent'], l['verdict']) for l in lines] == [('claude', 'wrong'), ('gemini', 'partial'),
                                                             ('copilot', 'missed'), ('chatgpt', 'right')]
