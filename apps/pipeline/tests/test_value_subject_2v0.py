@@ -11,6 +11,9 @@ the first row, so snapshot.brand is Northpaw, as Purina Pro Plan was Petco's.
 
 The brand fixtures (Wiggle & Snug, a hosted Pampers) are pinned to the text
 they produced before the change.
+
+2V-3: each seller product here is one variant whose label states a size, so
+every subject now ends with it (", 30 lb"). test_subject_size_2v3.py.
 """
 import json
 import os
@@ -65,18 +68,18 @@ def test_the_fixture_is_the_petco_shape():
 
 def test_a_sellers_points_questions_name_each_product_by_its_own_brand_once():
     assert _value_texts(_seller()) == [
-        'How many Acme Perks points does the Northpaw Salmon & Rice Adult Dog Food earn?',
+        'How many Acme Perks points does the Northpaw Salmon & Rice Adult Dog Food, 30 lb earn?',
         'How many Acme Perks points do you earn per dollar at Acme Pets?',
-        'How many Acme Perks points does the Trailmix Adult Dog Food earn?',
+        'How many Acme Perks points does the Trailmix Adult Dog Food, Chicken & Rice 35 lb earn?',
     ]
 
 
 def test_a_sellers_brand_direct_questions_name_each_product_by_its_own_brand_once():
     assert _intent_texts(_seller()) == [
-        'Where can I buy Northpaw Salmon & Rice Adult Dog Food?',
-        'Where can I buy Trailmix Adult Dog Food?',
-        'Cheapest place to buy Northpaw Salmon & Rice Adult Dog Food?',
-        'Cheapest place to buy Trailmix Adult Dog Food?',
+        'Where can I buy Northpaw Salmon & Rice Adult Dog Food, 30 lb?',
+        'Where can I buy Trailmix Adult Dog Food, Chicken & Rice 35 lb?',
+        'Cheapest place to buy Northpaw Salmon & Rice Adult Dog Food, 30 lb?',
+        'Cheapest place to buy Trailmix Adult Dog Food, Chicken & Rice 35 lb?',
     ]
 
 

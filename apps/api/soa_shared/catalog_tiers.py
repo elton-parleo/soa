@@ -436,14 +436,49 @@ def _price_retailers(snapshot, variant) -> List[str]:
     return others + [d for d in domains if d == snapshot.own_domain]
 
 
+#: 2V-3: a label that states a size or a count ("31.1 lb", "36 ct, 36 oz",
+#: "7 x 18 oz"). A label with neither ("Chicken") names no size to price.
+_SIZE_OR_COUNT = re.compile(
+    r"\d\s*(?:x\s*\d|(?:lbs?|oz|fl\.?\s*oz|ct|count|pk|pack|packs|kg|g|ml|l|gal|qt|pt|ea)\b)",
+    re.I)
+
+
+def single_variant_size(snapshot, product, variant) -> str:
+    """
+    2V-3: the size an external seller's one-variant product is sold in, as
+    its feed label says it ("31.1 lb"), or ''.
+
+    variant_display is empty for a single-variant product, which is right
+    where the product IS the variant. A seller's feed row is one variant of
+    a product the shopper can buy in several sizes elsewhere, so a question
+    without the size gets priced at whichever size the agent finds (Petco
+    FL17: the 8 lb Purina ONE at $19.99 against the 31.1 lb at $49.99).
+    Only a seller's: a brand's record carries all its sizes and is named
+    as before. A label that is empty, repeats the title, or states no size
+    or count adds nothing.
+    """
+    if not is_external(snapshot) or snapshot.merchant_kind != 'seller' or len(product.variants) != 1:
+        return ''
+    label = str((variant.attributes or {}).get('label') or '').strip()
+    title = (product.title or '').strip()
+    if title and label.lower().startswith(title.lower()):
+        label = label[len(title):].strip(' ,-–—')
+    if not label or not _SIZE_OR_COUNT.search(label):
+        return ''
+    return label
+
+
 def _external_subject(snapshot, product, variant) -> str:
     """The product named by ITS brand: a seller sells many brands. A feed
     product name that already starts with the brand ("Trailmix Adult Dog
-    Food") is not given it twice."""
+    Food") is not given it twice. 2V-3: a seller's one-variant product
+    carries its size ("..., 31.1 lb")."""
     brand = product.brand or snapshot.brand
     if brand and ea.names_brand(product.title or '', brand):
         brand = None
-    return _subject(brand, product, variant)
+    subject = _subject(brand, product, variant)
+    size = single_variant_size(snapshot, product, variant)
+    return f"{subject}, {size}" if size else subject
 
 
 def build_external_catalog_accuracy(snapshot, *, category, persona, study_pattern,
