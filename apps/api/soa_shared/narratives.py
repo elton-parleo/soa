@@ -126,7 +126,7 @@ from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 from sqlalchemy import inspect, text
 
 from soa_shared import attribute_accuracy, claim_kinds, per_unit, promo_pass_through, surfaces
-from soa_shared import severity, unprompted
+from soa_shared import local_time, severity, unprompted
 from soa_shared.expected_answers import UNVERIFIED, normalize_domain, normalize_money
 from soa_shared.retailers import KNOWN_RETAILERS, RETAILER_NAMES, retailer_name, retailers_named
 
@@ -489,15 +489,12 @@ def _money(value) -> Optional[str]:
     return None if m in (None, '0.00') else m
 
 
-def _day(value) -> Optional[str]:
-    """'2026-10-19T14:00:00+00:00' -> 'Oct 19'."""
-    if not value:
-        return None
-    try:
-        d = datetime.fromisoformat(str(value).replace('Z', '+00:00'))
-    except ValueError:
-        return None
-    return f"{d.strftime('%b')} {d.day}"
+def _day(value, zone: Optional[str] = None) -> Optional[str]:
+    """'2026-10-30T02:00:00+00:00' -> 'Oct 29' in Los Angeles. 2V-3: the
+    read's day in the workspace's timezone (the study's, else the default),
+    by the console's own rule (local_time.short_day), never its UTC date:
+    FL17 wrote "Petco charged $28.99 on Oct 30" for an Oct 29 PDT read."""
+    return local_time.short_day(value, zone) if value else None
 
 
 def _gtin14(value) -> Optional[str]:
@@ -523,6 +520,8 @@ class Merchant:
     name: Optional[str]
     kind: Optional[str]
     terms: Tuple[str, ...]
+    #: 2V-3: the workspace's timezone, the day a read's date is written in
+    zone: Optional[str] = None
 
     def facts(self) -> dict:
         """{'brand': name} or {'store': name}: the facts name it by what it
@@ -550,20 +549,20 @@ def _source_keys(source_ref: Optional[dict]) -> List[str]:
     return [str(k) for k in keys if k]
 
 
-def _reference_fact(row: Optional[dict], member: bool = False) -> Optional[dict]:
+def _reference_fact(row: Optional[dict], member: bool = False, zone: Optional[str] = None) -> Optional[dict]:
     if not row:
         return None
     domain = normalize_domain(row.get('retailer_domain'))
     if row.get('method') == 'none_by_design':
         return _drop_none({'retailer': retailer_name(domain), 'price': None, 'note': "sets no price, the brand's own site",
-                           'date': _day(row.get('observed_at'))})
+                           'date': _day(row.get('observed_at'), zone)})
     if row.get('verifiable') is False:
         return _drop_none({'retailer': retailer_name(domain), 'note': 'could not be read',
-                           'date': _day(row.get('observed_at'))})
+                           'date': _day(row.get('observed_at'), zone)})
     price = _money(row.get('member_price') if member else row.get('price'))
     if price is None:
         return None
-    return _drop_none({'retailer': retailer_name(domain), 'price': price, 'date': _day(row.get('observed_at'))})
+    return _drop_none({'retailer': retailer_name(domain), 'price': price, 'date': _day(row.get('observed_at'), zone)})
 
 
 def _claim_fact(claim: dict) -> Optional[dict]:
@@ -773,7 +772,7 @@ def answer_facts(run: dict, outcome: Optional[dict], mentions: List[dict], merch
     if not brand and expected.get('type') in ('price', 'member_price'):
         domain = normalize_domain(expected.get('attributed_to'))
         row = next((index[(domain, k)] for k in _source_keys(_json(run.get('source_ref'))) if (domain, k) in index), None)
-        reference = _reference_fact(row, member=expected.get('type') == 'member_price')
+        reference = _reference_fact(row, member=expected.get('type') == 'member_price', zone=merchant.zone)
         if reference is None and _money(expected.get('amount')):
             reference = _drop_none({'retailer': retailer_name(domain) if domain else None,
                                     'price': _money(expected.get('amount'))})
@@ -999,7 +998,7 @@ def product_facts(reference: Optional[dict], catalog_runs: List[dict], merchant:
         for row in g['rows']:
             if row.get('role') == 'own' and row.get('method') != 'none_by_design' and not _money(row.get('price')):
                 continue
-            fact = _reference_fact(row)
+            fact = _reference_fact(row, zone=merchant.zone)
             if fact and fact.get('retailer'):
                 prices[fact['retailer']] = fact
         listed = []
@@ -1099,7 +1098,7 @@ def merchant_of(conn, cycle: dict, reference: Optional[dict]) -> Merchant:
     if name and name not in terms:
         terms = [name, *terms]
     kind = (reference or {}).get('kind') or m.get('kind') or m.get('merchant_kind')
-    return Merchant(name=name, kind=kind, terms=tuple(terms))
+    return Merchant(name=name, kind=kind, terms=tuple(terms), zone=local_time.merchant_timezone(tier_config))
 
 
 def load_cycle_facts(conn, cycle_id: int) -> Dict[str, dict]:

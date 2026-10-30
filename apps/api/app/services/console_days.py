@@ -17,7 +17,7 @@ America/Los_Angeles: soa_shared.local_time). Every /truesync, /publishing,
 """
 import contextvars
 import json
-from datetime import date, datetime
+from datetime import date
 from typing import Optional
 
 from sqlalchemy import text
@@ -70,25 +70,11 @@ def use_zone_for(org_id: int, slug: Optional[str]) -> None:
 
 
 def local_day(value) -> Optional[date]:
-    """The workspace-local date of a stamp; a bare date as it is."""
-    if value in (None, ''):
-        return None
-    if isinstance(value, datetime):
-        return local_time.local_date(value, zone())
-    if isinstance(value, date):
-        return value
-    text_ = str(value).strip()
-    if len(text_) > 10 and text_[10] in 'T ':
-        day = local_time.local_date(text_.replace(' ', 'T', 1), zone())
-        if day is not None:
-            return day
-    try:
-        return date.fromisoformat(text_[:10])
-    except ValueError:
-        return None
+    """The workspace-local date of a stamp; a bare date as it is. 2V-3: the
+    rule is soa_shared.local_time.local_day, which the narrative writer uses too."""
+    return local_time.local_day(value, zone())
 
 
 def short_day(value) -> Optional[str]:
     """"Oct 27": the workspace-local day of a stamp or a date, None when there is none."""
-    d = local_day(value)
-    return f"{d.strftime('%b')} {d.day}" if d else None
+    return local_time.short_day(value, zone())
