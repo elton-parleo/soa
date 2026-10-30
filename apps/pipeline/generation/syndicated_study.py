@@ -354,10 +354,13 @@ def comparison_line(count: int, dropped: int) -> str:
     return line
 
 
-def admissible_rival(name, brand_terms: list) -> bool:
+def admissible_rival(name, brand_terms: list, store: bool = False) -> bool:
     """A rival the writer declared counts when it is a name, is not one of
     the brand's own terms (or a line of it), and is not a retailer: a store
-    is not a brand to choose against (soa_shared/retailers.py)."""
+    is not a brand to choose against (soa_shared/retailers.py).
+
+    2V-3: `store`, a retailer-pattern study, whose subject is a store: there
+    a rival store is exactly what is chosen against, and a retailer counts."""
     from soa_shared.retailers import retailers_named
     from soa_shared.expected_answers import names_brand, normalize_brand_text
     key = normalize_brand_text(name) if isinstance(name, str) else ''
@@ -365,18 +368,29 @@ def admissible_rival(name, brand_terms: list) -> bool:
         return False
     if any(key == normalize_brand_text(t) or names_brand(name, t) for t in brand_terms):
         return False
-    return not retailers_named(name)
+    return store or not retailers_named(name)
 
 
-def _passes(row: dict, terms: list, rivals: list) -> tuple:
+def store_rivals(retailer_names, rivals, terms: list) -> list:
+    """2V-3: a retailer-pattern study's rivals: the retailers the study names,
+    then the merchant's competitors, less the store itself, once each."""
+    out = []
+    for name in list(retailer_names or []) + list(rivals or []):
+        if admissible_rival(name, terms, store=True) and name not in out:
+            out.append(name)
+    return out
+
+
+def _passes(row: dict, terms: list, rivals: list, store: bool = False) -> tuple:
     """(is a comparison, the rival terms it was checked against): the
     listed rivals, plus the one the writer declared when admissible."""
     declared = row.get('rival')
-    checked = list(rivals) + ([declared] if admissible_rival(declared, terms) and declared not in rivals else [])
+    checked = list(rivals) + ([declared] if admissible_rival(declared, terms, store) and declared not in rivals
+                              else [])
     return unprompted.is_comparison(row, terms, checked), checked
 
 
-def keep_comparisons(rows: list, terms: list, rivals: list, regenerate) -> tuple:
+def keep_comparisons(rows: list, terms: list, rivals: list, regenerate, store: bool = False) -> tuple:
     """
     The comparison check (2K-1). Returns (kept rows, report).
 
@@ -395,7 +409,7 @@ def keep_comparisons(rows: list, terms: list, rivals: list, regenerate) -> tuple
     kept, failed, rivals_named = [], [], Counter()
     passed = set()
     for r in rows:
-        ok, checked = _passes(r, terms, rivals)
+        ok, checked = _passes(r, terms, rivals, store)
         if ok:
             kept.append(r)
             passed.add(id(r))
@@ -418,7 +432,7 @@ def keep_comparisons(rows: list, terms: list, rivals: list, regenerate) -> tuple
             key = normalize_query_text(row.get('query_text'))
             if len(replacements) >= len(failed) or key in seen:
                 continue
-            ok, checked = _passes(row, terms, rivals)
+            ok, checked = _passes(row, terms, rivals, store)
             if not ok:
                 continue
             seen.add(key)
@@ -505,9 +519,24 @@ def build_syndicated_study(
     control = {'brand': brand, 'product_names': product_names} if control_on and brand else None
     # 2K-1: with the control tier on and a brand to name, the Comparison
     # stage is the comparison tier: the brand and a rival
-    rivals = [r for r in (rivals or []) if admissible_rival(r, terms)] if control else []
+    #
+    # 2V-3: a retailer-pattern study (a seller: Petco) is about a store, and
+    # its comparison is a store against the others it names. Its rivals were
+    # filtered as "a store is not a brand to choose against", so the writer
+    # was told to name a rival brand, every brand a seller stocks is one of
+    # its own lines, and every comparison row was dropped (FL17: none saved,
+    # none naming Chewy, against the preview's 12).
+    store = study_pattern == 'retailer'
+    if not control:
+        rivals = []
+    elif store:
+        rivals = store_rivals(retailer_names, rivals, terms)
+    else:
+        rivals = [r for r in (rivals or []) if admissible_rival(r, terms)]
     comparison_on = bool(control and (stage_targets or {}).get(COMPARISON_STAGE))
     comparison = {'brand': brand, 'rivals': rivals} if comparison_on else None
+    if comparison and store:
+        comparison['kind'] = 'retailer'
 
     # 2L-4: the where-to-buy and cheapest-place questions (brand-direct,
     # Ready to Buy) come out of the stage counts, so the study's size is
@@ -590,7 +619,7 @@ def build_syndicated_study(
                 return fresh
 
             asked = len(compared)
-            compared, ccheck = keep_comparisons(compared, terms, rivals, regenerate_comparisons)
+            compared, ccheck = keep_comparisons(compared, terms, rivals, regenerate_comparisons, store)
             for row in compared:
                 row['tier'] = 'comparison'
                 row['provenance'] = 'ai'
