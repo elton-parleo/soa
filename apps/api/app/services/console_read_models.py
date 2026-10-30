@@ -1511,6 +1511,17 @@ def _program_agents(scored: List[dict]) -> Dict[str, dict]:
     return out
 
 
+def incentive_name(inc: dict, fallback: str = 'Program') -> str:
+    """2V-3 (Q7): an owned incentive by its program and its tier, "Petco Perks · Premier": three tiers of one
+    program read as one name three times on FL17's record and True Value. The tier is left out when the name
+    already says it ("Perks Premier")."""
+    name = inc.get('name') or inc.get('tier_name') or inc.get('code') or fallback
+    tier = str(inc.get('tier_name') or '').strip()
+    if tier and _norm_tier(tier) not in _norm_tier(name):
+        return f"{name} · {tier}"
+    return name
+
+
 def build_programs(incentives: List[dict], value_outcomes: List[dict], *, record: Optional[dict] = None) -> List[dict]:
     """
     TrueValue.programs. 2C-2a: the record's programs first (record_programs:
@@ -1533,7 +1544,7 @@ def build_programs(incentives: List[dict], value_outcomes: List[dict], *, record
         if (inc.get('code') and _norm_code(inc['code']) in have_codes) or \
                 (inc.get('tier_name') and _norm_tier(inc['tier_name']) in have_tiers):
             continue
-        programs.append({**inc, 'name': inc.get('name') or inc.get('tier_name') or inc.get('code') or (inc.get('mechanic') or 'Program'),
+        programs.append({**inc, 'name': incentive_name(inc, inc.get('mechanic') or 'Program'),
                          'terms': _program_terms(inc), 'offer_ids': [], 'source': 'owned_incentive'})
     out = []
     for prog in programs:
