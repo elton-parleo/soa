@@ -1511,6 +1511,19 @@ def _program_agents(scored: List[dict]) -> Dict[str, dict]:
     return out
 
 
+def incentive_name(inc: dict, fallback: str = 'Program', siblings: Optional[List[dict]] = None) -> str:
+    """2V-3 (Q7): an owned incentive's name, with its tier when another incentive in `siblings` has the same name
+    ("Petco Perks · Premier"): three tiers of one program read as one name three times on FL17's record and True
+    Value. A name that is alone (Wiggle & Snug's "Member Rewards"), or already says its tier ("Perks Premier"), is
+    as before."""
+    name = inc.get('name') or inc.get('tier_name') or inc.get('code') or fallback
+    tier = str(inc.get('tier_name') or '').strip()
+    if not tier or _norm_tier(tier) in (_norm_tier(name) or ''):
+        return name
+    shared = [o for o in siblings or [] if o is not inc and (o.get('name') or o.get('tier_name') or o.get('code')) == name]
+    return f"{name} · {tier}" if shared else name
+
+
 def build_programs(incentives: List[dict], value_outcomes: List[dict], *, record: Optional[dict] = None) -> List[dict]:
     """
     TrueValue.programs. 2C-2a: the record's programs first (record_programs:
@@ -1533,7 +1546,7 @@ def build_programs(incentives: List[dict], value_outcomes: List[dict], *, record
         if (inc.get('code') and _norm_code(inc['code']) in have_codes) or \
                 (inc.get('tier_name') and _norm_tier(inc['tier_name']) in have_tiers):
             continue
-        programs.append({**inc, 'name': inc.get('name') or inc.get('tier_name') or inc.get('code') or (inc.get('mechanic') or 'Program'),
+        programs.append({**inc, 'name': incentive_name(inc, inc.get('mechanic') or 'Program', incentives),
                          'terms': _program_terms(inc), 'offer_ids': [], 'source': 'owned_incentive'})
     out = []
     for prog in programs:
@@ -3905,28 +3918,41 @@ def promo_as_of(cycle: dict) -> Optional[str]:
     return (start.isoformat() if hasattr(start, 'isoformat') else str(start))[:10] if start else None
 
 
+def catalog_intent(source_ref, provenance: Optional[str], tier: Optional[str]) -> Optional[str]:
+    """2V-3 (Q6): a catalog-built where-to-buy or cheapest-place row's intent, keyed on its source (provenance
+    'catalog' and source_ref.intent), never the tier the console files it under: Petco's ten cheapest-place rows
+    were filed as brand-direct and the measure read none. A row from before provenance was stored counts as it
+    did, by its brand-direct tier."""
+    intent = (_json(source_ref) or {}).get('intent')
+    if intent not in ppt.INTENTS:
+        return None
+    return intent if provenance == 'catalog' or (provenance is None and tier == 'brand_direct') else None
+
+
 def asks_cheapest_place(conn, cycle: dict) -> bool:
-    """2M-2: whether the cycle's study has a cheapest-place question."""
+    """2M-2: whether the cycle's study has a cheapest-place question (2V-3: a catalog-built one, by its source)."""
     if not cycle.get('study_type'):
         return False
-    refs = conn.execute(text("SELECT source_ref FROM soa_queries WHERE study_type = :st AND tier = 'brand_direct'"),
-                        {'st': cycle['study_type']}).scalars()
-    return any((_json(r) or {}).get('intent') == ppt.CHEAPEST_PLACE for r in refs)
+    rows = conn.execute(text("SELECT source_ref, provenance, tier FROM soa_queries WHERE study_type = :st"),
+                        {'st': cycle['study_type']}).fetchall()
+    return any(catalog_intent(r[0], r[1], r[2]) == ppt.CHEAPEST_PLACE for r in rows)
 
 
 def promo_answers(conn, cycle: dict) -> List[dict]:
     """Every answered run of the cycle's cheapest-place and where-to-buy
-    questions: {run_id, platform, surface, intent, source_ref, text, query}."""
+    questions: {run_id, platform, surface, intent, source_ref, text, query}.
+    2V-3: the catalog-built ones, by their source (catalog_intent)."""
     rows = conn.execute(text("""
-        SELECT r.id, r.platform, r.surface, r.answer_status, r.raw_response, q.query_text, q.source_ref
+        SELECT r.id, r.platform, r.surface, r.answer_status, r.raw_response, q.query_text, q.source_ref,
+               q.provenance, q.tier
         FROM soa_runs r JOIN soa_queries q ON q.id = r.query_id
-        WHERE r.cycle_id = :c AND q.tier = 'brand_direct'
+        WHERE r.cycle_id = :c
         ORDER BY r.id
     """), {'c': cycle['id']}).mappings().all()
     out = []
     for r in rows:
         ref = _json(r['source_ref']) or {}
-        if ref.get('intent') not in ppt.INTENTS:
+        if catalog_intent(ref, r['provenance'], r['tier']) is None:
             continue
         if (r['answer_status'] or surfaces.ANSWERED) != surfaces.ANSWERED or not (r['raw_response'] or '').strip():
             continue

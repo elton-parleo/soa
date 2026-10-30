@@ -325,7 +325,7 @@ async def brand_overview(scope: CustomerScope, ms: MerchantScope, merchant: str,
     fact and the quotes collapsed. Every count from a tile's or a block's own
     helper: the score's tiles (/score's read), TrueSync's workspace
     (release_view), the revenue model's pools."""
-    from app.routers.console import _revenue_model, _score
+    from app.routers.console import _is_seller_external, _revenue_model, _score
     from app.services import console_brand_overview as bo
     from app.services import console_revenue as revenue_svc
 
@@ -382,12 +382,16 @@ async def brand_overview(scope: CustomerScope, ms: MerchantScope, merchant: str,
            bo.deal_signal(promo, manu.short_day((promo or {}).get('read_date') or (promo or {}).get('as_of')))]
     values = bo.pool_values(model)
     agent_of_run = {r['run_id']: surfaces.agent_of(r.get('platform')) or r.get('platform') for r in rows}
+    seller = _is_seller_external(ms, merchant)
     for s, block in (body.get('by_surface') or {}).items():
         block['signals'] = bo.rank_signals(block.get('signals') or [], new if s == surfaces.ALL else [], values)
         block['agents'] = bo.extend_agents(block.get('agents') or [], attribute_answers=attribute_answers, promo=promo,
                                            agent_of_run=agent_of_run, surface=s)
         block['products'] = bo.extend_products(block.get('products') or [], attribute_answers=attribute_answers,
                                                deals=deals, true_value=true_value, surface=s, signals=block['signals'])
+        if seller:
+            # 2V-3 (Q5): a seller's rows are named as its Product record names them; a brand's are unchanged
+            block['products'] = bo.name_products(block['products'], feed_rows)
     every = (body.get('by_surface') or {}).get(surfaces.ALL) or {}
     ranked = every.get('signals') or []
     product_brand = _brand(catalog) or brand

@@ -856,21 +856,37 @@ def _build_general_prompt(
     if comparison and comparison.get('brand') and stage_counts.get(COMPARISON_STAGE):
         brand = comparison['brand']
         rivals = [r for r in comparison.get('rivals') or [] if r][:MAX_COMPARISON_RIVALS]
-        rival_text = (f"Name at least one of these rivals, spread across them: {', '.join(rivals)}. "
-                      f"If one of them does not fit a question, another well-known rival brand in the "
-                      f"category may be named instead." if rivals else
-                      "Name at least one well-known rival brand in the category, a real brand a shopper "
-                      "would weigh against it (never a retailer or a store brand).")
-        comparison_text = (
-            f"\n\nEXCEPT the {COMPARISON_STAGE!r} stage. Those questions are the study's COMPARISON "
-            f"questions, and neither the no-brand rule nor the product-ask rule above applies to them: "
-            f"each must name {brand}, "
-            f"spelled exactly that way, AND at least one rival brand, and ask which to choose, the way "
-            f"a shopper weighing them types it (\"{brand} vs <rival> for a newborn\", \"{brand} or "
-            f"<rival> for overnight leaks?\"). {rival_text} A {COMPARISON_STAGE!r} question that does "
-            f"not name both {brand} and a rival will be discarded. For each {COMPARISON_STAGE!r} "
-            f"question also give `rival`: the rival brand it names, exactly as written in the question."
-        )
+        if comparison.get('kind') == 'retailer':
+            # 2V-3: a retailer-pattern study's subject is a store, compared
+            # with the other stores it names, never with a brand.
+            rival_text = (f"Name at least one of these stores, spread across them: {', '.join(rivals)}. "
+                          if rivals else "Name at least one other store a shopper would buy from instead. ")
+            comparison_text = (
+                f"\n\nEXCEPT the {COMPARISON_STAGE!r} stage. Those questions are the study's COMPARISON "
+                f"questions, and neither the no-brand rule nor the product-ask rule above applies to them: "
+                f"each must name the store {brand}, spelled exactly that way, AND at least one rival store, "
+                f"and ask which store to buy from, the way a shopper weighing them types it (\"{brand} or "
+                f"<store> for dog food?\", \"is <store> cheaper than {brand} for cat litter?\"). {rival_text}"
+                f"Alternate which store is named first. A {COMPARISON_STAGE!r} question that does not name "
+                f"both {brand} and a rival store will be discarded. For each {COMPARISON_STAGE!r} question "
+                f"also give `rival`: the rival store it names, exactly as written in the question."
+            )
+        else:
+            rival_text = (f"Name at least one of these rivals, spread across them: {', '.join(rivals)}. "
+                          f"If one of them does not fit a question, another well-known rival brand in the "
+                          f"category may be named instead." if rivals else
+                          "Name at least one well-known rival brand in the category, a real brand a shopper "
+                          "would weigh against it (never a retailer or a store brand).")
+            comparison_text = (
+                f"\n\nEXCEPT the {COMPARISON_STAGE!r} stage. Those questions are the study's COMPARISON "
+                f"questions, and neither the no-brand rule nor the product-ask rule above applies to them: "
+                f"each must name {brand}, "
+                f"spelled exactly that way, AND at least one rival brand, and ask which to choose, the way "
+                f"a shopper weighing them types it (\"{brand} vs <rival> for a newborn\", \"{brand} or "
+                f"<rival> for overnight leaks?\"). {rival_text} A {COMPARISON_STAGE!r} question that does "
+                f"not name both {brand} and a rival will be discarded. For each {COMPARISON_STAGE!r} "
+                f"question also give `rival`: the rival brand it names, exactly as written in the question."
+            )
         response_keys += ", rival (Comparison stage only)"
 
     return f"""Generate exactly {total} distinct search-style questions for a brand/market research study called "{study_name}".
@@ -1050,6 +1066,15 @@ def generate_general_queries(
         offset = prompt_calls['n'] % len(names)
         return names[offset:] + names[:offset]
 
+    def _rotated_comparison():
+        """2V-3: the comparison's rivals, rotated as the retailer names are,
+        so a study's head-to-heads do not all lead with the first rival."""
+        rivals = list(comparison.get('rivals') or [])
+        if not rivals or not rotate_named_retailer:
+            return comparison
+        offset = prompt_calls['n'] % len(rivals)
+        return {**comparison, 'rivals': rivals[offset:] + rivals[:offset]}
+
     def _build(shortfall, accepted_rows):
         # The avoid-list is the FULL keep-list, not just what this
         # helper pass has bucketed. A replacement round opens a fresh
@@ -1070,7 +1095,7 @@ def generate_general_queries(
             catalog_context=catalog_context,
             brand_direct=require_brand,
             category_control=category_control,
-            **({'comparison': comparison} if comparison else {}),
+            **({'comparison': _rotated_comparison()} if comparison else {}),
         )
         prompt_calls['n'] += 1
         return prompt

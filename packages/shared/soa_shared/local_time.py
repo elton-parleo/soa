@@ -83,3 +83,31 @@ def local_iso(value, tz: Optional[str] = None) -> Optional[str]:
     its offset (2026-10-19T21:26:00-07:00)."""
     moment = local_datetime(value, tz)
     return moment.isoformat() if moment else None
+
+
+def local_day(value, tz: Optional[str] = None) -> Optional[date]:
+    """2V-3: the local date of a stamp (a value with a time) in `tz`, else
+    the default zone; a bare date ("2026-10-24", a read day) has no time to
+    convert and reads as it is. The one day rule of the console's labels
+    (2U-5, apps/api/app/services/console_days.py) and the narrative lines."""
+    if value in (None, ''):
+        return None
+    if isinstance(value, datetime):
+        return local_date(value, tz)
+    if isinstance(value, date):
+        return value
+    text_ = str(value).strip()
+    if len(text_) > 10 and text_[10] in 'T ':
+        day = local_date(text_.replace(' ', 'T', 1), tz)
+        if day is not None:
+            return day
+    try:
+        return date.fromisoformat(text_[:10])
+    except ValueError:
+        return None
+
+
+def short_day(value, tz: Optional[str] = None) -> Optional[str]:
+    """"Oct 29": local_day as the labels write it, None when there is none."""
+    d = local_day(value, tz)
+    return f"{d.strftime('%b')} {d.day}" if d else None

@@ -126,7 +126,7 @@ from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 from sqlalchemy import inspect, text
 
 from soa_shared import attribute_accuracy, claim_kinds, per_unit, promo_pass_through, surfaces
-from soa_shared import severity, unprompted
+from soa_shared import local_time, severity, unprompted
 from soa_shared.expected_answers import UNVERIFIED, normalize_domain, normalize_money
 from soa_shared.retailers import KNOWN_RETAILERS, RETAILER_NAMES, retailer_name, retailers_named
 
@@ -489,15 +489,12 @@ def _money(value) -> Optional[str]:
     return None if m in (None, '0.00') else m
 
 
-def _day(value) -> Optional[str]:
-    """'2026-10-19T14:00:00+00:00' -> 'Oct 19'."""
-    if not value:
-        return None
-    try:
-        d = datetime.fromisoformat(str(value).replace('Z', '+00:00'))
-    except ValueError:
-        return None
-    return f"{d.strftime('%b')} {d.day}"
+def _day(value, zone: Optional[str] = None) -> Optional[str]:
+    """'2026-10-30T02:00:00+00:00' -> 'Oct 29' in Los Angeles. 2V-3: the
+    read's day in the workspace's timezone (the study's, else the default),
+    by the console's own rule (local_time.short_day), never its UTC date:
+    FL17 wrote "Petco charged $28.99 on Oct 30" for an Oct 29 PDT read."""
+    return local_time.short_day(value, zone) if value else None
 
 
 def _gtin14(value) -> Optional[str]:
@@ -523,6 +520,8 @@ class Merchant:
     name: Optional[str]
     kind: Optional[str]
     terms: Tuple[str, ...]
+    #: 2V-3: the workspace's timezone, the day a read's date is written in
+    zone: Optional[str] = None
 
     def facts(self) -> dict:
         """{'brand': name} or {'store': name}: the facts name it by what it
@@ -550,20 +549,20 @@ def _source_keys(source_ref: Optional[dict]) -> List[str]:
     return [str(k) for k in keys if k]
 
 
-def _reference_fact(row: Optional[dict], member: bool = False) -> Optional[dict]:
+def _reference_fact(row: Optional[dict], member: bool = False, zone: Optional[str] = None) -> Optional[dict]:
     if not row:
         return None
     domain = normalize_domain(row.get('retailer_domain'))
     if row.get('method') == 'none_by_design':
         return _drop_none({'retailer': retailer_name(domain), 'price': None, 'note': "sets no price, the brand's own site",
-                           'date': _day(row.get('observed_at'))})
+                           'date': _day(row.get('observed_at'), zone)})
     if row.get('verifiable') is False:
         return _drop_none({'retailer': retailer_name(domain), 'note': 'could not be read',
-                           'date': _day(row.get('observed_at'))})
+                           'date': _day(row.get('observed_at'), zone)})
     price = _money(row.get('member_price') if member else row.get('price'))
     if price is None:
         return None
-    return _drop_none({'retailer': retailer_name(domain), 'price': price, 'date': _day(row.get('observed_at'))})
+    return _drop_none({'retailer': retailer_name(domain), 'price': price, 'date': _day(row.get('observed_at'), zone)})
 
 
 def _claim_fact(claim: dict) -> Optional[dict]:
@@ -748,8 +747,9 @@ def answer_facts(run: dict, outcome: Optional[dict], mentions: List[dict], merch
     the cycle's brand truths (attribute_accuracy.truth_index)."""
     if run.get('answer_status') not in (None, surfaces.ANSWERED):
         return None
-    named = [m['name'] for m in sorted(mentions, key=lambda m: m.get('position') or 99)]
-    first = next((m['name'] for m in mentions if m.get('position') == 1), None)
+    # 2V-3 (Q4): an entity with no name is no name to write ("then <brand>")
+    named = [m['name'] for m in sorted(mentions, key=lambda m: m.get('position') or 99) if str(m.get('name') or '').strip()]
+    first = next((m['name'] for m in mentions if m.get('position') == 1 and str(m.get('name') or '').strip()), None)
     brand_choice = unprompted.is_brand_choice(run, merchant.terms)
     ref = _json(run.get('source_ref')) or {}
     attribute = attribute_accuracy.answer_attribute(ref, _json((outcome or {}).get('extraction')),
@@ -773,7 +773,7 @@ def answer_facts(run: dict, outcome: Optional[dict], mentions: List[dict], merch
     if not brand and expected.get('type') in ('price', 'member_price'):
         domain = normalize_domain(expected.get('attributed_to'))
         row = next((index[(domain, k)] for k in _source_keys(_json(run.get('source_ref'))) if (domain, k) in index), None)
-        reference = _reference_fact(row, member=expected.get('type') == 'member_price')
+        reference = _reference_fact(row, member=expected.get('type') == 'member_price', zone=merchant.zone)
         if reference is None and _money(expected.get('amount')):
             reference = _drop_none({'retailer': retailer_name(domain) if domain else None,
                                     'price': _money(expected.get('amount'))})
@@ -953,6 +953,26 @@ def walled_retailers(quotes: List[dict]) -> List[str]:
     return sorted(r for r, qs in by.items() if all(q['verdict'] == 'unverifiable' for q in qs))
 
 
+_ASKED = re.compile(r"^What does the (?P<product>.+?) cost(?: at .+)?\?$")
+
+
+def question_product(query_text: Optional[str]) -> Optional[str]:
+    """'What does the NexGard Chewables for Dogs, 1 ct cost at Petco?' ->
+    'NexGard Chewables for Dogs, 1 ct'. The catalog tier's wording is fixed
+    (soa_shared/catalog_tiers.py), so this is a parse, not a guess."""
+    m = _ASKED.match(str(query_text or '').strip())
+    return m.group('product').strip() if m else None
+
+
+def product_label(asked: Optional[str], variant_label: Optional[str]) -> Optional[str]:
+    """2V-3 (Q4): a product row's name: the record's variant label, else the
+    product as its catalog question named it; never the row's key (FL17
+    wrote "product:feed_sku:78" for the GTIN-less NexGard row, which has no
+    label). A row with a label keeps it, so its facts (and digest) do not move."""
+    label = str(variant_label or '').strip()
+    return label or asked or None
+
+
 def product_facts(reference: Optional[dict], catalog_runs: List[dict], merchant: Merchant) -> Dict[str, dict]:
     """{product key: facts} for each variant in the cycle's cached
     retailer-prices that a catalog question asked about. The key is True
@@ -964,17 +984,20 @@ def product_facts(reference: Optional[dict], catalog_runs: List[dict], merchant:
         key = _gtin14(row.get('gtin')) or row.get('variant_ref')
         if not key:
             continue
-        g = groups.setdefault(key, {'label': row.get('variant_label') or key, 'rows': [], 'aliases': []})
+        g = groups.setdefault(key, {'label': row.get('variant_label'), 'rows': [], 'aliases': []})
         g['rows'].append(row)
         for a in _ref_keys(row):
             if a not in g['aliases']:
                 g['aliases'].append(a)
             alias.setdefault(a, key)
     quotes: Dict[str, List[dict]] = {}
+    named_as: Dict[str, str] = {}
     for run in catalog_runs:
         key = next((alias[k] for k in _source_keys(_json(run.get('source_ref'))) if k in alias), None)
         if key is None or run.get('outcome') is None:
             continue
+        if key not in named_as and question_product(run.get('query_text')):
+            named_as[key] = question_product(run.get('query_text'))
         expected = _json(run.get('expected_answer')) or {}
         claims = [c for c in _json(run.get('claim_results')) or [] if isinstance(c, dict)]
         asked = next((c for c in claims if c.get('target', 'asked') == 'asked' and _money(c.get('stated'))), None)
@@ -999,7 +1022,7 @@ def product_facts(reference: Optional[dict], catalog_runs: List[dict], merchant:
         for row in g['rows']:
             if row.get('role') == 'own' and row.get('method') != 'none_by_design' and not _money(row.get('price')):
                 continue
-            fact = _reference_fact(row)
+            fact = _reference_fact(row, zone=merchant.zone)
             if fact and fact.get('retailer'):
                 prices[fact['retailer']] = fact
         listed = []
@@ -1015,7 +1038,7 @@ def product_facts(reference: Optional[dict], catalog_runs: List[dict], merchant:
         issue, direction = issue_sentence(qs, agents, prices)
         out[key] = _drop_none({
             'kind': PRODUCT,
-            'product': g['label'],
+            'product': product_label(named_as.get(key), g['label']),
             **merchant.facts(),
             'gtin': _gtin14(row0.get('gtin')),
             'sku': row0.get('sku') or row0.get('variant_ref'),
@@ -1099,7 +1122,7 @@ def merchant_of(conn, cycle: dict, reference: Optional[dict]) -> Merchant:
     if name and name not in terms:
         terms = [name, *terms]
     kind = (reference or {}).get('kind') or m.get('kind') or m.get('merchant_kind')
-    return Merchant(name=name, kind=kind, terms=tuple(terms))
+    return Merchant(name=name, kind=kind, terms=tuple(terms), zone=local_time.merchant_timezone(tier_config))
 
 
 def load_cycle_facts(conn, cycle_id: int) -> Dict[str, dict]:
@@ -1616,6 +1639,10 @@ def normalise(line: str, facts: dict) -> str:
         run = m.group(0).strip('.,:;!?()"')
         return _DASH.sub('-', m.group(0)) if run and run in known else m.group(0)
     line = _DASHED_RUN.sub(held, line)
+    # 2V-3 (Q4): "... but Petco is the store" says whose record it is
+    store = str(facts.get('store') or '').strip()
+    if store:
+        line = re.sub(r"\b" + re.escape(store) + r"\s+is\s+the\s+store\b", f"the record is {store}'s", line)
     # 2O-1 (B3): one store is the place to buy it, not places
     if len(facts.get('named_stores') or []) == 1:
         line = _PLACES.sub('as the place to buy it', line)
@@ -1815,6 +1842,85 @@ def off_issue(line: str, facts: dict, named: List[str]) -> bool:
     return bool(wrong) and not wrong & set(named)
 
 
+#: 2V-3 (Q2): what the facts hold that an agent said, the scorer noted or a
+#: product row's issue sums up: everything else is the record's and the pages'.
+AGENT_SAID_KEYS = ('agent_quoted', 'answer_spans', 'quotes', 'flags', 'sent_to', 'first pick',
+                   'named in order', 'named_stores', 'scorer_note', 'issue', 'gave_no_price',
+                   'priced_another_brand', 'claim_facts')
+#: a clause that says what the record or a page states
+_RECORD_CUE = re.compile(r"\b(?:records?|pages?|listings?|catalog|feed)\b", re.I)
+_CLAUSE_SPLIT = re.compile(r"(?<=[.!?])\s+|,\s+and\s+|,?\s+\b(?:but|while|whereas|although|though)\b\s+", re.I)
+_SIZE = re.compile(r"(\d+(?:\.\d+)?)\s*-?\s*(lbs?|pounds?|oz|ounces?|ct|count|pk|packs?|kg|ml)\b", re.I)
+_UNIT = {'lbs': 'lb', 'pound': 'lb', 'pounds': 'lb', 'ounce': 'oz', 'ounces': 'oz', 'count': 'ct',
+         'pack': 'pk', 'packs': 'pk'}
+_PROGRAM = re.compile(r"\b((?:[A-Z][\w&'\u2019+]*\s+)+(?:Perks|Rewards|Club|Insider|Plus|Pass|Care|Membership"
+                      r"|Program|Autoship|Delivery))\b")
+
+
+def record_facts(facts: dict) -> dict:
+    """The facts less what an agent said (AGENT_SAID_KEYS)."""
+    return {k: v for k, v in facts.items() if k not in AGENT_SAID_KEYS}
+
+
+def _sizes(text_: str) -> set:
+    out = set()
+    for m in _SIZE.finditer(text_ or ''):
+        unit = m.group(2).lower()
+        out.add((normalize_money(m.group(1)) or m.group(1), _UNIT.get(unit, unit)))
+    return out
+
+
+def record_fact_check(line: str, facts: dict) -> Optional[str]:
+    """
+    2V-3 (Q2): a size, count, price or program the line gives the record or
+    a page must be one the record holds, not one an agent said. FL17: "Gemini
+    said Walmart offers Purina ONE ... in 40 lb bags. Petco's record pages
+    show 40 lb." (the record is 31.1 lb). A clause naming an agent is the
+    agent's claim and is checked elsewhere. The first failure, or None.
+    """
+    record = record_facts(facts)
+    known = facts_text(record)
+    known_lower = known.lower().replace('\u2019', "'")
+    sizes = _sizes(known)
+    amounts = _amounts(record)
+    for clause in _CLAUSE_SPLIT.split(line):
+        if not clause or not _RECORD_CUE.search(clause) or _agents_in(clause):
+            continue
+        for m in _SIZE.finditer(clause):
+            unit = m.group(2).lower()
+            if (normalize_money(m.group(1)) or m.group(1), _UNIT.get(unit, unit)) not in sizes:
+                return f'record_fact_not_in_digest:{m.group(0)}'
+        for m in _AMOUNT.finditer(clause):
+            if normalize_money(m.group(1).replace(',', '')) not in amounts:
+                return f'record_fact_not_in_digest:${m.group(1)}'
+        for m in _PROGRAM.finditer(clause):
+            if m.group(1).lower().replace('\u2019', "'") not in known_lower:
+                return f'record_fact_not_in_digest:{m.group(1)}'
+    return None
+
+
+#: 2V-3 (Q4): a template slot the writer left in, or a name it left empty
+_PLACEHOLDER = re.compile(r"<[^<>]*>|\{[^{}]*\}|\[(?:brand|store|retailer|product|name)\]", re.I)
+_EMPTY_NAME = re.compile(r"\"\s*\"|''|\(\s*\)|\b(?:then|picked|named|chose|over|and|or)\s+[,.;!?]", re.I)
+#: a subject key the facts carry for joining, never for a reader
+_SUBJECT_KEY = re.compile(r"\b(?:feed_sku|sku|product|answer):\S+|\bfeed_sku\b", re.I)
+
+
+def placeholder_check(line: str) -> Optional[str]:
+    """2V-3 (Q4): "Perplexity first picked Costco, then <brand>." is never
+    written: a literal slot, an empty name, or a subject key ("feed_sku:78")."""
+    m = _PLACEHOLDER.search(line)
+    if m:
+        return f'placeholder:{m.group(0)}'
+    m = _EMPTY_NAME.search(line)
+    if m:
+        return f'empty_name:{m.group(0).strip()}'
+    m = _SUBJECT_KEY.search(line)
+    if m:
+        return f'subject_key:{m.group(0)}'
+    return None
+
+
 def check(line: Optional[str], facts: dict) -> Optional[str]:
     """None when the line passes every check, else the first failure."""
     if line is None or not str(line).strip():
@@ -1822,6 +1928,9 @@ def check(line: Optional[str], facts: dict) -> Optional[str]:
     line = normalise(str(line).strip(), facts)
     if len(line) > max_chars(facts):
         return f'too_long:{len(line)}'
+    slot = placeholder_check(line)
+    if slot:
+        return slot
     scrubbed = line
     for agent in AGENT_WORDS:
         scrubbed = scrubbed.replace(agent, ' ')
@@ -1873,6 +1982,9 @@ def check(line: Optional[str], facts: dict) -> Optional[str]:
     unpaired = _unpaired_amount(line, facts)
     if unpaired:
         return f'unpaired_amount:${unpaired}'
+    recorded = record_fact_check(line, facts)
+    if recorded:
+        return recorded
     misread = _who_said_what(line, facts)
     if misread:
         return f'who_said_what:{misread}'

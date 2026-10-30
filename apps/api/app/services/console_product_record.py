@@ -304,6 +304,23 @@ def sku_chart(prices: Optional[List[dict]], v: dict, *, charts: Optional[Dict[st
     return rel.record_chart(prices, [v], own_domains=own_domains, brand=brand)
 
 
+def label_without_name(label: Optional[str], name: Optional[str]) -> str:
+    """A feed label without the product name it leads with ("Pampers Swaddlers, Newborn, 84 ct" -> "Newborn, 84 ct")."""
+    label, name = str(label or '').strip(), str(name or '').strip()
+    if name and label.lower().startswith(name.lower()):
+        return label[len(name):].lstrip(' ,-·').strip()
+    return label
+
+
+def record_name(name: Optional[str], label: Optional[str]) -> str:
+    """2V-3 (Q5): a SKU named as the record names it, its product name and its variant label: "Purina Pro Plan
+    Sensitive Skin & Stomach, 30 lb". The label alone ("30 lb") when there is no name; the name alone when the
+    label adds nothing."""
+    name = str(name or '').strip()
+    words = label_without_name(label, name)
+    return ', '.join(w for w in (name, words) if w) or str(label or '')
+
+
 def record_sub(v: dict, chart) -> str:
     """The subtitle under the record's title (its product name): the variant's words without the name again. 2T-11
     (B2): a feed label that leads with the product name ("Pampers Swaddlers, Newborn, 84 ct") read "Pampers
@@ -311,7 +328,7 @@ def record_sub(v: dict, chart) -> str:
     from app.services import console_release as rel
     label, name = str(v.get('label') or ''), str(v.get('product_name') or '').strip()
     if name and label.lower().startswith(name.lower()):
-        v = {**v, 'label': label[len(name):].lstrip(' ,-·').strip()}
+        v = {**v, 'label': label_without_name(label, name)}
     return rel._variant_words(v, chart)
 
 

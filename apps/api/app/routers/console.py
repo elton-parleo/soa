@@ -1559,7 +1559,9 @@ async def get_revenue(cycle: str = Query(...), merchant: Optional[str] = Query(N
         raise HTTPException(status_code=422, detail="no merchant: name one with ?merchant=")
     row = dict(cycle_in_scope(cycle, scope))
     errors, requests = {}, None
-    _, payload, error = await full_loop._client(scope).get_access(ms.slug)
+    # 2V-3 (Q9): the access read the Overview just kept (console_cache.reads), not a second supply call. The raw
+    # client missed the cache on every load, and on a cold one the revenue model waited on supply's /access again.
+    _, payload, error = await _reads(scope).get_access(ms.slug)
     if error is None:
         requests = [{**r, 'measured': parity._measured(r)} for r in (rm.accessibility_from_supply(payload).get('requests') or [])]
     else:

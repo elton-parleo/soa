@@ -74,16 +74,17 @@ def cycle_answers(cycle: Optional[dict]) -> tuple:
         return [], []
     with _engine().connect() as conn:
         rows = conn.execute(text("""
-            SELECT r.id, r.platform, r.raw_response, r.answer_status, q.source_ref FROM soa_runs r
-            JOIN soa_queries q ON q.id = r.query_id WHERE r.cycle_id = :c ORDER BY r.id
+            SELECT r.id, r.platform, r.raw_response, r.answer_status, q.source_ref, q.provenance, q.tier
+            FROM soa_runs r JOIN soa_queries q ON q.id = r.query_id WHERE r.cycle_id = :c ORDER BY r.id
         """), {'c': cycle['id']}).mappings().all()
     answers = []
     for r in rows:
         if (r['answer_status'] or 'answered') != 'answered':
             continue
-        ref = rm._json(r['source_ref']) or {}
+        # 2V-3 (Q6): a where-to-buy or cheapest-place answer by its row's source, never its tier label
         answers.append({'run_id': r['id'], 'agent': surface_names.agent_of(r['platform']) or r['platform'],
-                        'intent': ref.get('intent'), 'text': r['raw_response'] or ''})
+                        'intent': rm.catalog_intent(r['source_ref'], r['provenance'], r['tier']),
+                        'text': r['raw_response'] or ''})
     return answers, [a for a in answers if a['intent'] in rm.VALUE_INTENTS]
 
 
@@ -210,8 +211,10 @@ async def prove(scope: CustomerScope, ms: MerchantScope, merchant: str, cycle: O
     reads = await seller_reads(scope, merchant)
     answers, _price = cycle_answers(cycle)
     body = cs.build_funded_offers(paths=reads['paths'], answers=answers, name=_name(ms, merchant))
+    passed = cs.funded_pass_through(paths=reads['paths'], answers=answers)
     return {'merchant': merchant, 'mode': cs.SELLER_EXTERNAL, 'state': 'measured' if cycle else 'not_measured',
-            **body, 'cycle': (cycle or {}).get('cycle_code'), 'read_errors': reads['errors']}
+            **body, **({'promo_pass_through': passed} if passed else {}),
+            'cycle': (cycle or {}).get('cycle_code'), 'read_errors': reads['errors']}
 
 
 async def record_list(scope: CustomerScope, ms: MerchantScope, merchant: str) -> dict:

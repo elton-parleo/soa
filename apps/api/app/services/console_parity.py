@@ -1487,7 +1487,7 @@ def offer_fields(record: dict, *, owned: Optional[List[dict]], reference_rows: L
         scope = {rm._gtin14(g) for g in inc.get('applies_to_gtins') or []}
         if scope and not (scope & gtins):
             continue
-        name = inc.get('name') or inc.get('tier_name') or inc.get('code') or MECHANIC_WORDS.get(inc.get('mechanic'), 'Incentive')
+        name = rm.incentive_name(inc, MECHANIC_WORDS.get(inc.get('mechanic'), 'Incentive'), owned)
         out.append(rm.compact({'k': f"Incentive · {name}", 'v': rm._program_terms(inc), 'prov': prov,
                                'note': ' · '.join(x for x in (MECHANIC_WORDS.get(inc.get('mechanic'), (inc.get('mechanic') or '').replace('_', ' ')),
                                                               f"ends {str(inc['valid_until'])[:10]}" if inc.get('valid_until') else 'no end date') if x),
