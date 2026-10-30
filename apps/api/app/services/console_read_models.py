@@ -736,7 +736,7 @@ def _ordered_surfaces(keys) -> List[str]:
     return [s for s in surfaces.SURFACE_KINDS if s in keys] + sorted(k for k in keys if k not in surfaces.SURFACE_KINDS)
 
 
-def build_answers_summary(rows: List[dict], *, cycle_code: str) -> dict:
+def build_answers_summary(rows: List[dict], *, cycle_code: str, catalog_in_tier: bool = False) -> dict:
     """
     /api/console/answers/summary: per tier and per surface, every outcome
     counted, `unverifiable` on its own, and `answered_with_other_brand` (an
@@ -759,6 +759,13 @@ def build_answers_summary(rows: List[dict], *, cycle_code: str) -> dict:
     (`intent`, claim_kinds.catalog_intent) carry their own verdict and are
     outside those counts; each cell says how many there were (`catalog_built`,
     present when the study asked one).
+
+    2V-5 (W2): `catalog_in_tier` (an external seller's read) counts those
+    answers in brand-direct's Answers too, as Visibility's "By tier" does, so
+    the five tier rows sum to the cycle's answers: `runs` and `answered` take
+    them, `counts` and `scored` stay the AI-written questions' verdicts, and
+    `catalog_built` says how many of the answers they are. A brand's read is
+    unchanged.
     """
     by_tier: Dict[str, List[dict]] = {}
     catalog_built: List[dict] = []
@@ -791,6 +798,17 @@ def build_answers_summary(rows: List[dict], *, cycle_code: str) -> dict:
         'tiers': [{'tier': t, 'label': TIER_LABELS.get(t, t), 'surfaces': per_surface(by_tier[t])}
                   for t in tier_order],
     }
+    if catalog_in_tier and catalog_built:
+        # 2V-5 (W2): the tier's cells over every brand-direct answer, their verdicts over the AI-written ones
+        ai = {c['surface']: c for c in per_surface(by_tier.get('brand_direct') or [])}
+        cells = []
+        for cell in per_surface((by_tier.get('brand_direct') or []) + catalog_built):
+            judged = ai.get(cell['surface']) or {**_summary_cell([]), 'surface': cell['surface'], 'label': cell['label']}
+            cells.append({**judged, 'runs': cell['runs'], 'answered': cell['answered']})
+        tier = {'tier': 'brand_direct', 'label': TIER_LABELS['brand_direct'], 'surfaces': cells}
+        known = list(TIER_LABELS)
+        body['tiers'] = sorted([t for t in body['tiers'] if t['tier'] != 'brand_direct'] + [tier],
+                               key=lambda t: known.index(t['tier']) if t['tier'] in known else len(known))
     for t in body['tiers'] if catalog_built else []:   # absent on a study with none, as before
         if t['tier'] == 'brand_direct':
             for cell in t['surfaces']:
@@ -799,7 +817,7 @@ def build_answers_summary(rows: List[dict], *, cycle_code: str) -> dict:
     return body
 
 
-def load_answers_summary(conn, cycle: dict) -> dict:
+def load_answers_summary(conn, cycle: dict, *, catalog_in_tier: bool = False) -> dict:
     rows = [dict(r) for r in conn.execute(text("""
         SELECT r.id AS run_id, r.platform, COALESCE(r.surface, o.surface) AS surface,
                r.answer_status, q.tier, q.source_ref, o.outcome, o.reason_code, o.flags
@@ -810,7 +828,8 @@ def load_answers_summary(conn, cycle: dict) -> dict:
     for r in rows:   # 2N-1
         r['intent'] = claim_kinds.catalog_intent(_json(r.pop('source_ref')))
     unpriced = brand_sets_no_price_runs(conn, cycle)
-    return build_answers_summary([not_priced(r, unpriced) for r in rows], cycle_code=cycle['cycle_code'])
+    return build_answers_summary([not_priced(r, unpriced) for r in rows], cycle_code=cycle['cycle_code'],
+                                 catalog_in_tier=catalog_in_tier)
 
 
 # ─── TrueValue ─────────────────────────────────────────────────────────────

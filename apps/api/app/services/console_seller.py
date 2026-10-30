@@ -84,6 +84,23 @@ SELLER_TEMPLATES = {
     'tv.ladder.title': "{funder_s} {program} ladder at {name}",
     'tv.ladder.sub': '{product}. Funded by {funder}{ends}.',
     'tv.ladder.note': 'Agents that quoted a step on the ladder: {k} of {n}.',
+    # 2V-5 (V3): a price path no brand funds
+    'tv.ladder.title.open': '{program} prices at {name}',
+    'tv.ladder.sub.open': '{product}. Funder not stated{ends}.',
+    # 2V-5 (V1, V2, V4): a program entry's line (program_text)
+    'program.scope.all': 'all SKUs',
+    'program.tier': 'tier {tier}',
+    'program.points': '{points} points',
+    'program.multiplier': '{x}x points',
+    'program.former': 'formerly {names}',
+    'program.member': '{tier} members {off}',
+    'program.rx': 'Rx excluded{orders}',
+    'program.funded': 'funded by {funder}',
+    'program.funded.none': 'funder not stated',
+    'program.stacks': 'combines with {names}',
+    'program.stacks.none': 'not combinable with other offers',
+    'program.ends': 'ends {day}',
+    'program.ends.none': 'no end date',
     'tv.receipt.title': 'What a first {program} order costs',
     'tv.program.terms': '{terms}',
     'prove.title': 'Funded offers',
@@ -372,6 +389,26 @@ def says_former(answer: dict, former: Iterable[str]) -> List[str]:
     return [n for n in former if n and n.casefold() in text]
 
 
+def subject_keys(source_ref: Optional[dict]) -> List[str]:
+    """2V-5 (W4): the product a question is coded to, by its source: the variant id, SKU, variant ref and GTIN its
+    source_ref carries, each also as GTIN-14. None for a question coded to no one product (a comparison)."""
+    from app.services import console_read_models as rm
+    ref = source_ref if isinstance(source_ref, dict) else {}
+    raw = [ref.get(k) for k in ('variant_id', 'sku', 'variant_ref', 'gtin')]
+    return sorted({str(k) for k in raw + [rm._gtin14(ref.get('gtin'))] if k})
+
+
+def coded_to(answer: dict, row: dict) -> bool:
+    """2V-5 (W4): an answer whose question is coded to this SKU (subject_keys against the row's variant id, SKU and
+    GTIN). Text naming the product is not enough: a where-to-buy answer that also prices the 47 lb bag, or a
+    comparison naming several products, is not an answer about the 30 lb bag."""
+    from app.services import console_read_models as rm
+    sku = str(row.get('sku') or '')
+    mine = {str(k) for k in (row.get('variant_id'), sku, f"sku:{sku}" if sku else None, f"feed_sku:{sku}" if sku else None,
+                             row.get('gtin'), rm._gtin14(row.get('gtin'))) if k}
+    return bool(mine & set(answer.get('keys') or []))
+
+
 def mentions(answer: dict, row: dict) -> bool:
     """An answer about the SKU: its product name's first words, or its sku."""
     text = (answer.get('text') or '').casefold()
@@ -510,9 +547,22 @@ def program_lines(*, paths: List[dict], answers: List[dict], merchant: str) -> D
     return out
 
 
-def build_ladder(*, paths: List[dict], answers: List[dict], name: str) -> Optional[dict]:
-    """The demo's ladder block for the first funded SKU: list, each step, ongoing, each with its bar's width."""
-    row = next((r for r in paths if ((r.get('price_path') or {}).get('steps') or [{}])[0].get('funded_by')), None)
+def _stepped(row: dict) -> bool:
+    path = row.get('price_path') or {}
+    return bool(path.get('steps') or path.get('ongoing') or path.get('member'))
+
+
+def build_ladder(*, paths: List[dict], answers: List[dict], name: str, sku: Optional[str] = None) -> Optional[dict]:
+    """
+    The demo's ladder block for one SKU's price path, in 2V-1's shape: list,
+    each first-order step in order, ongoing, member, each with its bar's width.
+    2V-5 (V3): any SKU with a price below list, funded or not: the block read
+    only a funded ladder, so a feed with no `funded_by` said "no price below
+    the list price" above a receipt at $46.79. `sku` the selected SKU, else the
+    receipt's (_first_with_steps). None only when the path has no step.
+    """
+    row = next((r for r in paths if str(r.get('sku')) == str(sku) and _stepped(r)), None) if sku else \
+        (_first_with_steps(paths) or next((r for r in paths if _stepped(r)), None))
     if row is None:
         return None
     path = row['price_path']
@@ -520,23 +570,28 @@ def build_ladder(*, paths: List[dict], answers: List[dict], name: str) -> Option
     if not lst:
         return None
     pct = lambda p: int(round(float(_dec(p) / lst * 100)))  # noqa: E731
-    first = path['steps'][0]
     steps = [{'label': 'List', 'value': money(lst), 'pct': 100, 'kind': 'ink'}]
-    for s in path['steps']:
+    for s in path.get('steps') or []:
         steps.append({'label': f"{ORDER_LABELS[s['order_n']]}, {short_rule(s['rule'])}",
                       'value': money(s['price']), 'pct': pct(s['price']), **({'kind': 'b'} if s['order_n'] == '1' else {})})
     if path.get('ongoing'):
         o = path['ongoing']
         steps.append({'label': f"Ongoing, {short_rule(o['rule'])}", 'value': money(o['price']), 'pct': pct(o['price'])})
+    if path.get('member'):
+        m = path['member']
+        steps.append({'label': f"{m.get('program_name') or 'Member'}, {short_rule(m.get('rule'))}", 'value': money(m['price']),
+                      'pct': pct(m['price'])})
+    first = (path.get('steps') or [None])[0] or path.get('ongoing') or path.get('member')
     funder = _funder(first.get('funded_by'))
+    program = _program(first.get('program_name'), name)
     k = sum(1 for a in answers if mentions(a, row) and quoted_step(a, path))
     n = sum(1 for a in answers if mentions(a, row))
     until = _until(first)
-    return {'title': T['tv.ladder.title'].format(funder_s=_possessive(funder), name=name,
-                                                 program=_program(first.get('program_name'), name)),
-            'sub': T['tv.ladder.sub'].format(product=row.get('title') and f"{row.get('product_name')}, {row.get('title')}"
-                                             or row.get('product_name'), funder=funder,
-                                             ends=f", ends {_day(until)}" if until else ''),
+    product = row.get('title') and f"{row.get('product_name')}, {row.get('title')}" or row.get('product_name')
+    return {'title': T['tv.ladder.title'].format(funder_s=_possessive(funder), name=name, program=program) if funder
+            else T['tv.ladder.title.open'].format(name=name, program=program),
+            'sub': T['tv.ladder.sub'].format(product=product, funder=funder, ends=f", ends {_day(until)}" if until else '')
+            if funder else T['tv.ladder.sub.open'].format(product=product, ends=f", ends {_day(until)}" if until else ''),
             'steps': steps, 'note': T['tv.ladder.note'].format(k=k, n=n), 'sku': row.get('sku')}
 
 
@@ -563,33 +618,134 @@ def build_receipt(*, paths: List[dict], merchant: str) -> Optional[dict]:
             'rows': rows, 'sku': row.get('sku')}
 
 
+def _scope_words(entry: dict) -> str:
+    """An incentive's scope in words: "all SKUs", "6 SKUs", "Dog > Food"."""
+    kind = entry.get('applies_to') or 'all'
+    if kind == 'skus':
+        n = len(entry.get('applies_to_skus') or [])
+        return f"{n} {'SKU' if n == 1 else 'SKUs'}"
+    if kind == 'gtins':
+        n = len(entry.get('applies_to_gtins') or [])
+        return f"{n} {'GTIN' if n == 1 else 'GTINs'}"
+    if kind == 'category':
+        return str(entry.get('applies_to_category') or 'one category')
+    return T['program.scope.all']
+
+
+def _off(entry: dict) -> str:
+    pct, amount = entry.get('discount_percent'), entry.get('discount_amount')
+    text = f"{_dec(pct).normalize():f}% off" if pct is not None else f"{money(amount)} off" if amount is not None else ''
+    if entry.get('cap_amount') is not None:
+        text += f", capped at {money(entry['cap_amount'])}"
+    return text
+
+
+def _exclusions(entry: dict) -> List[str]:
+    out = []
+    for x in entry.get('exclusions') or []:
+        if isinstance(x, dict) and x.get('rx'):
+            orders = [ORDER_LABELS.get(str(o), str(o)).lower() for o in x.get('orders') or []]
+            out.append(T['program.rx'].format(orders=f" on the {manu._and(orders)}" if orders else ''))
+    return out
+
+
+def program_text(entry: dict, *, scopes: List[str]) -> str:
+    """
+    2V-5 (V1, V2, V4): one owned incentive entry as one line, from 2V-1's
+    shape: its scope in words, its steps in order with `ongoing` (or its
+    member discount), each cap, the Rx exclusion, a loyalty program's tier,
+    points and former names, its funder ("funder not stated" when none),
+    whether it combines (`stacks_with` empty: not combinable with other
+    offers), its end date ("no end date").
+    """
+    parts = [', '.join(scopes)]
+    mechanic = entry.get('mechanic')
+    if mechanic == 'loyalty_program':
+        if entry.get('tier_name'):
+            parts.append(T['program.tier'].format(tier=entry['tier_name']))
+        if entry.get('points') is not None:
+            parts.append(T['program.points'].format(points=f"{_dec(entry['points']).normalize():f}"))
+        if entry.get('points_multiplier') is not None:
+            parts.append(T['program.multiplier'].format(x=f"{_dec(entry['points_multiplier']).normalize():f}"))
+        if entry.get('former_names'):
+            parts.append(T['program.former'].format(names=manu._and(entry['former_names'])))
+    elif entry.get('steps'):
+        parts.append('; '.join(f"{ORDER_LABELS.get(str(s.get('order_n')), str(s.get('order_n'))).lower()} {_off(s)}".strip()
+                               for s in entry['steps']))
+    else:
+        off = _off(entry)
+        if off:
+            parts.append(T['program.member'].format(off=off, tier=entry.get('tier_name') or 'member')
+                         if mechanic == 'member_price' else off)
+    parts += _exclusions(entry)
+    parts.append(T['program.funded'].format(funder=_funder(entry['funded_by'])) if entry.get('funded_by')
+                 else T['program.funded.none'])
+    stacks = [str(x) for x in entry.get('stacks_with') or []]
+    parts.append(T['program.stacks'].format(names=manu._and(stacks)) if stacks else T['program.stacks.none'])
+    until = _until(entry)
+    parts.append(T['program.ends'].format(day=_day(until)) if until else T['program.ends.none'])
+    return '. '.join(p[:1].upper() + p[1:] for p in parts if p) + '.'
+
+
+def _same_terms(entry: dict) -> tuple:
+    """What makes two entries one line: all but their scope (Perks Premier on Dog > Food and on Cat > Food)."""
+    import json
+    return json.dumps({k: v for k, v in entry.items() if not k.startswith('applies_to') and k not in ('id', 'set_at')},
+                      sort_keys=True, default=str)
+
+
 def build_programs(*, owned: Optional[List[dict]], paths: List[dict], answers: List[dict], merchant: str) -> List[dict]:
-    """The demo's program cards (petco.ts trueValue.programs): each owned program's terms, and how agents got it."""
-    out, seen = [], set()
-    former_of = {i.get('name'): i.get('former_names') or [] for i in owned or [] if i.get('mechanic') == 'loyalty_program'}
-    for entry in owned or []:
+    """
+    The demo's program cards (petco.ts trueValue.programs): 2V-5 (V1, V2, V4)
+    one per owned incentive entry, entries that differ only in scope on one
+    line, in supply's order: {name (2V-3 Q7: with its tier where entries share
+    a name), tier, scope, text (program_text, the whole line), terms (its
+    steps), valid_until, funded_by, mechanic, agentsRight, tone, program_id}.
+    Before, one line per program id hid Autoship's base entry under its
+    SKU-scoped ladder, and Perks Premier read the ladder's steps.
+    """
+    from app.services import console_read_models as rm
+    entries = [e for e in owned or [] if e.get('mechanic') in ('subscription_discount', 'member_price', 'loyalty_program')]
+    groups: List[List[dict]] = []
+    for e in entries:
+        same = next((g for g in groups if _same_terms(g[0]) == _same_terms(e)), None)
+        if same is not None:
+            same.append(e)
+        else:
+            groups.append([e])
+    claimed = {str(s) for e in entries if e.get('applies_to') == 'skus' for s in e.get('applies_to_skus') or []}
+    out = []
+    for group in groups:
+        entry = group[0]
         pid = entry.get('program_id') or entry.get('name')
-        if entry.get('mechanic') not in ('subscription_discount', 'member_price', 'loyalty_program') or pid in seen:
-            continue
-        seen.add(pid)
+        scopes = list(dict.fromkeys(_scope_words(e) for e in group))
+        text = program_text(entry, scopes=scopes)
+        base = {'name': rm.incentive_name(entry, 'Program', [e for e in entries if e not in group] + [entry]),
+                'tier': entry.get('tier_name'), 'scope': ', '.join(scopes), 'text': text, 'valid_until': _until(entry),
+                'funded_by': entry.get('funded_by'), 'mechanic': entry.get('mechanic'), 'program_id': pid}
         if entry.get('mechanic') == 'loyalty_program':
-            former = former_of.get(entry.get('name')) or []
+            former = list(entry.get('former_names') or [])
             saying = [a for a in answers if says_former(a, former)]
-            out.append({'name': entry.get('name'), 'terms': f"Formerly {manu._and(former)}." if former else '',
+            out.append({**base, 'terms': T['program.former'].format(names=manu._and(former)) if former else '',
                         'agentsRight': f"{len(saying)} answers still said {manu._and(former)}." if former else '',
-                        'tone': 'warn' if saying else 'ok', 'program_id': pid})
+                        'tone': 'warn' if saying else 'ok'})
             continue
-        priced = [r for r in paths if any(s.get('program_id') == pid for s in (r.get('price_path') or {}).get('steps') or [])
-                  or ((r.get('price_path') or {}).get('member') or {}).get('program_id') == pid]
-        steps = next((s for r in priced for s in (r.get('price_path') or {}).get('steps') or [] if s.get('program_id') == pid), None)
-        terms = ', '.join(f"{ORDER_LABELS[s['order_n']].lower()} {s['rule']}" for r in priced[:1]
-                          for s in (r.get('price_path') or {}).get('steps') or [])
+        skus = {str(s) for e in group for s in e.get('applies_to_skus') or []}
+
+        def in_scope(r: dict) -> bool:
+            path = r.get('price_path') or {}
+            on_path = any(s.get('program_id') == pid for s in (path.get('steps') or []) + [path.get('ongoing') or {}]) \
+                if entry.get('mechanic') != 'member_price' else (path.get('member') or {}).get('program_id') == pid
+            if entry.get('applies_to') == 'skus':
+                return on_path and str(r.get('sku')) in skus
+            return on_path and (entry.get('mechanic') == 'member_price' or str(r.get('sku')) not in claimed)
+
+        priced = [r for r in paths if in_scope(r)]
         about = [a for a in answers if any(mentions(a, r) for r in priced)]
         right = [a for a in about if any(quoted_step(a, r.get('price_path')) for r in priced)]
-        out.append({'name': entry.get('name'), 'terms': terms or (steps or {}).get('rule') or '',
+        out.append({**base, 'terms': text,
                     'agentsRight': f"Program price quoted in {len(right)} of {len(about)} answers.",
-                    'tone': 'bad' if about and not right else 'warn' if about and len(right) < len(about) else 'ok',
-                    'program_id': pid})
+                    'tone': 'bad' if about and not right else 'warn' if about and len(right) < len(about) else 'ok'})
     return out
 
 

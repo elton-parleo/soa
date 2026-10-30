@@ -147,18 +147,22 @@ async def _claim_features(row: dict, scope: CustomerScope, merchant: Optional[st
 
 
 @router.get("/answers/summary")
-async def get_answers_summary(cycle: str = Query(...), scope: CustomerScope = Depends(console_scope)):
+async def get_answers_summary(cycle: str = Query(...), merchant: Optional[str] = Query(None),
+                              scope: CustomerScope = Depends(console_scope)):
     """2C: per tier and per surface, every outcome counted, unverifiable on
     its own, and answered_with_other_brand. 2I-8: every agent together
     (`all`) first, counts summed; each surface beside it. 2T-4 (2):
     `severity`, the Answers list's flagged counts (soa_shared/severity.tally
     over the answers /answers serves). 2T-5 (A1 to A3): the lead over the
     same answers, `flagged`, `hero`, `worst_answer_id`, `chips` and `kinds`
-    (console_measure.answers_lead)."""
+    (console_measure.answers_lead). 2V-5 (W2): with an external seller's
+    `merchant`, the catalog-built questions' answers count in Brand-direct,
+    as Visibility's "By tier" has them, so the tiers sum to the cycle."""
     row = dict(cycle_in_scope(cycle, scope))
+    ms = await check_merchant(scope, merchant) if merchant else None
     clubs = await _club_keys(row, scope)
     with engine.connect() as conn:
-        body = rm.load_answers_summary(conn, row)
+        body = rm.load_answers_summary(conn, row, catalog_in_tier=_is_seller_external(ms, merchant))
         answers = rm.load_answers(conn, row, club_keys=clubs)
         body['severity'] = severity.tally(answers)
         body.update(measure.answers_lead(answers, rm.load_primary(conn, row)))
@@ -451,7 +455,8 @@ async def get_overview(cycle: str = Query(...), merchant: Optional[str] = Query(
                              record_variants=variants, reads=reads)
     body = parity.build_overview(row, rows=rows, visibility=vis, true_value=tv, brand=brand, access=access,
                                  previous=previous, scored_cycles=n_scored if n_scored else 1, read_errors=errors,
-                                 study_questions=study_questions, study=study)
+                                 study_questions=study_questions, study=study,
+                                 last_read=_is_seller_external(ms, merchant))
     # 2K-3 (B5): the start day in the merchant's zone, beside `started` (the UTC start_date)
     body.update(rm.cycle_dates(row, rm.study_timezone(job[0] if job else None)))
     # 2K-4 (B2): the cycle's study, with its own date in the merchant's zone ("The Oct 20 study")

@@ -221,7 +221,7 @@ def test_true_value_reads_the_price_path(http, db, upstream):
     assert ladder['sub'].endswith('Funded by Purina, ends Oct 31.')
     assert [(s['label'], s['value']) for s in ladder['steps']] == [
         ('List', '$77.99'), ('1st order, 40%', '$46.79'), ('2nd order, 20%', '$62.39'), ('3rd order, 10%', '$70.19'),
-        ('Ongoing, 5%', '$74.09')]
+        ('Ongoing, 5%', '$74.09'), ('Perks Premier, 10% off, Premier members only', '$70.19')]   # 2V-5 (V3): to member
     receipt = {r['k']: r for r in body['receipt']['rows']}
     assert receipt['First Autoship order']['v'] == '$46.79'
     assert receipt['Purina ladder, first order 40% off']['v'] == '-$31.20'

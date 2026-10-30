@@ -530,11 +530,15 @@ def _quoted_text(quotes: List[dict]) -> str:
 
 
 _SOURCE_WORDS = {'honest_fetch': 'our own fetch', 'hosted_render': 'a hosted render', 'record': 'the record'}
+#: 2V-5 (W6): the same source in brackets after "last read Oct 29"
+_LAST_READ_WORDS = {'our own fetch': 'own fetch', 'a hosted render': 'hosted render'}
 
 
-def _live_text(cell: dict, domain: str) -> str:
+def _live_text(cell: dict, domain: str, last_read: bool = False) -> str:
     """The reference beside a quote: the newest page read when one exists,
-    else the record, saying which."""
+    else the record, saying which. 2V-5 (W6): `last_read` (an external
+    seller's Overview) says the day is the read's, not the cycle's: "$77.21 at
+    petco.com, last read Oct 29 (hosted render)"; a brand's reads as before."""
     live = cell.get('live')
     if live in (None, '', '—'):
         return 'No reference read'
@@ -545,6 +549,8 @@ def _live_text(cell: dict, domain: str) -> str:
     how = _SOURCE_WORDS.get(cell.get('reference_source') or '', (cell.get('reference_source') or 'a read').replace('_', ' '))
     if cell.get('live_basis') == 'record' or cell.get('reference_source') == 'record':
         return f"{live} at {domain}, the record of {_short_day(cell.get('observed_at'))}, no page read yet"
+    if last_read:
+        return f"{live} at {domain}, last read {_short_day(cell.get('observed_at'))} ({_LAST_READ_WORDS.get(how, how)})"
     return f"{live} at {domain}, {how}, {_short_day(cell.get('observed_at'))}"
 
 
@@ -727,7 +733,7 @@ _PRODUCT_SEVERITY = {'wrong': 0, 'partial': 1, 'none': 2, 'exact': 3}
 
 
 def build_products(true_value: dict, vis_rows: List[dict], surface: str, *, variant_of_run: Dict[str, str],
-                   reason_of_run: Dict[str, Optional[str]]) -> List[dict]:
+                   reason_of_run: Dict[str, Optional[str]], last_read: bool = False) -> List[dict]:
     """ProductWeek per True Value row asked about on this surface: named and
     first from the mention coding of the runs that asked about it, the
     quotes per agent, the live price with its source, the cell's status
@@ -763,7 +769,7 @@ def build_products(true_value: dict, vis_rows: List[dict], surface: str, *, vari
             across = [(col, cell, quotes_of(cell, col)) for col, cell in cells_by.items() if col != you_col]
             across = [(col, cell, qs) for col, cell, qs in across if qs]
             if across:
-                out.append(_product_across(row, across, surface, counts))
+                out.append(_product_across(row, across, surface, counts, last_read=last_read))
             continue
         cols = [you_col] if you_col in cells_by else list(cells_by)
         for col in cols:
@@ -778,7 +784,7 @@ def build_products(true_value: dict, vis_rows: List[dict], surface: str, *, vari
             out.append({
                 'name': row['product'], 'sku': row['sku'],
                 'named': nf['named'], 'first': nf['first'],
-                'quoted': _quoted_text(quotes), 'live': _live_text(cell, col),
+                'quoted': _quoted_text(quotes), 'live': _live_text(cell, col, last_read),
                 'status': status_for(rule, status), 'issue': issue, 'route': 'true-value',
                 # beside the typed fields
                 'cell_status': status, 'quote': sc.get('quoted'), 'retailer': col, 'runs': len(quotes),
@@ -796,7 +802,7 @@ def build_products(true_value: dict, vis_rows: List[dict], surface: str, *, vari
     return out
 
 
-def _product_across(row: dict, across: List[tuple], surface: str, counts) -> dict:
+def _product_across(row: dict, across: List[tuple], surface: str, counts, *, last_read: bool = False) -> dict:
     """2J-2: one ProductWeek over a row's retailer cells (col, cell, quotes),
     for a `you` cell no agent quoted. `retailer` and the reference fields
     beside the typed ones are the worst cell's; `retailers` lists each
@@ -813,7 +819,7 @@ def _product_across(row: dict, across: List[tuple], surface: str, counts) -> dic
         'name': row['product'], 'sku': row['sku'],
         'named': nf['named'], 'first': nf['first'],
         'quoted': _quoted_across_text(quotes),
-        'live': '. '.join(_live_text(cell, col) for col, cell, _qs in across),
+        'live': '. '.join(_live_text(cell, col, last_read) for col, cell, _qs in across),
         'status': status_for(rule, status), 'issue': issue, 'route': 'true-value',
         # beside the typed fields
         'cell_status': status, 'quote': ((worst_cell.get('by_surface') or {}).get(surface) or {}).get('quoted'),
@@ -1009,9 +1015,12 @@ def build_changes(now: dict, prev: Optional[dict], prev_code: Optional[str],
 def build_overview(cycle: dict, *, rows: List[dict], visibility: dict, true_value: dict, brand: str,
                    access: Optional[dict] = None, previous: Optional[dict] = None,
                    scored_cycles: int = 1, read_errors: Optional[Dict[str, str]] = None,
-                   study_questions: Optional[int] = None, study: Optional[dict] = None) -> dict:
+                   study_questions: Optional[int] = None, study: Optional[dict] = None,
+                   last_read: bool = False) -> dict:
     """
     GET /api/console/overview: This week's blocks for one cycle, per surface.
+    2V-5 (W6): `last_read` the products' live prices as an external seller's
+    Overview words them (_live_text).
     2I-8: `all` first (every agent together, as the demo counts them) and the
     default; each surface's blocks beside it, for the console's filter.
 
@@ -1042,7 +1051,8 @@ def build_overview(cycle: dict, *, rows: List[dict], visibility: dict, true_valu
         if prev_metrics is not None:
             prev_metrics['code'] = prev_name
         head = visibility_headline(vis_rows, s, next((r['name'] for r in (visibility.get('ranking') or {}).get('rows') or [] if r.get('you')), None))
-        products = build_products(true_value, vis_rows, s, variant_of_run=variant_of_run, reason_of_run=reason_of_run)
+        products = build_products(true_value, vis_rows, s, variant_of_run=variant_of_run, reason_of_run=reason_of_run,
+                                  last_read=last_read)
         signals = build_signals(metrics, products, surface=s, brand=brand, cycle_start=cycle.get('start_date'),
                                 access_problems=access_problems)
         by_surface[s] = {
