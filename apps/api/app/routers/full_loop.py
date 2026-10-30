@@ -72,12 +72,13 @@ def _iso(value):
 
 
 def _study_org(conn, study_type: str):
+    """(owning org, archived) of a study; (None, False) when there is no such study."""
     row = conn.execute(text(
-        "SELECT customer_organization_id, organization_id FROM soa_query_generation_jobs "
+        "SELECT customer_organization_id, organization_id, archived_at FROM soa_query_generation_jobs "
         "WHERE study_type = :st"), {"st": study_type}).fetchone()
     if row is None:
-        return None
-    return row[0] if row[0] is not None else row[1]
+        return None, False
+    return (row[0] if row[0] is not None else row[1]), row[2] is not None
 
 
 def _platforms(value) -> list:
@@ -202,9 +203,13 @@ async def start_full_loop(body: FullLoopStart, scope: CustomerScope = Depends(co
     if not body.platforms:
         raise HTTPException(status_code=422, detail="a full loop with a study needs at least one surface")
     with engine.connect() as conn:
-        owner = _study_org(conn, body.study_type)
+        owner, archived = _study_org(conn, body.study_type)
     if owner != scope.org.id:
         raise HTTPException(status_code=404, detail=f"study {body.study_type!r} not found")
+    # 2V-6 (P6): an archived study is not run. The console defaulted to the last loop's study when it had since
+    # been archived (Oct 30), and this accepted it.
+    if archived:
+        raise HTTPException(status_code=422, detail="study is archived")
     # 2H: a study is generated for one merchant, and the loop runs for that
     # one: the coordinator keys every step on merchant_slug. Checked from the
     # study's job, not supply, so starting a loop still makes no supply call.

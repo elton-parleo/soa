@@ -91,7 +91,9 @@ SELLER_TEMPLATES = {
     'program.scope.all': 'all SKUs',
     'program.tier': 'tier {tier}',
     'program.points': '{points} points',
-    'program.multiplier': '{x}x points',
+    # 2V-6 (X2): supply's points_multiplier is the rate per dollar spent
+    'program.multiplier': '{x} points per $1',
+    'program.benefit': '{tier} members get {off} on {scope} ({name})',
     'program.former': 'formerly {names}',
     'program.member': '{tier} members {off}',
     'program.rx': 'Rx excluded{orders}',
@@ -101,6 +103,16 @@ SELLER_TEMPLATES = {
     'program.stacks.none': 'not combinable with other offers',
     'program.ends': 'ends {day}',
     'program.ends.none': 'no end date',
+    # 2V-6 (X3): a line's read-out, from the cycle's value-tier rows
+    'program.asked': 'asked this cycle, {k} of {n} right',
+    'program.asked.unscored': 'asked this cycle, none scored',
+    'program.not_asked': 'not asked this cycle',
+    'program.quoted': 'Program price quoted in {k} of {n} answers.',
+    # 2V-6 (X4): the record's points line
+    'record.points': '{program} points',
+    'record.points.rate': '{rate} per $1 ({at_list} on this {item} at list{first})',
+    'record.points.first': ', {n} on the first {program} order',
+    'record.points.fixed': '{n} on this {item}',
     'tv.receipt.title': 'What a first {program} order costs',
     'tv.program.terms': '{terms}',
     'prove.title': 'Funded offers',
@@ -649,7 +661,67 @@ def _exclusions(entry: dict) -> List[str]:
     return out
 
 
-def program_text(entry: dict, *, scopes: List[str]) -> str:
+def points_rate(entry: dict) -> Optional[str]:
+    """2V-6 (X2): a points entry's rate in words: "10 points per $1" (points_multiplier, per dollar spent) or
+    "120 points" (a fixed total); None for an entry with neither."""
+    if entry.get('points_multiplier') is not None:
+        return T['program.multiplier'].format(x=f"{_dec(entry['points_multiplier']).normalize():f}")
+    if entry.get('points') is not None:
+        return T['program.points'].format(points=f"{_dec(entry['points']).normalize():f}")
+    return None
+
+
+def _name_words(name: Optional[str]) -> set:
+    return set(re.findall(r'[a-z0-9]+', str(name or '').casefold())) - {'points', 'point'}
+
+
+def same_program(a: Optional[str], b: Optional[str]) -> bool:
+    """2V-6: two program names are one program when one's words hold the other's ("Perks", "Petco Perks",
+    "Petco Perks points"), as a question names a program by what the record called it."""
+    x, y = _name_words(a), _name_words(b)
+    return bool(x and y) and (x <= y or y <= x)
+
+
+def _tier(value) -> Optional[str]:
+    from app.services import console_read_models as rm
+    return rm._norm_tier(value)
+
+
+def _points_of(loyalty: dict, owned: List[dict]) -> Optional[dict]:
+    """2V-6 (X2): the points entry a loyalty tier earns by: the same program (id or name), for this tier or every
+    tier."""
+    for e in owned:
+        if e.get('mechanic') != 'points':
+            continue
+        if not (e.get('program_id') and e.get('program_id') == loyalty.get('program_id')
+                or same_program(e.get('name'), loyalty.get('name'))):
+            continue
+        if e.get('tier_name') and _tier(e['tier_name']) != _tier(loyalty.get('tier_name')):
+            continue
+        return e
+    return None
+
+
+def _benefits(loyalty: dict, owned: List[dict]) -> List[str]:
+    """2V-6 (X2): the member prices a loyalty tier gives, linked by tier_name, entries that differ only in scope
+    together: "Premier members get 10% off on Dog > Food, Cat > Food (Perks Premier)"."""
+    tier = _tier(loyalty.get('tier_name'))
+    if not tier:
+        return []
+    groups: List[List[dict]] = []
+    for e in owned:
+        if e.get('mechanic') == 'member_price' and _tier(e.get('tier_name')) == tier and _off(e):
+            same = next((g for g in groups if _same_terms(g[0]) == _same_terms(e)), None)
+            if same is not None:
+                same.append(e)
+            else:
+                groups.append([e])
+    return [T['program.benefit'].format(tier=g[0]['tier_name'], off=_off(g[0]), name=g[0].get('name') or 'member price',
+                                        scope=', '.join(dict.fromkeys(_scope_words(e) for e in g)))
+            for g in groups]
+
+
+def program_text(entry: dict, *, scopes: List[str], owned: Optional[List[dict]] = None, former: bool = True) -> str:
     """
     2V-5 (V1, V2, V4): one owned incentive entry as one line, from 2V-1's
     shape: its scope in words, its steps in order with `ongoing` (or its
@@ -657,17 +729,24 @@ def program_text(entry: dict, *, scopes: List[str]) -> str:
     points and former names, its funder ("funder not stated" when none),
     whether it combines (`stacks_with` empty: not combinable with other
     offers), its end date ("no end date").
+
+    2V-6 (X2): a points entry reads its rate first ("10 points per $1, all
+    SKUs"); a loyalty tier carries its program's points rate and the member
+    prices linked to it by tier_name (`owned`, every entry), and its former
+    names only where `former` (the program's first line).
     """
     parts = [', '.join(scopes)]
     mechanic = entry.get('mechanic')
-    if mechanic == 'loyalty_program':
+    if mechanic == 'points':
+        parts = [f"{points_rate(entry) or 'points'}, {', '.join(scopes)}"]
+    elif mechanic == 'loyalty_program':
         if entry.get('tier_name'):
             parts.append(T['program.tier'].format(tier=entry['tier_name']))
-        if entry.get('points') is not None:
-            parts.append(T['program.points'].format(points=f"{_dec(entry['points']).normalize():f}"))
-        if entry.get('points_multiplier') is not None:
-            parts.append(T['program.multiplier'].format(x=f"{_dec(entry['points_multiplier']).normalize():f}"))
-        if entry.get('former_names'):
+        rate = points_rate(entry) or points_rate(_points_of(entry, owned or []) or {})
+        if rate:
+            parts.append(rate)
+        parts += _benefits(entry, owned or [])
+        if former and entry.get('former_names'):
             parts.append(T['program.former'].format(names=manu._and(entry['former_names'])))
     elif entry.get('steps'):
         parts.append('; '.join(f"{ORDER_LABELS.get(str(s.get('order_n')), str(s.get('order_n'))).lower()} {_off(s)}".strip()
@@ -694,7 +773,47 @@ def _same_terms(entry: dict) -> tuple:
                       sort_keys=True, default=str)
 
 
-def build_programs(*, owned: Optional[List[dict]], paths: List[dict], answers: List[dict], merchant: str) -> List[dict]:
+def asked_about(entry: dict, value_outcomes: List[dict]) -> List[dict]:
+    """
+    2V-6 (X3): the cycle's value-tier rows (soa_expectation_outcomes, tier
+    value_incentives) about one program entry, by what the question asked:
+    a points question by its rule's program_name, and for a points entry by
+    its mechanic too (a per_dollar question is about a points_multiplier,
+    a fixed one about a points total); a member-price question by its tier
+    name. Before, the line keyed on 2V-1's per-product rows: cycle 3's one
+    per-dollar question left every line "not asked this cycle".
+    """
+    from app.services import console_read_models as rm
+    mechanic, out = entry.get('mechanic'), []
+    for o in value_outcomes or []:
+        expected = rm._json(o.get('expected_answer')) or {}
+        kind = expected.get('type')
+        if kind == 'points' and mechanic in ('points', 'loyalty_program'):
+            rule = expected.get('rule') if isinstance(expected.get('rule'), dict) else {}
+            if not same_program(rule.get('program_name') or expected.get('program_name'), entry.get('name')):
+                continue
+            if mechanic == 'points' and (rule.get('kind') == 'per_dollar') != (entry.get('points_multiplier') is not None):
+                continue
+            out.append(o)
+        elif kind == 'member_price' and mechanic in ('member_price', 'loyalty_program') and entry.get('tier_name') \
+                and _tier(expected.get('tier_name')) == _tier(entry['tier_name']):
+            out.append(o)
+    return out
+
+
+def _read_out(about: List[dict]) -> dict:
+    """2V-6 (X3): {agentsRight, tone, asked, scored, right, by_surface} of a line's value-tier rows, in words."""
+    from app.services import console_read_models as rm
+    scored = [o for o in about if o.get('outcome') in rm.SUMMARY_SCORED]
+    right = sum(1 for o in scored if o.get('outcome') == 'exact')
+    text_ = (T['program.asked'].format(k=right, n=len(scored)) if scored else T['program.asked.unscored'])
+    tone = 'neu' if not scored else 'ok' if right == len(scored) else 'bad' if not right else 'warn'
+    return {'agentsRight': text_, 'tone': tone, 'asked': len(about), 'scored': len(scored), 'right': right,
+            'by_surface': rm._program_agents(scored)}
+
+
+def build_programs(*, owned: Optional[List[dict]], paths: List[dict], answers: List[dict], merchant: str,
+                   value_outcomes: Optional[List[dict]] = None) -> List[dict]:
     """
     The demo's program cards (petco.ts trueValue.programs): 2V-5 (V1, V2, V4)
     one per owned incentive entry, entries that differ only in scope on one
@@ -703,9 +822,20 @@ def build_programs(*, owned: Optional[List[dict]], paths: List[dict], answers: L
     steps), valid_until, funded_by, mechanic, agentsRight, tone, program_id}.
     Before, one line per program id hid Autoship's base entry under its
     SKU-scoped ladder, and Perks Premier read the ladder's steps.
+
+    2V-6: `terms` is `text`, the one line, on every card (X1: a loyalty tier's
+    terms were its former names alone, or empty). The points entry has its
+    line, and a loyalty tier reads its points rate and member prices, its
+    former names on the program's first line only (X2). `agentsRight` is
+    "asked this cycle, k of n right" over the cycle's value-tier rows about
+    the line (asked_about), with `asked`, `scored`, `right`, `by_surface`;
+    a line no value-tier row asked about keeps the price-path count, or
+    "not asked this cycle" when no answer was about it either (X3).
     """
     from app.services import console_read_models as rm
-    entries = [e for e in owned or [] if e.get('mechanic') in ('subscription_discount', 'member_price', 'loyalty_program')]
+    owned = list(owned or [])
+    entries = [e for e in owned
+               if e.get('mechanic') in ('subscription_discount', 'member_price', 'loyalty_program', 'points')]
     groups: List[List[dict]] = []
     for e in entries:
         same = next((g for g in groups if _same_terms(g[0]) == _same_terms(e)), None)
@@ -714,21 +844,35 @@ def build_programs(*, owned: Optional[List[dict]], paths: List[dict], answers: L
         else:
             groups.append([e])
     claimed = {str(s) for e in entries if e.get('applies_to') == 'skus' for s in e.get('applies_to_skus') or []}
+    formers_said: set = set()
     out = []
     for group in groups:
         entry = group[0]
         pid = entry.get('program_id') or entry.get('name')
         scopes = list(dict.fromkeys(_scope_words(e) for e in group))
-        text = program_text(entry, scopes=scopes)
-        base = {'name': rm.incentive_name(entry, 'Program', [e for e in entries if e not in group] + [entry]),
-                'tier': entry.get('tier_name'), 'scope': ', '.join(scopes), 'text': text, 'valid_until': _until(entry),
-                'funded_by': entry.get('funded_by'), 'mechanic': entry.get('mechanic'), 'program_id': pid}
-        if entry.get('mechanic') == 'loyalty_program':
-            former = list(entry.get('former_names') or [])
-            saying = [a for a in answers if says_former(a, former)]
-            out.append({**base, 'terms': T['program.former'].format(names=manu._and(former)) if former else '',
-                        'agentsRight': f"{len(saying)} answers still said {manu._and(former)}." if former else '',
-                        'tone': 'warn' if saying else 'ok'})
+        former = list(entry.get('former_names') or [])
+        first = not (former and pid in formers_said)
+        if former:
+            formers_said.add(pid)
+        text_ = program_text(entry, scopes=scopes, owned=owned, former=first)
+        name = rm.incentive_name(entry, 'Program', [e for e in entries if e not in group] + [entry])
+        if entry.get('mechanic') == 'points' and 'point' not in name.casefold():
+            name = f"{name} points"
+        base = {'name': name, 'tier': entry.get('tier_name'), 'scope': ', '.join(scopes), 'text': text_,
+                'terms': text_, 'valid_until': _until(entry), 'funded_by': entry.get('funded_by'),
+                'mechanic': entry.get('mechanic'), 'program_id': pid}
+        asked = asked_about(entry, value_outcomes or [])
+        if entry.get('mechanic') in ('loyalty_program', 'points'):
+            saying = [a for a in answers if says_former(a, former)] if former else []
+            said = f"{len(saying)} answers still said {manu._and(former)}." if former else ''
+            if asked:
+                read = _read_out(asked)
+                out.append({**base, **read, 'agentsRight': ' '.join(filter(None, [read['agentsRight'],
+                                                                                   said if saying else ''])),
+                            'tone': 'warn' if saying and read['tone'] == 'ok' else read['tone']})
+            else:
+                out.append({**base, 'agentsRight': said or T['program.not_asked'], 'tone': 'warn' if saying else
+                            'ok' if former else 'neu', 'asked': 0, 'scored': 0, 'right': 0, 'by_surface': {}})
             continue
         skus = {str(s) for e in group for s in e.get('applies_to_skus') or []}
 
@@ -740,12 +884,16 @@ def build_programs(*, owned: Optional[List[dict]], paths: List[dict], answers: L
                 return on_path and str(r.get('sku')) in skus
             return on_path and (entry.get('mechanic') == 'member_price' or str(r.get('sku')) not in claimed)
 
+        if asked:
+            out.append({**base, **_read_out(asked)})
+            continue
         priced = [r for r in paths if in_scope(r)]
         about = [a for a in answers if any(mentions(a, r) for r in priced)]
         right = [a for a in about if any(quoted_step(a, r.get('price_path')) for r in priced)]
-        out.append({**base, 'terms': text,
-                    'agentsRight': f"Program price quoted in {len(right)} of {len(about)} answers.",
-                    'tone': 'bad' if about and not right else 'warn' if about and len(right) < len(about) else 'ok'})
+        out.append({**base, 'agentsRight': T['program.quoted'].format(k=len(right), n=len(about)) if about
+                    else T['program.not_asked'],
+                    'tone': 'bad' if about and not right else 'warn' if about and len(right) < len(about)
+                    else 'ok' if about else 'neu', 'asked': 0, 'scored': 0, 'right': 0, 'by_surface': {}})
     return out
 
 
@@ -809,9 +957,63 @@ def funded_pass_through(*, paths: List[dict], answers: List[dict]) -> Optional[d
 
 # ─── Product record ───────────────────────────────────────────────────────
 
+def _covers(entry: dict, row: dict, feed_row: Optional[dict]) -> bool:
+    """An owned entry's scope holds this SKU: every SKU, its SKU, its GTIN, or its feed category (or under it)."""
+    kind = entry.get('applies_to') or 'all'
+    if kind == 'skus':
+        return str(row.get('sku')) in {str(s) for s in entry.get('applies_to_skus') or []}
+    if kind == 'gtins':
+        from app.services import console_read_models as rm
+        gtin = rm._gtin14(row.get('gtin') or (feed_row or {}).get('gtin'))
+        return bool(gtin) and gtin in {rm._gtin14(g) for g in entry.get('applies_to_gtins') or []}
+    if kind == 'category':
+        cat, want = str((feed_row or {}).get('category') or ''), str(entry.get('applies_to_category') or '')
+        return bool(cat and want) and (cat == want or cat.startswith(want + ' >'))
+    return True
+
+
+def _points_earned(rate, price) -> str:
+    """Points a per-dollar rate earns on a price, to the whole point: 10 per $1 on $77.99 is 780."""
+    from decimal import ROUND_HALF_UP
+    return f"{(_dec(rate) * _dec(price)).quantize(Decimal('1'), rounding=ROUND_HALF_UP):,}"
+
+
+def points_field(*, row: dict, feed_row: Optional[dict], owned: Optional[List[dict]], merchant: str) -> Optional[dict]:
+    """
+    2V-6 (X4): the record's points line, from the owned points entry whose
+    scope holds the SKU: "Perks points: 10 per $1 (780 on this bag at list,
+    468 on the first Autoship order)", the rate on the list price and on the
+    first program step; a fixed total as "120 on this item". Read-model only:
+    the price path carries no points (supply's offer_path, 2V-6 X5).
+    """
+    entry = next((e for e in owned or [] if e.get('mechanic') == 'points' and _covers(e, row, feed_row)), None)
+    if entry is None:
+        return None
+    path = row.get('price_path') or {}
+    item = 'bag' if re.search(r'\b(lb|oz|kg|g)\b', str(row.get('title') or row.get('product_name') or ''), re.I) \
+        else 'item'
+    label = T['record.points'].format(program=_program(entry.get('name'), merchant) or 'Program')
+    if label.casefold().endswith('points points'):
+        label = label[:-len(' points')]
+    if entry.get('points_multiplier') is not None and _dec(path.get('list_price')) is not None:
+        rate = _dec(entry['points_multiplier'])
+        first = (path.get('steps') or [None])[0]
+        value = T['record.points.rate'].format(
+            rate=f"{rate.normalize():f}", at_list=_points_earned(rate, path['list_price']), item=item,
+            first=T['record.points.first'].format(n=_points_earned(rate, first['price']),
+                                                  program=_program(first.get('program_name'), merchant))
+            if first and _dec(first.get('price')) is not None else '')
+    elif entry.get('points') is not None:
+        value = T['record.points.fixed'].format(n=f"{_dec(entry['points']).normalize():f}", item=item)
+    else:
+        return None
+    return {'k': label, 'v': value, 'prov': 'retail', 'note': program_text(entry, scopes=[_scope_words(entry)])}
+
+
 def build_record(*, row: dict, feed_row: Optional[dict], name: str, merchant: str, sent: Optional[dict],
-                 held_any: bool) -> dict:
-    """The demo's offer record for one SKU (petco.ts record): the price path as fields, with provenance."""
+                 held_any: bool, owned: Optional[List[dict]] = None) -> dict:
+    """The demo's offer record for one SKU (petco.ts record): the price path as fields, with provenance. 2V-6 (X4):
+    with the owned incentives, its points line (points_field) after the member price."""
     path = row.get('price_path') or {}
     fields = [{'k': 'List price', 'v': money(path.get('list_price')), 'prov': 'retail'}]
     steps = path.get('steps') or []
@@ -834,6 +1036,9 @@ def build_record(*, row: dict, feed_row: Optional[dict], name: str, merchant: st
         m = path['member']
         fields.append({'k': f"Member price ({m.get('program_name')})", 'v': money(m['price']), 'prov': 'retail',
                        'note': m.get('rule')})
+    points = points_field(row=row, feed_row=feed_row, owned=owned, merchant=merchant)
+    if points:
+        fields.append(points)
     funded = next((s for s in steps if s.get('funded_by')), None)
     if funded:
         fields.append({'k': 'Funded by', 'v': _funder(funded['funded_by']), 'prov': 'brand',

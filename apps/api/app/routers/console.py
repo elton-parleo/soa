@@ -840,7 +840,7 @@ async def get_true_value(cycle: str = Query(...), merchant: Optional[str] = Quer
     if _external_kind(ms, merchant) == 'seller':
         # 2V-2: the program cards, each row's program line, the ladder and the receipt, from the price paths
         from app.routers import console_seller
-        await console_seller.true_value(scope, ms, merchant, body, dict(row))
+        await console_seller.true_value(scope, ms, merchant, body, dict(row), value_outcomes=value_outcomes)
     if _external_kind(ms, merchant) == 'brand':
         await _true_value_brand(scope, dict(row), merchant, body, record_row,
                                 reference=reference if r_err is None else None,

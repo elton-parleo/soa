@@ -213,7 +213,9 @@ def test_v_one_line_per_program_entry_from_the_2v1_shape():
     owned = t2v2.recorded('incentives-owned')['incentives']
     progs = cs.build_programs(owned=owned, paths=_paths(), answers=[], merchant='Petco')
     assert [(p['name'], p['text']) for p in progs] == [
-        ('Petco Perks', 'All SKUs. Tier Premier. Formerly Vital Care and Repeat Delivery. Funder not stated. '
+        # 2V-6 (X2): the tier reads the member price linked to it by tier_name
+        ('Petco Perks', 'All SKUs. Tier Premier. Premier members get 10% off on Dog > Food, Cat > Food (Perks Premier). '
+                        'Formerly Vital Care and Repeat Delivery. Funder not stated. '
                         'Not combinable with other offers. No end date.'),
         ('Petco Autoship', 'All SKUs. 1st order 35% off, capped at $20; ongoing 5% off. Rx excluded on the 1st order. '
                            'Funder not stated. Not combinable with other offers. No end date.'),
@@ -233,7 +235,10 @@ def test_v_a_loyalty_program_lists_its_tiers_points_and_former_names():
              for i, t in enumerate(('Classic', 'Premier', 'Gold'))]
     progs = cs.build_programs(owned=tiers, paths=[], answers=[], merchant='Petco')
     assert [p['name'] for p in progs] == ['Petco Perks · Classic', 'Petco Perks · Premier', 'Petco Perks · Gold']
-    assert progs[1]['text'] == ('All SKUs. Tier Premier. 10 points. Formerly Vital Care. Funder not stated. '
+    # 2V-6 (X2): the former names on the program's first line only
+    assert progs[0]['text'] == ('All SKUs. Tier Classic. 10 points. Formerly Vital Care. Funder not stated. '
+                                'Not combinable with other offers. No end date.')
+    assert progs[1]['text'] == ('All SKUs. Tier Premier. 10 points. Funder not stated. '
                                 'Not combinable with other offers. No end date.')
 
 

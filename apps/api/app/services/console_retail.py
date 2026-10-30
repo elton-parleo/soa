@@ -495,7 +495,7 @@ def sku_timeline(rows: Dict[str, dict], *, name: str, held: Optional[dict], line
 def build_records(*, paths: List[dict], held_paths: List[dict], pubs: List[dict], states: List[dict],
                   channels: List[dict], rules: Optional[List[dict]], name: str, slug: str, held: Optional[dict],
                   cycle: Optional[dict], price_answers: List[dict], agents: Iterable[str], merchant: str,
-                  feed_rows: Optional[List[dict]] = None) -> List[dict]:
+                  feed_rows: Optional[List[dict]] = None, owned: Optional[List[dict]] = None) -> List[dict]:
     """The matrix, one row per SKU (the price path's), on the eight channels:
     {record_ref, sku, name, brand, sub, variants, retired, successor, disagree,
     cells, record (the offer record with the price path), drift, drift_all,
@@ -529,7 +529,7 @@ def build_records(*, paths: List[dict], held_paths: List[dict], pubs: List[dict]
                 cells[slug_]['disagree'] = dis['agents']
         feed_row = next((f for f in feed_rows or [] if str(f.get('sku')) == str(row.get('sku'))), None)
         record = cs.build_record(row=row, feed_row=feed_row, name=name, merchant=merchant, sent=manu.first_sent(pubs),
-                                 held_any=any(manu.is_held(p) for p in pubs))
+                                 held_any=any(manu.is_held(p) for p in pubs), owned=owned)
         out.append({
             'record_ref': ref, 'sku': str(row.get('sku') or ref), 'name': record['title'],
             'brand': (feed_row or {}).get('brand_name') or (feed_row or {}).get('brand'), 'sub': record['sub'],
