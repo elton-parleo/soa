@@ -1,0 +1,192 @@
+{
+ "body": {
+  "incentives": [
+   {
+    "applies_to": "all",
+    "applies_to_category": null,
+    "applies_to_gtins": [],
+    "applies_to_skus": [],
+    "code": null,
+    "currency": null,
+    "discount_amount": null,
+    "discount_percent": null,
+    "exclusions": [],
+    "former_names": [
+     "Vital Care",
+     "Repeat Delivery"
+    ],
+    "funded_by": null,
+    "id": 1,
+    "mechanic": "loyalty_program",
+    "member_price": null,
+    "name": "Petco Perks",
+    "points": null,
+    "points_multiplier": null,
+    "program_id": "petco_perks",
+    "set_at": "2026-10-30T07:05:05.129289",
+    "stacks_with": [],
+    "steps": null,
+    "tier_name": "Premier",
+    "valid_from": null,
+    "valid_until": null
+   },
+   {
+    "applies_to": "all",
+    "applies_to_category": null,
+    "applies_to_gtins": [],
+    "applies_to_skus": [],
+    "code": null,
+    "currency": "USD",
+    "discount_amount": null,
+    "discount_percent": null,
+    "exclusions": [
+     {
+      "orders": [
+       "1"
+      ],
+      "rx": true
+     }
+    ],
+    "former_names": [],
+    "funded_by": null,
+    "id": 2,
+    "mechanic": "subscription_discount",
+    "member_price": null,
+    "name": "Petco Autoship",
+    "points": null,
+    "points_multiplier": null,
+    "program_id": "petco_autoship",
+    "set_at": "2026-10-30T07:05:05.129289",
+    "stacks_with": [],
+    "steps": [
+     {
+      "cap_amount": "20",
+      "discount_amount": null,
+      "discount_percent": "35",
+      "order_n": "1"
+     },
+     {
+      "cap_amount": null,
+      "discount_amount": null,
+      "discount_percent": "5",
+      "order_n": "ongoing"
+     }
+    ],
+    "tier_name": null,
+    "valid_from": null,
+    "valid_until": null
+   },
+   {
+    "applies_to": "skus",
+    "applies_to_category": null,
+    "applies_to_gtins": [],
+    "applies_to_skus": [
+     "2579466",
+     "3089211"
+    ],
+    "code": null,
+    "currency": "USD",
+    "discount_amount": null,
+    "discount_percent": null,
+    "exclusions": [],
+    "former_names": [],
+    "funded_by": "purina",
+    "id": 3,
+    "mechanic": "subscription_discount",
+    "member_price": null,
+    "name": "Petco Autoship",
+    "points": null,
+    "points_multiplier": null,
+    "program_id": "petco_autoship",
+    "set_at": "2026-10-30T07:05:05.129289",
+    "stacks_with": [],
+    "steps": [
+     {
+      "cap_amount": null,
+      "discount_amount": null,
+      "discount_percent": "40",
+      "order_n": "1"
+     },
+     {
+      "cap_amount": null,
+      "discount_amount": null,
+      "discount_percent": "20",
+      "order_n": "2"
+     },
+     {
+      "cap_amount": null,
+      "discount_amount": null,
+      "discount_percent": "10",
+      "order_n": "3"
+     },
+     {
+      "cap_amount": null,
+      "discount_amount": null,
+      "discount_percent": "5",
+      "order_n": "ongoing"
+     }
+    ],
+    "tier_name": null,
+    "valid_from": null,
+    "valid_until": "2026-10-31T00:00:00"
+   },
+   {
+    "applies_to": "category",
+    "applies_to_category": "Dog > Food",
+    "applies_to_gtins": [],
+    "applies_to_skus": [],
+    "code": null,
+    "currency": "USD",
+    "discount_amount": null,
+    "discount_percent": "10.00",
+    "exclusions": [],
+    "former_names": [],
+    "funded_by": null,
+    "id": 4,
+    "mechanic": "member_price",
+    "member_price": null,
+    "name": "Perks Premier",
+    "points": null,
+    "points_multiplier": null,
+    "program_id": "perks_premier",
+    "set_at": "2026-10-30T07:05:05.129289",
+    "stacks_with": [],
+    "steps": null,
+    "tier_name": "Premier",
+    "valid_from": null,
+    "valid_until": null
+   },
+   {
+    "applies_to": "category",
+    "applies_to_category": "Cat > Food",
+    "applies_to_gtins": [],
+    "applies_to_skus": [],
+    "code": null,
+    "currency": "USD",
+    "discount_amount": null,
+    "discount_percent": "10.00",
+    "exclusions": [],
+    "former_names": [],
+    "funded_by": null,
+    "id": 5,
+    "mechanic": "member_price",
+    "member_price": null,
+    "name": "Perks Premier",
+    "points": null,
+    "points_multiplier": null,
+    "program_id": "perks_premier",
+    "set_at": "2026-10-30T07:05:05.129289",
+    "stacks_with": [],
+    "steps": null,
+    "tier_name": "Premier",
+    "valid_from": null,
+    "valid_until": null
+   }
+  ],
+  "merchant": "petco"
+ },
+ "headers": {
+  "content-type": "application/json"
+ },
+ "status": 200
+}

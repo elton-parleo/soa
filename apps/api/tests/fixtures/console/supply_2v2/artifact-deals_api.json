@@ -1,0 +1,309 @@
+{
+ "body": {
+  "channel": "deals_api",
+  "merchant": "petco",
+  "records": [
+   {
+    "merchant_slug": "petco",
+    "product_url": "https://www.petco.com/shop/en/petcostore/product/2579466",
+    "record_ref": "feed:petco:sku:2579466",
+    "skus": [
+     {
+      "gtin": null,
+      "price_path": {
+       "currency": "USD",
+       "former_names": [],
+       "list_price": "77.99",
+       "loyalty_program": "Petco Perks",
+       "member": null,
+       "not_applied": [],
+       "ongoing": {
+        "cap_amount": null,
+        "capped": false,
+        "discount_amount": null,
+        "discount_percent": "5",
+        "funded_by": "purina",
+        "kind": "ongoing",
+        "mechanic": "subscription_discount",
+        "order_n": "ongoing",
+        "price": "74.09",
+        "program_id": "petco_autoship",
+        "program_name": "Petco Autoship",
+        "rule": "5% off",
+        "stackable": null,
+        "stacks_with": [],
+        "tier_name": null,
+        "valid_until": "2026-10-31T00:00:00Z"
+       },
+       "rx": false,
+       "steps": [
+        {
+         "cap_amount": null,
+         "capped": false,
+         "discount_amount": null,
+         "discount_percent": "40",
+         "funded_by": "purina",
+         "kind": "first_order",
+         "mechanic": "subscription_discount",
+         "order_n": "1",
+         "price": "46.79",
+         "program_id": "petco_autoship",
+         "program_name": "Petco Autoship",
+         "rule": "40% off",
+         "stackable": null,
+         "stacks_with": [],
+         "tier_name": null,
+         "valid_until": "2026-10-31T00:00:00Z"
+        },
+        {
+         "cap_amount": null,
+         "capped": false,
+         "discount_amount": null,
+         "discount_percent": "20",
+         "funded_by": "purina",
+         "kind": "second_order",
+         "mechanic": "subscription_discount",
+         "order_n": "2",
+         "price": "62.39",
+         "program_id": "petco_autoship",
+         "program_name": "Petco Autoship",
+         "rule": "20% off",
+         "stackable": null,
+         "stacks_with": [],
+         "tier_name": null,
+         "valid_until": "2026-10-31T00:00:00Z"
+        },
+        {
+         "cap_amount": null,
+         "capped": false,
+         "discount_amount": null,
+         "discount_percent": "10",
+         "funded_by": "purina",
+         "kind": "third_order",
+         "mechanic": "subscription_discount",
+         "order_n": "3",
+         "price": "70.19",
+         "program_id": "petco_autoship",
+         "program_name": "Petco Autoship",
+         "rule": "10% off",
+         "stackable": null,
+         "stacks_with": [],
+         "tier_name": null,
+         "valid_until": "2026-10-31T00:00:00Z"
+        }
+       ]
+      },
+      "product_url": "https://www.petco.com/shop/en/petcostore/product/2579466",
+      "sku": "2579466",
+      "title": "Purina Pro Plan Sensitive Skin & Stomach Salmon & Rice 30 lb",
+      "variant_id": "sku:2579466"
+     }
+    ],
+    "visible": true
+   },
+   {
+    "merchant_slug": "petco",
+    "product_url": "https://www.petco.com/shop/en/petcostore/product/3089211",
+    "record_ref": "feed:petco:sku:3089211",
+    "skus": [
+     {
+      "gtin": null,
+      "price_path": {
+       "currency": "USD",
+       "former_names": [],
+       "list_price": "28.98",
+       "loyalty_program": "Petco Perks",
+       "member": null,
+       "not_applied": [],
+       "ongoing": {
+        "cap_amount": null,
+        "capped": false,
+        "discount_amount": null,
+        "discount_percent": "5",
+        "funded_by": "purina",
+        "kind": "ongoing",
+        "mechanic": "subscription_discount",
+        "order_n": "ongoing",
+        "price": "27.53",
+        "program_id": "petco_autoship",
+        "program_name": "Petco Autoship",
+        "rule": "5% off",
+        "stackable": null,
+        "stacks_with": [],
+        "tier_name": null,
+        "valid_until": "2026-10-31T00:00:00Z"
+       },
+       "rx": false,
+       "steps": [
+        {
+         "cap_amount": null,
+         "capped": false,
+         "discount_amount": null,
+         "discount_percent": "40",
+         "funded_by": "purina",
+         "kind": "first_order",
+         "mechanic": "subscription_discount",
+         "order_n": "1",
+         "price": "17.39",
+         "program_id": "petco_autoship",
+         "program_name": "Petco Autoship",
+         "rule": "40% off",
+         "stackable": null,
+         "stacks_with": [],
+         "tier_name": null,
+         "valid_until": "2026-10-31T00:00:00Z"
+        },
+        {
+         "cap_amount": null,
+         "capped": false,
+         "discount_amount": null,
+         "discount_percent": "20",
+         "funded_by": "purina",
+         "kind": "second_order",
+         "mechanic": "subscription_discount",
+         "order_n": "2",
+         "price": "23.18",
+         "program_id": "petco_autoship",
+         "program_name": "Petco Autoship",
+         "rule": "20% off",
+         "stackable": null,
+         "stacks_with": [],
+         "tier_name": null,
+         "valid_until": "2026-10-31T00:00:00Z"
+        },
+        {
+         "cap_amount": null,
+         "capped": false,
+         "discount_amount": null,
+         "discount_percent": "10",
+         "funded_by": "purina",
+         "kind": "third_order",
+         "mechanic": "subscription_discount",
+         "order_n": "3",
+         "price": "26.08",
+         "program_id": "petco_autoship",
+         "program_name": "Petco Autoship",
+         "rule": "10% off",
+         "stackable": null,
+         "stacks_with": [],
+         "tier_name": null,
+         "valid_until": "2026-10-31T00:00:00Z"
+        }
+       ]
+      },
+      "product_url": "https://www.petco.com/shop/en/petcostore/product/3089211",
+      "sku": "3089211",
+      "title": "Tidy Cats LightWeight 24/7 Performance 17 lb",
+      "variant_id": "sku:3089211"
+     }
+    ],
+    "visible": true
+   },
+   {
+    "merchant_slug": "petco",
+    "product_url": "https://www.petco.com/shop/en/petcostore/product/2174511",
+    "record_ref": "feed:petco:sku:2174511",
+    "skus": [
+     {
+      "gtin": null,
+      "price_path": {
+       "currency": "USD",
+       "former_names": [],
+       "list_price": "39.99",
+       "loyalty_program": "Petco Perks",
+       "member": null,
+       "not_applied": [],
+       "ongoing": {
+        "cap_amount": null,
+        "capped": false,
+        "discount_amount": null,
+        "discount_percent": "5",
+        "funded_by": null,
+        "kind": "ongoing",
+        "mechanic": "subscription_discount",
+        "order_n": "ongoing",
+        "price": "37.99",
+        "program_id": "petco_autoship",
+        "program_name": "Petco Autoship",
+        "rule": "5% off",
+        "stackable": null,
+        "stacks_with": [],
+        "tier_name": null,
+        "valid_until": null
+       },
+       "rx": false,
+       "steps": [
+        {
+         "cap_amount": "20",
+         "capped": false,
+         "discount_amount": null,
+         "discount_percent": "35",
+         "funded_by": null,
+         "kind": "first_order",
+         "mechanic": "subscription_discount",
+         "order_n": "1",
+         "price": "25.99",
+         "program_id": "petco_autoship",
+         "program_name": "Petco Autoship",
+         "rule": "35% off, capped at $20",
+         "stackable": null,
+         "stacks_with": [],
+         "tier_name": null,
+         "valid_until": null
+        }
+       ]
+      },
+      "product_url": "https://www.petco.com/shop/en/petcostore/product/2174511",
+      "sku": "2174511",
+      "title": "Greenies Original Regular Dental Treats 36 ct",
+      "variant_id": "sku:2174511"
+     }
+    ],
+    "visible": true
+   },
+   {
+    "merchant_slug": "petco",
+    "product_url": "https://www.petco.com/shop/en/petcostore/product/3879911",
+    "record_ref": "feed:petco:sku:3879911",
+    "skus": [
+     {
+      "gtin": null,
+      "price_path": {
+       "currency": "USD",
+       "former_names": [],
+       "list_price": "235.59",
+       "loyalty_program": "Petco Perks",
+       "member": null,
+       "not_applied": [
+        {
+         "order_n": "1",
+         "program_id": "petco_autoship",
+         "program_name": "Petco Autoship",
+         "reason": "excluded: rx"
+        }
+       ],
+       "ongoing": null,
+       "rx": true,
+       "steps": []
+      },
+      "product_url": "https://www.petco.com/shop/en/petcostore/product/3879911",
+      "sku": "3879911",
+      "title": "NexGard PLUS Chewables for Dogs 33.1-66 lb 6 chews",
+      "variant_id": "sku:3879911"
+     }
+    ],
+    "visible": false
+   }
+  ]
+ },
+ "headers": {
+  "content-disposition": "attachment; filename=\"petco-deals-api-20261030.json\"",
+  "content-type": "application/json",
+  "x-truesync-compiled-at": "2026-10-30T07:05:05+00:00",
+  "x-truesync-merchant-kind": "seller",
+  "x-truesync-mode": "seller_external",
+  "x-truesync-record-count": "4",
+  "x-truesync-validator": "ok=3; failed=1"
+ },
+ "status": 200
+}

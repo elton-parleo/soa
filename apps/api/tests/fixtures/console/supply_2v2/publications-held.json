@@ -1,0 +1,2579 @@
+{
+ "body": [
+  {
+   "channel": "mcp",
+   "channel_slug": "mcp",
+   "compiled_at": "2026-10-30T07:05:05",
+   "error": null,
+   "expressiveness": [],
+   "external_ref": "https://mcp.parleo.example#get_product_true_cost",
+   "held": false,
+   "id": 28,
+   "journal": [
+    {
+     "at": "2026-10-30T07:05:05+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-30T07:05:05.795113+00:00",
+     "by": "parleo",
+     "event": "published",
+     "note": "https://mcp.parleo.example#get_product_true_cost"
+    }
+   ],
+   "listing_id": null,
+   "mode": "seller_external",
+   "payload": {
+    "held_publication_id": 19,
+    "line": "NexGard PLUS Chewables for Dogs 33.1-66 lb",
+    "merchant": "petco",
+    "record_ref": "feed:petco:sku:3879911",
+    "served": 1,
+    "server": "https://mcp.parleo.example",
+    "skus": [
+     {
+      "product": "NexGard PLUS Chewables for Dogs 33.1-66 lb 6 chews",
+      "query": "https://www.petco.com/shop/en/petcostore/product/3879911",
+      "resolved": true,
+      "sku": "3879911",
+      "true_cost": 235.59
+     }
+    ],
+    "tool": "get_product_true_cost"
+   },
+   "published_at": "2026-10-30T07:05:05.795113",
+   "reason": null,
+   "record_ref": "feed:petco:sku:3879911",
+   "spec_clause": null,
+   "spec_version": "parleo-internal",
+   "status": "published",
+   "validation": {
+    "errors": [],
+    "ok": true
+   }
+  },
+  {
+   "channel": "mcp",
+   "channel_slug": "mcp",
+   "compiled_at": "2026-10-30T07:05:05",
+   "error": null,
+   "expressiveness": [],
+   "external_ref": "https://mcp.parleo.example#get_product_true_cost",
+   "held": false,
+   "id": 27,
+   "journal": [
+    {
+     "at": "2026-10-30T07:05:05+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-30T07:05:05.787434+00:00",
+     "by": "parleo",
+     "event": "published",
+     "note": "https://mcp.parleo.example#get_product_true_cost"
+    }
+   ],
+   "listing_id": null,
+   "mode": "seller_external",
+   "payload": {
+    "held_publication_id": 13,
+    "line": "Greenies Original Regular Dental Treats",
+    "merchant": "petco",
+    "record_ref": "feed:petco:sku:2174511",
+    "served": 1,
+    "server": "https://mcp.parleo.example",
+    "skus": [
+     {
+      "product": "Greenies Original Regular Dental Treats 36 ct",
+      "query": "https://www.petco.com/shop/en/petcostore/product/2174511",
+      "resolved": true,
+      "sku": "2174511",
+      "true_cost": 25.99
+     }
+    ],
+    "tool": "get_product_true_cost"
+   },
+   "published_at": "2026-10-30T07:05:05.787434",
+   "reason": null,
+   "record_ref": "feed:petco:sku:2174511",
+   "spec_clause": null,
+   "spec_version": "parleo-internal",
+   "status": "published",
+   "validation": {
+    "errors": [],
+    "ok": true
+   }
+  },
+  {
+   "channel": "mcp",
+   "channel_slug": "mcp",
+   "compiled_at": "2026-10-30T07:05:05",
+   "error": null,
+   "expressiveness": [],
+   "external_ref": "https://mcp.parleo.example#get_product_true_cost",
+   "held": false,
+   "id": 26,
+   "journal": [
+    {
+     "at": "2026-10-30T07:05:05+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-30T07:05:05.779269+00:00",
+     "by": "parleo",
+     "event": "published",
+     "note": "https://mcp.parleo.example#get_product_true_cost"
+    }
+   ],
+   "listing_id": null,
+   "mode": "seller_external",
+   "payload": {
+    "held_publication_id": 7,
+    "line": "Tidy Cats LightWeight 24/7 Performance",
+    "merchant": "petco",
+    "record_ref": "feed:petco:sku:3089211",
+    "served": 1,
+    "server": "https://mcp.parleo.example",
+    "skus": [
+     {
+      "product": "Tidy Cats LightWeight 24/7 Performance 17 lb",
+      "query": "https://www.petco.com/shop/en/petcostore/product/3089211",
+      "resolved": true,
+      "sku": "3089211",
+      "true_cost": 17.39
+     }
+    ],
+    "tool": "get_product_true_cost"
+   },
+   "published_at": "2026-10-30T07:05:05.779269",
+   "reason": null,
+   "record_ref": "feed:petco:sku:3089211",
+   "spec_clause": null,
+   "spec_version": "parleo-internal",
+   "status": "published",
+   "validation": {
+    "errors": [],
+    "ok": true
+   }
+  },
+  {
+   "channel": "mcp",
+   "channel_slug": "mcp",
+   "compiled_at": "2026-10-30T07:05:05",
+   "error": null,
+   "expressiveness": [],
+   "external_ref": "https://mcp.parleo.example#get_product_true_cost",
+   "held": false,
+   "id": 25,
+   "journal": [
+    {
+     "at": "2026-10-30T07:05:05+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-30T07:05:05.770774+00:00",
+     "by": "parleo",
+     "event": "published",
+     "note": "https://mcp.parleo.example#get_product_true_cost"
+    }
+   ],
+   "listing_id": null,
+   "mode": "seller_external",
+   "payload": {
+    "held_publication_id": 1,
+    "line": "Purina Pro Plan Sensitive Skin & Stomach Salmon & Rice",
+    "merchant": "petco",
+    "record_ref": "feed:petco:sku:2579466",
+    "served": 1,
+    "server": "https://mcp.parleo.example",
+    "skus": [
+     {
+      "product": "Purina Pro Plan Sensitive Skin & Stomach Salmon & Rice 30 lb",
+      "query": "https://www.petco.com/shop/en/petcostore/product/2579466",
+      "resolved": true,
+      "sku": "2579466",
+      "true_cost": 46.79
+     }
+    ],
+    "tool": "get_product_true_cost"
+   },
+   "published_at": "2026-10-30T07:05:05.770774",
+   "reason": null,
+   "record_ref": "feed:petco:sku:2579466",
+   "spec_clause": null,
+   "spec_version": "parleo-internal",
+   "status": "published",
+   "validation": {
+    "errors": [],
+    "ok": true
+   }
+  },
+  {
+   "channel": "deal_directory",
+   "channel_slug": "deal_directory",
+   "compiled_at": "2026-10-30T07:05:05",
+   "error": "no owned program price to list (every path is list price only)",
+   "expressiveness": [
+    {
+     "field": "rule_s6",
+     "note": "rule s6 off: a marketplace storefront URL would be treated as not a seller offer",
+     "severity": "info"
+    }
+   ],
+   "external_ref": null,
+   "held": true,
+   "id": 24,
+   "journal": [
+    {
+     "at": "2026-10-30T07:05:05+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-30T07:05:05+00:00",
+     "by": "parleo",
+     "event": "held_for_merchant",
+     "note": "compiled; the brand's own team sends it"
+    }
+   ],
+   "listing_id": null,
+   "mode": "seller_external",
+   "payload": {
+    "merchant_slug": "petco",
+    "product_url": "https://www.petco.com/shop/en/petcostore/product/3879911",
+    "programs": [],
+    "record_ref": "feed:petco:sku:3879911",
+    "visible": false
+   },
+   "published_at": null,
+   "reason": "held_for_merchant",
+   "record_ref": "feed:petco:sku:3879911",
+   "spec_clause": null,
+   "spec_version": "parleo-internal",
+   "status": "compiled_not_published",
+   "validation": {
+    "errors": [
+     "no owned program price to list (every path is list price only)"
+    ],
+    "ok": false
+   }
+  },
+  {
+   "channel": "deals_api",
+   "channel_slug": "deals_api",
+   "compiled_at": "2026-10-30T07:05:05",
+   "error": "no owned program price to list (every path is list price only)",
+   "expressiveness": [
+    {
+     "field": "rule_s6",
+     "note": "rule s6 off: a marketplace storefront URL would be treated as not a seller offer",
+     "severity": "info"
+    }
+   ],
+   "external_ref": null,
+   "held": true,
+   "id": 23,
+   "journal": [
+    {
+     "at": "2026-10-30T07:05:05+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-30T07:05:05+00:00",
+     "by": "parleo",
+     "event": "held_for_merchant",
+     "note": "compiled; the brand's own team sends it"
+    }
+   ],
+   "listing_id": null,
+   "mode": "seller_external",
+   "payload": {
+    "merchant_slug": "petco",
+    "product_url": "https://www.petco.com/shop/en/petcostore/product/3879911",
+    "record_ref": "feed:petco:sku:3879911",
+    "skus": [
+     {
+      "gtin": null,
+      "price_path": {
+       "currency": "USD",
+       "former_names": [],
+       "list_price": "235.59",
+       "loyalty_program": "Petco Perks",
+       "member": null,
+       "not_applied": [
+        {
+         "order_n": "1",
+         "program_id": "petco_autoship",
+         "program_name": "Petco Autoship",
+         "reason": "excluded: rx"
+        }
+       ],
+       "ongoing": null,
+       "rx": true,
+       "steps": []
+      },
+      "product_url": "https://www.petco.com/shop/en/petcostore/product/3879911",
+      "sku": "3879911",
+      "title": "NexGard PLUS Chewables for Dogs 33.1-66 lb 6 chews",
+      "variant_id": "sku:3879911"
+     }
+    ],
+    "visible": false
+   },
+   "published_at": null,
+   "reason": "held_for_merchant",
+   "record_ref": "feed:petco:sku:3879911",
+   "spec_clause": null,
+   "spec_version": "parleo-internal",
+   "status": "compiled_not_published",
+   "validation": {
+    "errors": [
+     "no owned program price to list (every path is list price only)"
+    ],
+    "ok": false
+   }
+  },
+  {
+   "channel": "ucp_uip",
+   "channel_slug": "ucp_uip",
+   "compiled_at": "2026-10-30T07:05:05",
+   "error": null,
+   "expressiveness": [
+    {
+     "field": "gtin",
+     "note": "sku:3879911: no GTIN, so variant.barcodes is omitted (shopping/types/variant.json). An agent has title and sku to correlate on.",
+     "severity": "info"
+    },
+    {
+     "field": "rule_s6",
+     "note": "rule s6 off: a marketplace storefront URL would be treated as not a seller offer",
+     "severity": "info"
+    }
+   ],
+   "external_ref": null,
+   "held": true,
+   "id": 22,
+   "journal": [
+    {
+     "at": "2026-10-30T07:05:05+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-30T07:05:05+00:00",
+     "by": "parleo",
+     "event": "held_for_merchant",
+     "note": "compiled; the brand's own team sends it"
+    }
+   ],
+   "listing_id": null,
+   "mode": "seller_external",
+   "payload": {
+    "product": {
+     "description": {
+      "plain": ""
+     },
+     "id": "feed:petco:sku:3879911",
+     "price_range": {
+      "max": {
+       "amount": 23559,
+       "currency": "USD"
+      },
+      "min": {
+       "amount": 23559,
+       "currency": "USD"
+      }
+     },
+     "tags": [
+      "NexGard PLUS"
+     ],
+     "title": "NexGard PLUS Chewables for Dogs 33.1-66 lb",
+     "url": "https://www.petco.com/shop/en/petcostore/product/3879911",
+     "variants": [
+      {
+       "availability": {
+        "available": false,
+        "status": "unknown"
+       },
+       "description": {
+        "plain": "NexGard PLUS Chewables for Dogs 33.1-66 lb 6 chews"
+       },
+       "id": "sku:3879911",
+       "options": [
+        {
+         "label": "6",
+         "name": "count"
+        }
+       ],
+       "price": {
+        "amount": 23559,
+        "currency": "USD"
+       },
+       "sku": "3879911",
+       "title": "NexGard PLUS Chewables for Dogs 33.1-66 lb 6 chews",
+       "url": "https://www.petco.com/shop/en/petcostore/product/3879911"
+      }
+     ]
+    },
+    "ucp": {
+     "version": "2026-08-25"
+    }
+   },
+   "published_at": null,
+   "reason": "held_for_merchant",
+   "record_ref": "feed:petco:sku:3879911",
+   "spec_clause": null,
+   "spec_version": "ucp-2026-08-25",
+   "status": "compiled_not_published",
+   "validation": {
+    "errors": [],
+    "ok": true
+   }
+  },
+  {
+   "channel": "acp",
+   "channel_slug": "acp",
+   "compiled_at": "2026-10-30T07:05:05",
+   "error": "sku:3879911: missing required field 'image_url' (specs \u00a71)",
+   "expressiveness": [
+    {
+     "field": "gtin",
+     "note": "sku:3879911: no GTIN or MPN. ACP's OpenAI schema makes identifiers optional (specs \u00a71), so the row is valid, but an agent has only title and brand to match on.",
+     "severity": "info"
+    },
+    {
+     "field": "rule_s6",
+     "note": "rule s6 off: a marketplace storefront URL would be treated as not a seller offer",
+     "severity": "info"
+    }
+   ],
+   "external_ref": null,
+   "held": true,
+   "id": 21,
+   "journal": [
+    {
+     "at": "2026-10-30T07:05:05+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-30T07:05:05+00:00",
+     "by": "parleo",
+     "event": "held_for_merchant",
+     "note": "compiled; the brand's own team sends it"
+    }
+   ],
+   "listing_id": null,
+   "mode": "seller_external",
+   "payload": {
+    "items": [
+     {
+      "availability": "unknown",
+      "brand": "NexGard PLUS",
+      "description": "NexGard PLUS Chewables for Dogs 33.1-66 lb 6 chews",
+      "image_url": null,
+      "is_eligible_checkout": false,
+      "is_eligible_search": true,
+      "item_id": "sku:3879911",
+      "listing_has_variations": false,
+      "price": "235.59 USD",
+      "seller_name": "Petco",
+      "target_countries": [
+       "US"
+      ],
+      "title": "NexGard PLUS Chewables for Dogs 33.1-66 lb 6 chews",
+      "url": "https://www.petco.com/shop/en/petcostore/product/3879911",
+      "variant_dict": {
+       "count": "6"
+      }
+     }
+    ]
+   },
+   "published_at": null,
+   "reason": "held_for_merchant",
+   "record_ref": "feed:petco:sku:3879911",
+   "spec_clause": null,
+   "spec_version": "acp-feed-stable-2026-08-18",
+   "status": "compiled_not_published",
+   "validation": {
+    "errors": [
+     "sku:3879911: missing required field 'image_url' (specs \u00a71)"
+    ],
+    "ok": false
+   }
+  },
+  {
+   "channel": "merchant_center",
+   "channel_slug": "merchant_center",
+   "compiled_at": "2026-10-30T07:05:05",
+   "error": "sku:3879911: missing imageLink",
+   "expressiveness": [
+    {
+     "field": "gtin",
+     "note": "sku:3879911: no GTIN \u2014 identifier_exists=false; expect limited serving/possible disapproval.",
+     "severity": "info"
+    },
+    {
+     "field": "rule_s6",
+     "note": "rule s6 off: a marketplace storefront URL would be treated as not a seller offer",
+     "severity": "info"
+    }
+   ],
+   "external_ref": null,
+   "held": true,
+   "id": 20,
+   "journal": [
+    {
+     "at": "2026-10-30T07:05:05+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-30T07:05:05+00:00",
+     "by": "parleo",
+     "event": "held_for_merchant",
+     "note": "compiled; the brand's own team sends it"
+    }
+   ],
+   "listing_id": null,
+   "mode": "seller_external",
+   "payload": {
+    "apiVersion": "products/v1",
+    "productInputs": [
+     {
+      "contentLanguage": "en",
+      "feedLabel": "US",
+      "offerId": "sku:3879911",
+      "productAttributes": {
+       "availability": "IN_STOCK",
+       "brand": "NexGard PLUS",
+       "condition": "NEW",
+       "identifierExists": false,
+       "link": "https://www.petco.com/shop/en/petcostore/product/3879911",
+       "price": {
+        "amountMicros": "235590000",
+        "currencyCode": "USD"
+       },
+       "title": "NexGard PLUS Chewables for Dogs 33.1-66 lb 6 chews"
+      }
+     }
+    ]
+   },
+   "published_at": null,
+   "reason": "held_for_merchant",
+   "record_ref": "feed:petco:sku:3879911",
+   "spec_clause": null,
+   "spec_version": "gmc-products-v1-2026-08-18",
+   "status": "compiled_not_published",
+   "validation": {
+    "errors": [
+     "sku:3879911: missing imageLink"
+    ],
+    "ok": false
+   }
+  },
+  {
+   "channel": "schema_org",
+   "channel_slug": "schema_org",
+   "compiled_at": "2026-10-30T07:05:05",
+   "error": null,
+   "expressiveness": [
+    {
+     "field": "rule_s6",
+     "note": "rule s6 off: a marketplace storefront URL would be treated as not a seller offer",
+     "severity": "info"
+    }
+   ],
+   "external_ref": null,
+   "held": true,
+   "id": 19,
+   "journal": [
+    {
+     "at": "2026-10-30T07:05:05+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-30T07:05:05+00:00",
+     "by": "parleo",
+     "event": "held_for_merchant",
+     "note": "compiled; the brand's own team sends it"
+    }
+   ],
+   "listing_id": null,
+   "mode": "seller_external",
+   "payload": {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    "additionalProperty": [
+     {
+      "@type": "PropertyValue",
+      "name": "count",
+      "value": "6"
+     }
+    ],
+    "brand": {
+     "@type": "Brand",
+     "name": "NexGard PLUS"
+    },
+    "name": "NexGard PLUS Chewables for Dogs 33.1-66 lb 6 chews",
+    "offers": {
+     "@type": "Offer",
+     "availability": "https://schema.org/InStock",
+     "price": "235.59",
+     "priceCurrency": "USD",
+     "seller": {
+      "@type": "Organization",
+      "name": "Petco"
+     },
+     "url": "https://www.petco.com/shop/en/petcostore/product/3879911"
+    },
+    "sku": "3879911",
+    "url": "https://www.petco.com/shop/en/petcostore/product/3879911"
+   },
+   "published_at": null,
+   "reason": "held_for_merchant",
+   "record_ref": "feed:petco:sku:3879911",
+   "spec_clause": null,
+   "spec_version": "schemaorg-merchant-listing-2026-08-18",
+   "status": "compiled_not_published",
+   "validation": {
+    "errors": [],
+    "ok": true
+   }
+  },
+  {
+   "channel": "deal_directory",
+   "channel_slug": "deal_directory",
+   "compiled_at": "2026-10-30T07:05:05",
+   "error": null,
+   "expressiveness": [
+    {
+     "field": "rule_s6",
+     "note": "rule s6 off: a marketplace storefront URL would be treated as not a seller offer",
+     "severity": "info"
+    }
+   ],
+   "external_ref": null,
+   "held": true,
+   "id": 18,
+   "journal": [
+    {
+     "at": "2026-10-30T07:05:05+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-30T07:05:05+00:00",
+     "by": "parleo",
+     "event": "held_for_merchant",
+     "note": "compiled; the brand's own team sends it"
+    }
+   ],
+   "listing_id": null,
+   "mode": "seller_external",
+   "payload": {
+    "merchant_slug": "petco",
+    "product_url": "https://www.petco.com/shop/en/petcostore/product/2174511",
+    "programs": [
+     {
+      "funded_by": null,
+      "mechanic": "subscription_discount",
+      "program_id": "petco_autoship",
+      "program_name": "Petco Autoship",
+      "skus": [
+       "sku:2174511"
+      ],
+      "valid_until": null
+     }
+    ],
+    "record_ref": "feed:petco:sku:2174511",
+    "visible": true
+   },
+   "published_at": null,
+   "reason": "held_for_merchant",
+   "record_ref": "feed:petco:sku:2174511",
+   "spec_clause": null,
+   "spec_version": "parleo-internal",
+   "status": "compiled_not_published",
+   "validation": {
+    "errors": [],
+    "ok": true
+   }
+  },
+  {
+   "channel": "deals_api",
+   "channel_slug": "deals_api",
+   "compiled_at": "2026-10-30T07:05:05",
+   "error": null,
+   "expressiveness": [
+    {
+     "field": "rule_s6",
+     "note": "rule s6 off: a marketplace storefront URL would be treated as not a seller offer",
+     "severity": "info"
+    }
+   ],
+   "external_ref": null,
+   "held": true,
+   "id": 17,
+   "journal": [
+    {
+     "at": "2026-10-30T07:05:05+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-30T07:05:05+00:00",
+     "by": "parleo",
+     "event": "held_for_merchant",
+     "note": "compiled; the brand's own team sends it"
+    }
+   ],
+   "listing_id": null,
+   "mode": "seller_external",
+   "payload": {
+    "merchant_slug": "petco",
+    "product_url": "https://www.petco.com/shop/en/petcostore/product/2174511",
+    "record_ref": "feed:petco:sku:2174511",
+    "skus": [
+     {
+      "gtin": null,
+      "price_path": {
+       "currency": "USD",
+       "former_names": [],
+       "list_price": "39.99",
+       "loyalty_program": "Petco Perks",
+       "member": null,
+       "not_applied": [],
+       "ongoing": {
+        "cap_amount": null,
+        "capped": false,
+        "discount_amount": null,
+        "discount_percent": "5",
+        "funded_by": null,
+        "kind": "ongoing",
+        "mechanic": "subscription_discount",
+        "order_n": "ongoing",
+        "price": "37.99",
+        "program_id": "petco_autoship",
+        "program_name": "Petco Autoship",
+        "rule": "5% off",
+        "stackable": null,
+        "stacks_with": [],
+        "tier_name": null,
+        "valid_until": null
+       },
+       "rx": false,
+       "steps": [
+        {
+         "cap_amount": "20",
+         "capped": false,
+         "discount_amount": null,
+         "discount_percent": "35",
+         "funded_by": null,
+         "kind": "first_order",
+         "mechanic": "subscription_discount",
+         "order_n": "1",
+         "price": "25.99",
+         "program_id": "petco_autoship",
+         "program_name": "Petco Autoship",
+         "rule": "35% off, capped at $20",
+         "stackable": null,
+         "stacks_with": [],
+         "tier_name": null,
+         "valid_until": null
+        }
+       ]
+      },
+      "product_url": "https://www.petco.com/shop/en/petcostore/product/2174511",
+      "sku": "2174511",
+      "title": "Greenies Original Regular Dental Treats 36 ct",
+      "variant_id": "sku:2174511"
+     }
+    ],
+    "visible": true
+   },
+   "published_at": null,
+   "reason": "held_for_merchant",
+   "record_ref": "feed:petco:sku:2174511",
+   "spec_clause": null,
+   "spec_version": "parleo-internal",
+   "status": "compiled_not_published",
+   "validation": {
+    "errors": [],
+    "ok": true
+   }
+  },
+  {
+   "channel": "ucp_uip",
+   "channel_slug": "ucp_uip",
+   "compiled_at": "2026-10-30T07:05:05",
+   "error": null,
+   "expressiveness": [
+    {
+     "field": "gtin",
+     "note": "sku:2174511: no GTIN, so variant.barcodes is omitted (shopping/types/variant.json). An agent has title and sku to correlate on.",
+     "severity": "info"
+    },
+    {
+     "field": "price_path.first_order",
+     "note": "UCP: the catalog variant has no conditional price; price stays list and the step rides in variant.metadata.price_path, business-defined data (shopping/types/variant.json).",
+     "severity": "approximated"
+    },
+    {
+     "field": "price_path.ongoing",
+     "note": "UCP: in variant.metadata.price_path only (shopping/types/variant.json).",
+     "severity": "approximated"
+    },
+    {
+     "field": "rule_s6",
+     "note": "rule s6 off: a marketplace storefront URL would be treated as not a seller offer",
+     "severity": "info"
+    }
+   ],
+   "external_ref": null,
+   "held": true,
+   "id": 16,
+   "journal": [
+    {
+     "at": "2026-10-30T07:05:05+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-30T07:05:05+00:00",
+     "by": "parleo",
+     "event": "held_for_merchant",
+     "note": "compiled; the brand's own team sends it"
+    }
+   ],
+   "listing_id": null,
+   "mode": "seller_external",
+   "payload": {
+    "product": {
+     "description": {
+      "plain": ""
+     },
+     "id": "feed:petco:sku:2174511",
+     "price_range": {
+      "max": {
+       "amount": 3999,
+       "currency": "USD"
+      },
+      "min": {
+       "amount": 3999,
+       "currency": "USD"
+      }
+     },
+     "tags": [
+      "Greenies"
+     ],
+     "title": "Greenies Original Regular Dental Treats",
+     "url": "https://www.petco.com/shop/en/petcostore/product/2174511",
+     "variants": [
+      {
+       "availability": {
+        "available": false,
+        "status": "unknown"
+       },
+       "description": {
+        "plain": "Greenies Original Regular Dental Treats 36 ct"
+       },
+       "id": "sku:2174511",
+       "metadata": {
+        "price_path": {
+         "ongoing": {
+          "kind": "ongoing",
+          "order_n": "ongoing",
+          "price": {
+           "amount": 3799,
+           "currency": "USD"
+          },
+          "program_id": "petco_autoship",
+          "program_name": "Petco Autoship",
+          "rule": "5% off"
+         },
+         "steps": [
+          {
+           "kind": "first_order",
+           "order_n": "1",
+           "price": {
+            "amount": 2599,
+            "currency": "USD"
+           },
+           "program_id": "petco_autoship",
+           "program_name": "Petco Autoship",
+           "rule": "35% off, capped at $20"
+          }
+         ]
+        }
+       },
+       "options": [
+        {
+         "label": "36",
+         "name": "count"
+        }
+       ],
+       "price": {
+        "amount": 3999,
+        "currency": "USD"
+       },
+       "sku": "2174511",
+       "title": "Greenies Original Regular Dental Treats 36 ct",
+       "url": "https://www.petco.com/shop/en/petcostore/product/2174511"
+      }
+     ]
+    },
+    "ucp": {
+     "version": "2026-08-25"
+    }
+   },
+   "published_at": null,
+   "reason": "held_for_merchant",
+   "record_ref": "feed:petco:sku:2174511",
+   "spec_clause": null,
+   "spec_version": "ucp-2026-08-25",
+   "status": "compiled_not_published",
+   "validation": {
+    "errors": [],
+    "ok": true
+   }
+  },
+  {
+   "channel": "acp",
+   "channel_slug": "acp",
+   "compiled_at": "2026-10-30T07:05:05",
+   "error": "sku:2174511: missing required field 'image_url' (specs \u00a71)",
+   "expressiveness": [
+    {
+     "field": "gtin",
+     "note": "sku:2174511: no GTIN or MPN. ACP's OpenAI schema makes identifiers optional (specs \u00a71), so the row is valid, but an agent has only title and brand to match on.",
+     "severity": "info"
+    },
+    {
+     "field": "price_path.first_order",
+     "note": "ACP: the first-order price is sale_price, with no field for its condition (a first subscription order), so it reads as a price anyone gets (specs \u00a71).",
+     "severity": "approximated"
+    },
+    {
+     "field": "price_path.ongoing",
+     "note": "ACP: no subscribe-and-save fields (specs \u00a71).",
+     "severity": "dropped"
+    },
+    {
+     "field": "rule_s6",
+     "note": "rule s6 off: a marketplace storefront URL would be treated as not a seller offer",
+     "severity": "info"
+    }
+   ],
+   "external_ref": null,
+   "held": true,
+   "id": 15,
+   "journal": [
+    {
+     "at": "2026-10-30T07:05:05+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-30T07:05:05+00:00",
+     "by": "parleo",
+     "event": "held_for_merchant",
+     "note": "compiled; the brand's own team sends it"
+    }
+   ],
+   "listing_id": null,
+   "mode": "seller_external",
+   "payload": {
+    "items": [
+     {
+      "availability": "unknown",
+      "brand": "Greenies",
+      "description": "Greenies Original Regular Dental Treats 36 ct",
+      "image_url": null,
+      "is_eligible_checkout": false,
+      "is_eligible_search": true,
+      "item_id": "sku:2174511",
+      "listing_has_variations": false,
+      "price": "39.99 USD",
+      "sale_price": "25.99 USD",
+      "seller_name": "Petco",
+      "target_countries": [
+       "US"
+      ],
+      "title": "Greenies Original Regular Dental Treats 36 ct",
+      "url": "https://www.petco.com/shop/en/petcostore/product/2174511",
+      "variant_dict": {
+       "count": "36"
+      }
+     }
+    ]
+   },
+   "published_at": null,
+   "reason": "held_for_merchant",
+   "record_ref": "feed:petco:sku:2174511",
+   "spec_clause": null,
+   "spec_version": "acp-feed-stable-2026-08-18",
+   "status": "compiled_not_published",
+   "validation": {
+    "errors": [
+     "sku:2174511: missing required field 'image_url' (specs \u00a71)"
+    ],
+    "ok": false
+   }
+  },
+  {
+   "channel": "merchant_center",
+   "channel_slug": "merchant_center",
+   "compiled_at": "2026-10-30T07:05:05",
+   "error": "sku:2174511: missing imageLink",
+   "expressiveness": [
+    {
+     "field": "gtin",
+     "note": "sku:2174511: no GTIN \u2014 identifier_exists=false; expect limited serving/possible disapproval.",
+     "severity": "info"
+    },
+    {
+     "field": "price_path.first_order",
+     "note": "GMC: the first-order price is salePrice, which Google reads as a price any buyer gets; the precise form is a promotion with SUBSCRIBE and FIRST_ORDER restrictions, not compiled from a price path (specs \u00a73).",
+     "severity": "approximated"
+    },
+    {
+     "field": "price_path.ongoing",
+     "note": "GMC: no subscription price on the product (specs \u00a73).",
+     "severity": "dropped"
+    },
+    {
+     "field": "rule_s6",
+     "note": "rule s6 off: a marketplace storefront URL would be treated as not a seller offer",
+     "severity": "info"
+    }
+   ],
+   "external_ref": null,
+   "held": true,
+   "id": 14,
+   "journal": [
+    {
+     "at": "2026-10-30T07:05:05+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-30T07:05:05+00:00",
+     "by": "parleo",
+     "event": "held_for_merchant",
+     "note": "compiled; the brand's own team sends it"
+    }
+   ],
+   "listing_id": null,
+   "mode": "seller_external",
+   "payload": {
+    "apiVersion": "products/v1",
+    "productInputs": [
+     {
+      "contentLanguage": "en",
+      "feedLabel": "US",
+      "offerId": "sku:2174511",
+      "productAttributes": {
+       "availability": "IN_STOCK",
+       "brand": "Greenies",
+       "condition": "NEW",
+       "identifierExists": false,
+       "link": "https://www.petco.com/shop/en/petcostore/product/2174511",
+       "price": {
+        "amountMicros": "39990000",
+        "currencyCode": "USD"
+       },
+       "salePrice": {
+        "amountMicros": "25990000",
+        "currencyCode": "USD"
+       },
+       "title": "Greenies Original Regular Dental Treats 36 ct"
+      }
+     }
+    ]
+   },
+   "published_at": null,
+   "reason": "held_for_merchant",
+   "record_ref": "feed:petco:sku:2174511",
+   "spec_clause": null,
+   "spec_version": "gmc-products-v1-2026-08-18",
+   "status": "compiled_not_published",
+   "validation": {
+    "errors": [
+     "sku:2174511: missing imageLink"
+    ],
+    "ok": false
+   }
+  },
+  {
+   "channel": "schema_org",
+   "channel_slug": "schema_org",
+   "compiled_at": "2026-10-30T07:05:05",
+   "error": null,
+   "expressiveness": [
+    {
+     "field": "price_path.first_order",
+     "note": "schema.org: the first-order price is a UnitPriceSpecification beside the list price; the condition (a first subscription order) and the percent are description text (specs \u00a74).",
+     "severity": "approximated"
+    },
+    {
+     "field": "price_path.ongoing",
+     "note": "schema.org: the recurring price is description text; no subscription pricing structure (specs matrix).",
+     "severity": "approximated"
+    },
+    {
+     "field": "rule_s6",
+     "note": "rule s6 off: a marketplace storefront URL would be treated as not a seller offer",
+     "severity": "info"
+    }
+   ],
+   "external_ref": null,
+   "held": true,
+   "id": 13,
+   "journal": [
+    {
+     "at": "2026-10-30T07:05:05+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-30T07:05:05+00:00",
+     "by": "parleo",
+     "event": "held_for_merchant",
+     "note": "compiled; the brand's own team sends it"
+    }
+   ],
+   "listing_id": null,
+   "mode": "seller_external",
+   "payload": {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    "additionalProperty": [
+     {
+      "@type": "PropertyValue",
+      "name": "count",
+      "value": "36"
+     }
+    ],
+    "brand": {
+     "@type": "Brand",
+     "name": "Greenies"
+    },
+    "description": "Petco Autoship: first order $25.99 (35% off, capped at $20), then $37.99 (5% off) on every order.",
+    "name": "Greenies Original Regular Dental Treats 36 ct",
+    "offers": {
+     "@type": "Offer",
+     "availability": "https://schema.org/InStock",
+     "price": "39.99",
+     "priceCurrency": "USD",
+     "priceSpecification": [
+      {
+       "@type": "UnitPriceSpecification",
+       "description": "35% off, capped at $20",
+       "name": "Petco Autoship, first order",
+       "price": "25.99",
+       "priceCurrency": "USD"
+      }
+     ],
+     "seller": {
+      "@type": "Organization",
+      "name": "Petco"
+     },
+     "url": "https://www.petco.com/shop/en/petcostore/product/2174511"
+    },
+    "sku": "2174511",
+    "url": "https://www.petco.com/shop/en/petcostore/product/2174511"
+   },
+   "published_at": null,
+   "reason": "held_for_merchant",
+   "record_ref": "feed:petco:sku:2174511",
+   "spec_clause": null,
+   "spec_version": "schemaorg-merchant-listing-2026-08-18",
+   "status": "compiled_not_published",
+   "validation": {
+    "errors": [],
+    "ok": true
+   }
+  },
+  {
+   "channel": "deal_directory",
+   "channel_slug": "deal_directory",
+   "compiled_at": "2026-10-30T07:05:05",
+   "error": null,
+   "expressiveness": [
+    {
+     "field": "rule_s6",
+     "note": "rule s6 off: a marketplace storefront URL would be treated as not a seller offer",
+     "severity": "info"
+    }
+   ],
+   "external_ref": null,
+   "held": true,
+   "id": 12,
+   "journal": [
+    {
+     "at": "2026-10-30T07:05:05+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-30T07:05:05+00:00",
+     "by": "parleo",
+     "event": "held_for_merchant",
+     "note": "compiled; the brand's own team sends it"
+    }
+   ],
+   "listing_id": null,
+   "mode": "seller_external",
+   "payload": {
+    "merchant_slug": "petco",
+    "product_url": "https://www.petco.com/shop/en/petcostore/product/3089211",
+    "programs": [
+     {
+      "funded_by": "purina",
+      "mechanic": "subscription_discount",
+      "program_id": "petco_autoship",
+      "program_name": "Petco Autoship",
+      "skus": [
+       "sku:3089211"
+      ],
+      "valid_until": "2026-10-31"
+     }
+    ],
+    "record_ref": "feed:petco:sku:3089211",
+    "visible": true
+   },
+   "published_at": null,
+   "reason": "held_for_merchant",
+   "record_ref": "feed:petco:sku:3089211",
+   "spec_clause": null,
+   "spec_version": "parleo-internal",
+   "status": "compiled_not_published",
+   "validation": {
+    "errors": [],
+    "ok": true
+   }
+  },
+  {
+   "channel": "deals_api",
+   "channel_slug": "deals_api",
+   "compiled_at": "2026-10-30T07:05:05",
+   "error": null,
+   "expressiveness": [
+    {
+     "field": "rule_s6",
+     "note": "rule s6 off: a marketplace storefront URL would be treated as not a seller offer",
+     "severity": "info"
+    }
+   ],
+   "external_ref": null,
+   "held": true,
+   "id": 11,
+   "journal": [
+    {
+     "at": "2026-10-30T07:05:05+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-30T07:05:05+00:00",
+     "by": "parleo",
+     "event": "held_for_merchant",
+     "note": "compiled; the brand's own team sends it"
+    }
+   ],
+   "listing_id": null,
+   "mode": "seller_external",
+   "payload": {
+    "merchant_slug": "petco",
+    "product_url": "https://www.petco.com/shop/en/petcostore/product/3089211",
+    "record_ref": "feed:petco:sku:3089211",
+    "skus": [
+     {
+      "gtin": null,
+      "price_path": {
+       "currency": "USD",
+       "former_names": [],
+       "list_price": "28.98",
+       "loyalty_program": "Petco Perks",
+       "member": null,
+       "not_applied": [],
+       "ongoing": {
+        "cap_amount": null,
+        "capped": false,
+        "discount_amount": null,
+        "discount_percent": "5",
+        "funded_by": "purina",
+        "kind": "ongoing",
+        "mechanic": "subscription_discount",
+        "order_n": "ongoing",
+        "price": "27.53",
+        "program_id": "petco_autoship",
+        "program_name": "Petco Autoship",
+        "rule": "5% off",
+        "stackable": null,
+        "stacks_with": [],
+        "tier_name": null,
+        "valid_until": "2026-10-31T00:00:00Z"
+       },
+       "rx": false,
+       "steps": [
+        {
+         "cap_amount": null,
+         "capped": false,
+         "discount_amount": null,
+         "discount_percent": "40",
+         "funded_by": "purina",
+         "kind": "first_order",
+         "mechanic": "subscription_discount",
+         "order_n": "1",
+         "price": "17.39",
+         "program_id": "petco_autoship",
+         "program_name": "Petco Autoship",
+         "rule": "40% off",
+         "stackable": null,
+         "stacks_with": [],
+         "tier_name": null,
+         "valid_until": "2026-10-31T00:00:00Z"
+        },
+        {
+         "cap_amount": null,
+         "capped": false,
+         "discount_amount": null,
+         "discount_percent": "20",
+         "funded_by": "purina",
+         "kind": "second_order",
+         "mechanic": "subscription_discount",
+         "order_n": "2",
+         "price": "23.18",
+         "program_id": "petco_autoship",
+         "program_name": "Petco Autoship",
+         "rule": "20% off",
+         "stackable": null,
+         "stacks_with": [],
+         "tier_name": null,
+         "valid_until": "2026-10-31T00:00:00Z"
+        },
+        {
+         "cap_amount": null,
+         "capped": false,
+         "discount_amount": null,
+         "discount_percent": "10",
+         "funded_by": "purina",
+         "kind": "third_order",
+         "mechanic": "subscription_discount",
+         "order_n": "3",
+         "price": "26.08",
+         "program_id": "petco_autoship",
+         "program_name": "Petco Autoship",
+         "rule": "10% off",
+         "stackable": null,
+         "stacks_with": [],
+         "tier_name": null,
+         "valid_until": "2026-10-31T00:00:00Z"
+        }
+       ]
+      },
+      "product_url": "https://www.petco.com/shop/en/petcostore/product/3089211",
+      "sku": "3089211",
+      "title": "Tidy Cats LightWeight 24/7 Performance 17 lb",
+      "variant_id": "sku:3089211"
+     }
+    ],
+    "visible": true
+   },
+   "published_at": null,
+   "reason": "held_for_merchant",
+   "record_ref": "feed:petco:sku:3089211",
+   "spec_clause": null,
+   "spec_version": "parleo-internal",
+   "status": "compiled_not_published",
+   "validation": {
+    "errors": [],
+    "ok": true
+   }
+  },
+  {
+   "channel": "ucp_uip",
+   "channel_slug": "ucp_uip",
+   "compiled_at": "2026-10-30T07:05:05",
+   "error": null,
+   "expressiveness": [
+    {
+     "field": "gtin",
+     "note": "sku:3089211: no GTIN, so variant.barcodes is omitted (shopping/types/variant.json). An agent has title and sku to correlate on.",
+     "severity": "info"
+    },
+    {
+     "field": "price_path.first_order",
+     "note": "UCP: the catalog variant has no conditional price; price stays list and the step rides in variant.metadata.price_path, business-defined data (shopping/types/variant.json).",
+     "severity": "approximated"
+    },
+    {
+     "field": "price_path.later_steps",
+     "note": "UCP: in variant.metadata.price_path only (shopping/types/variant.json).",
+     "severity": "approximated"
+    },
+    {
+     "field": "price_path.ongoing",
+     "note": "UCP: in variant.metadata.price_path only (shopping/types/variant.json).",
+     "severity": "approximated"
+    },
+    {
+     "field": "price_path.funded_by",
+     "note": "UCP: in variant.metadata.price_path only.",
+     "severity": "approximated"
+    },
+    {
+     "field": "price_path.valid_until",
+     "note": "UCP: in variant.metadata.price_path only.",
+     "severity": "approximated"
+    },
+    {
+     "field": "rule_s6",
+     "note": "rule s6 off: a marketplace storefront URL would be treated as not a seller offer",
+     "severity": "info"
+    }
+   ],
+   "external_ref": null,
+   "held": true,
+   "id": 10,
+   "journal": [
+    {
+     "at": "2026-10-30T07:05:05+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-30T07:05:05+00:00",
+     "by": "parleo",
+     "event": "held_for_merchant",
+     "note": "compiled; the brand's own team sends it"
+    }
+   ],
+   "listing_id": null,
+   "mode": "seller_external",
+   "payload": {
+    "product": {
+     "description": {
+      "plain": ""
+     },
+     "id": "feed:petco:sku:3089211",
+     "price_range": {
+      "max": {
+       "amount": 2898,
+       "currency": "USD"
+      },
+      "min": {
+       "amount": 2898,
+       "currency": "USD"
+      }
+     },
+     "tags": [
+      "Tidy Cats"
+     ],
+     "title": "Tidy Cats LightWeight 24/7 Performance",
+     "url": "https://www.petco.com/shop/en/petcostore/product/3089211",
+     "variants": [
+      {
+       "availability": {
+        "available": false,
+        "status": "unknown"
+       },
+       "description": {
+        "plain": "Tidy Cats LightWeight 24/7 Performance 17 lb"
+       },
+       "id": "sku:3089211",
+       "metadata": {
+        "price_path": {
+         "ongoing": {
+          "funded_by": "purina",
+          "kind": "ongoing",
+          "order_n": "ongoing",
+          "price": {
+           "amount": 2753,
+           "currency": "USD"
+          },
+          "program_id": "petco_autoship",
+          "program_name": "Petco Autoship",
+          "rule": "5% off",
+          "valid_until": "2026-10-31"
+         },
+         "steps": [
+          {
+           "funded_by": "purina",
+           "kind": "first_order",
+           "order_n": "1",
+           "price": {
+            "amount": 1739,
+            "currency": "USD"
+           },
+           "program_id": "petco_autoship",
+           "program_name": "Petco Autoship",
+           "rule": "40% off",
+           "valid_until": "2026-10-31"
+          },
+          {
+           "funded_by": "purina",
+           "kind": "second_order",
+           "order_n": "2",
+           "price": {
+            "amount": 2318,
+            "currency": "USD"
+           },
+           "program_id": "petco_autoship",
+           "program_name": "Petco Autoship",
+           "rule": "20% off",
+           "valid_until": "2026-10-31"
+          },
+          {
+           "funded_by": "purina",
+           "kind": "third_order",
+           "order_n": "3",
+           "price": {
+            "amount": 2608,
+            "currency": "USD"
+           },
+           "program_id": "petco_autoship",
+           "program_name": "Petco Autoship",
+           "rule": "10% off",
+           "valid_until": "2026-10-31"
+          }
+         ]
+        }
+       },
+       "options": [
+        {
+         "label": "17 lb",
+         "name": "size"
+        }
+       ],
+       "price": {
+        "amount": 2898,
+        "currency": "USD"
+       },
+       "sku": "3089211",
+       "title": "Tidy Cats LightWeight 24/7 Performance 17 lb",
+       "url": "https://www.petco.com/shop/en/petcostore/product/3089211"
+      }
+     ]
+    },
+    "ucp": {
+     "version": "2026-08-25"
+    }
+   },
+   "published_at": null,
+   "reason": "held_for_merchant",
+   "record_ref": "feed:petco:sku:3089211",
+   "spec_clause": null,
+   "spec_version": "ucp-2026-08-25",
+   "status": "compiled_not_published",
+   "validation": {
+    "errors": [],
+    "ok": true
+   }
+  },
+  {
+   "channel": "acp",
+   "channel_slug": "acp",
+   "compiled_at": "2026-10-30T07:05:05",
+   "error": "sku:3089211: missing required field 'image_url' (specs \u00a71)",
+   "expressiveness": [
+    {
+     "field": "gtin",
+     "note": "sku:3089211: no GTIN or MPN. ACP's OpenAI schema makes identifiers optional (specs \u00a71), so the row is valid, but an agent has only title and brand to match on.",
+     "severity": "info"
+    },
+    {
+     "field": "price_path.first_order",
+     "note": "ACP: the first-order price is sale_price, with no field for its condition (a first subscription order), so it reads as a price anyone gets (specs \u00a71).",
+     "severity": "approximated"
+    },
+    {
+     "field": "price_path.later_steps",
+     "note": "ACP: no field for later order prices (specs \u00a71).",
+     "severity": "dropped"
+    },
+    {
+     "field": "price_path.ongoing",
+     "note": "ACP: no subscribe-and-save fields (specs \u00a71).",
+     "severity": "dropped"
+    },
+    {
+     "field": "price_path.funded_by",
+     "note": "ACP: no field for who funds an offer.",
+     "severity": "dropped"
+    },
+    {
+     "field": "rule_s6",
+     "note": "rule s6 off: a marketplace storefront URL would be treated as not a seller offer",
+     "severity": "info"
+    }
+   ],
+   "external_ref": null,
+   "held": true,
+   "id": 9,
+   "journal": [
+    {
+     "at": "2026-10-30T07:05:05+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-30T07:05:05+00:00",
+     "by": "parleo",
+     "event": "held_for_merchant",
+     "note": "compiled; the brand's own team sends it"
+    }
+   ],
+   "listing_id": null,
+   "mode": "seller_external",
+   "payload": {
+    "items": [
+     {
+      "availability": "unknown",
+      "brand": "Tidy Cats",
+      "description": "Tidy Cats LightWeight 24/7 Performance 17 lb",
+      "image_url": null,
+      "is_eligible_checkout": false,
+      "is_eligible_search": true,
+      "item_id": "sku:3089211",
+      "listing_has_variations": false,
+      "price": "28.98 USD",
+      "sale_price": "17.39 USD",
+      "sale_price_end_date": "2026-10-31",
+      "seller_name": "Petco",
+      "size": "17 lb",
+      "target_countries": [
+       "US"
+      ],
+      "title": "Tidy Cats LightWeight 24/7 Performance 17 lb",
+      "url": "https://www.petco.com/shop/en/petcostore/product/3089211",
+      "variant_dict": {
+       "size": "17 lb"
+      }
+     }
+    ]
+   },
+   "published_at": null,
+   "reason": "held_for_merchant",
+   "record_ref": "feed:petco:sku:3089211",
+   "spec_clause": null,
+   "spec_version": "acp-feed-stable-2026-08-18",
+   "status": "compiled_not_published",
+   "validation": {
+    "errors": [
+     "sku:3089211: missing required field 'image_url' (specs \u00a71)"
+    ],
+    "ok": false
+   }
+  },
+  {
+   "channel": "merchant_center",
+   "channel_slug": "merchant_center",
+   "compiled_at": "2026-10-30T07:05:05",
+   "error": "sku:3089211: missing imageLink",
+   "expressiveness": [
+    {
+     "field": "gtin",
+     "note": "sku:3089211: no GTIN \u2014 identifier_exists=false; expect limited serving/possible disapproval.",
+     "severity": "info"
+    },
+    {
+     "field": "price_path.first_order",
+     "note": "GMC: the first-order price is salePrice, which Google reads as a price any buyer gets; the precise form is a promotion with SUBSCRIBE and FIRST_ORDER restrictions, not compiled from a price path (specs \u00a73).",
+     "severity": "approximated"
+    },
+    {
+     "field": "price_path.later_steps",
+     "note": "GMC: no field for later order prices (specs \u00a73).",
+     "severity": "dropped"
+    },
+    {
+     "field": "price_path.ongoing",
+     "note": "GMC: no subscription price on the product (specs \u00a73).",
+     "severity": "dropped"
+    },
+    {
+     "field": "price_path.funded_by",
+     "note": "GMC: no field for who funds an offer.",
+     "severity": "dropped"
+    },
+    {
+     "field": "rule_s6",
+     "note": "rule s6 off: a marketplace storefront URL would be treated as not a seller offer",
+     "severity": "info"
+    }
+   ],
+   "external_ref": null,
+   "held": true,
+   "id": 8,
+   "journal": [
+    {
+     "at": "2026-10-30T07:05:05+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-30T07:05:05+00:00",
+     "by": "parleo",
+     "event": "held_for_merchant",
+     "note": "compiled; the brand's own team sends it"
+    }
+   ],
+   "listing_id": null,
+   "mode": "seller_external",
+   "payload": {
+    "apiVersion": "products/v1",
+    "productInputs": [
+     {
+      "contentLanguage": "en",
+      "feedLabel": "US",
+      "offerId": "sku:3089211",
+      "productAttributes": {
+       "availability": "IN_STOCK",
+       "brand": "Tidy Cats",
+       "condition": "NEW",
+       "identifierExists": false,
+       "link": "https://www.petco.com/shop/en/petcostore/product/3089211",
+       "price": {
+        "amountMicros": "28980000",
+        "currencyCode": "USD"
+       },
+       "salePrice": {
+        "amountMicros": "17390000",
+        "currencyCode": "USD"
+       },
+       "salePriceEffectiveDate": {
+        "endTime": "2026-10-31T00:00:00Z"
+       },
+       "title": "Tidy Cats LightWeight 24/7 Performance 17 lb"
+      }
+     }
+    ]
+   },
+   "published_at": null,
+   "reason": "held_for_merchant",
+   "record_ref": "feed:petco:sku:3089211",
+   "spec_clause": null,
+   "spec_version": "gmc-products-v1-2026-08-18",
+   "status": "compiled_not_published",
+   "validation": {
+    "errors": [
+     "sku:3089211: missing imageLink"
+    ],
+    "ok": false
+   }
+  },
+  {
+   "channel": "schema_org",
+   "channel_slug": "schema_org",
+   "compiled_at": "2026-10-30T07:05:05",
+   "error": null,
+   "expressiveness": [
+    {
+     "field": "price_path.first_order",
+     "note": "schema.org: the first-order price is a UnitPriceSpecification beside the list price; the condition (a first subscription order) and the percent are description text (specs \u00a74).",
+     "severity": "approximated"
+    },
+    {
+     "field": "price_path.later_steps",
+     "note": "schema.org: second and third order prices are description text; there is no step vocabulary (specs \u00a74).",
+     "severity": "approximated"
+    },
+    {
+     "field": "price_path.ongoing",
+     "note": "schema.org: the recurring price is description text; no subscription pricing structure (specs matrix).",
+     "severity": "approximated"
+    },
+    {
+     "field": "price_path.funded_by",
+     "note": "schema.org: no field for who funds an offer.",
+     "severity": "dropped"
+    },
+    {
+     "field": "rule_s6",
+     "note": "rule s6 off: a marketplace storefront URL would be treated as not a seller offer",
+     "severity": "info"
+    }
+   ],
+   "external_ref": null,
+   "held": true,
+   "id": 7,
+   "journal": [
+    {
+     "at": "2026-10-30T07:05:05+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-30T07:05:05+00:00",
+     "by": "parleo",
+     "event": "held_for_merchant",
+     "note": "compiled; the brand's own team sends it"
+    }
+   ],
+   "listing_id": null,
+   "mode": "seller_external",
+   "payload": {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    "additionalProperty": [
+     {
+      "@type": "PropertyValue",
+      "name": "size",
+      "value": "17 lb"
+     }
+    ],
+    "brand": {
+     "@type": "Brand",
+     "name": "Tidy Cats"
+    },
+    "description": "Petco Autoship: first order $17.39 (40% off), second $23.18 (20% off), third $26.08 (10% off), then $27.53 (5% off) on every order, through 2026-10-31.",
+    "name": "Tidy Cats LightWeight 24/7 Performance 17 lb",
+    "offers": {
+     "@type": "Offer",
+     "availability": "https://schema.org/InStock",
+     "price": "28.98",
+     "priceCurrency": "USD",
+     "priceSpecification": [
+      {
+       "@type": "UnitPriceSpecification",
+       "description": "40% off",
+       "name": "Petco Autoship, first order",
+       "price": "17.39",
+       "priceCurrency": "USD",
+       "validThrough": "2026-10-31"
+      }
+     ],
+     "seller": {
+      "@type": "Organization",
+      "name": "Petco"
+     },
+     "url": "https://www.petco.com/shop/en/petcostore/product/3089211"
+    },
+    "sku": "3089211",
+    "url": "https://www.petco.com/shop/en/petcostore/product/3089211"
+   },
+   "published_at": null,
+   "reason": "held_for_merchant",
+   "record_ref": "feed:petco:sku:3089211",
+   "spec_clause": null,
+   "spec_version": "schemaorg-merchant-listing-2026-08-18",
+   "status": "compiled_not_published",
+   "validation": {
+    "errors": [],
+    "ok": true
+   }
+  },
+  {
+   "channel": "deal_directory",
+   "channel_slug": "deal_directory",
+   "compiled_at": "2026-10-30T07:05:05",
+   "error": null,
+   "expressiveness": [
+    {
+     "field": "rule_s6",
+     "note": "rule s6 off: a marketplace storefront URL would be treated as not a seller offer",
+     "severity": "info"
+    }
+   ],
+   "external_ref": null,
+   "held": true,
+   "id": 6,
+   "journal": [
+    {
+     "at": "2026-10-30T07:05:05+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-30T07:05:05+00:00",
+     "by": "parleo",
+     "event": "held_for_merchant",
+     "note": "compiled; the brand's own team sends it"
+    }
+   ],
+   "listing_id": null,
+   "mode": "seller_external",
+   "payload": {
+    "merchant_slug": "petco",
+    "product_url": "https://www.petco.com/shop/en/petcostore/product/2579466",
+    "programs": [
+     {
+      "funded_by": "purina",
+      "mechanic": "subscription_discount",
+      "program_id": "petco_autoship",
+      "program_name": "Petco Autoship",
+      "skus": [
+       "sku:2579466"
+      ],
+      "valid_until": "2026-10-31"
+     }
+    ],
+    "record_ref": "feed:petco:sku:2579466",
+    "visible": true
+   },
+   "published_at": null,
+   "reason": "held_for_merchant",
+   "record_ref": "feed:petco:sku:2579466",
+   "spec_clause": null,
+   "spec_version": "parleo-internal",
+   "status": "compiled_not_published",
+   "validation": {
+    "errors": [],
+    "ok": true
+   }
+  },
+  {
+   "channel": "deals_api",
+   "channel_slug": "deals_api",
+   "compiled_at": "2026-10-30T07:05:05",
+   "error": null,
+   "expressiveness": [
+    {
+     "field": "rule_s6",
+     "note": "rule s6 off: a marketplace storefront URL would be treated as not a seller offer",
+     "severity": "info"
+    }
+   ],
+   "external_ref": null,
+   "held": true,
+   "id": 5,
+   "journal": [
+    {
+     "at": "2026-10-30T07:05:05+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-30T07:05:05+00:00",
+     "by": "parleo",
+     "event": "held_for_merchant",
+     "note": "compiled; the brand's own team sends it"
+    }
+   ],
+   "listing_id": null,
+   "mode": "seller_external",
+   "payload": {
+    "merchant_slug": "petco",
+    "product_url": "https://www.petco.com/shop/en/petcostore/product/2579466",
+    "record_ref": "feed:petco:sku:2579466",
+    "skus": [
+     {
+      "gtin": null,
+      "price_path": {
+       "currency": "USD",
+       "former_names": [],
+       "list_price": "77.99",
+       "loyalty_program": "Petco Perks",
+       "member": null,
+       "not_applied": [],
+       "ongoing": {
+        "cap_amount": null,
+        "capped": false,
+        "discount_amount": null,
+        "discount_percent": "5",
+        "funded_by": "purina",
+        "kind": "ongoing",
+        "mechanic": "subscription_discount",
+        "order_n": "ongoing",
+        "price": "74.09",
+        "program_id": "petco_autoship",
+        "program_name": "Petco Autoship",
+        "rule": "5% off",
+        "stackable": null,
+        "stacks_with": [],
+        "tier_name": null,
+        "valid_until": "2026-10-31T00:00:00Z"
+       },
+       "rx": false,
+       "steps": [
+        {
+         "cap_amount": null,
+         "capped": false,
+         "discount_amount": null,
+         "discount_percent": "40",
+         "funded_by": "purina",
+         "kind": "first_order",
+         "mechanic": "subscription_discount",
+         "order_n": "1",
+         "price": "46.79",
+         "program_id": "petco_autoship",
+         "program_name": "Petco Autoship",
+         "rule": "40% off",
+         "stackable": null,
+         "stacks_with": [],
+         "tier_name": null,
+         "valid_until": "2026-10-31T00:00:00Z"
+        },
+        {
+         "cap_amount": null,
+         "capped": false,
+         "discount_amount": null,
+         "discount_percent": "20",
+         "funded_by": "purina",
+         "kind": "second_order",
+         "mechanic": "subscription_discount",
+         "order_n": "2",
+         "price": "62.39",
+         "program_id": "petco_autoship",
+         "program_name": "Petco Autoship",
+         "rule": "20% off",
+         "stackable": null,
+         "stacks_with": [],
+         "tier_name": null,
+         "valid_until": "2026-10-31T00:00:00Z"
+        },
+        {
+         "cap_amount": null,
+         "capped": false,
+         "discount_amount": null,
+         "discount_percent": "10",
+         "funded_by": "purina",
+         "kind": "third_order",
+         "mechanic": "subscription_discount",
+         "order_n": "3",
+         "price": "70.19",
+         "program_id": "petco_autoship",
+         "program_name": "Petco Autoship",
+         "rule": "10% off",
+         "stackable": null,
+         "stacks_with": [],
+         "tier_name": null,
+         "valid_until": "2026-10-31T00:00:00Z"
+        }
+       ]
+      },
+      "product_url": "https://www.petco.com/shop/en/petcostore/product/2579466",
+      "sku": "2579466",
+      "title": "Purina Pro Plan Sensitive Skin & Stomach Salmon & Rice 30 lb",
+      "variant_id": "sku:2579466"
+     }
+    ],
+    "visible": true
+   },
+   "published_at": null,
+   "reason": "held_for_merchant",
+   "record_ref": "feed:petco:sku:2579466",
+   "spec_clause": null,
+   "spec_version": "parleo-internal",
+   "status": "compiled_not_published",
+   "validation": {
+    "errors": [],
+    "ok": true
+   }
+  },
+  {
+   "channel": "ucp_uip",
+   "channel_slug": "ucp_uip",
+   "compiled_at": "2026-10-30T07:05:05",
+   "error": null,
+   "expressiveness": [
+    {
+     "field": "gtin",
+     "note": "sku:2579466: no GTIN, so variant.barcodes is omitted (shopping/types/variant.json). An agent has title and sku to correlate on.",
+     "severity": "info"
+    },
+    {
+     "field": "price_path.first_order",
+     "note": "UCP: the catalog variant has no conditional price; price stays list and the step rides in variant.metadata.price_path, business-defined data (shopping/types/variant.json).",
+     "severity": "approximated"
+    },
+    {
+     "field": "price_path.later_steps",
+     "note": "UCP: in variant.metadata.price_path only (shopping/types/variant.json).",
+     "severity": "approximated"
+    },
+    {
+     "field": "price_path.ongoing",
+     "note": "UCP: in variant.metadata.price_path only (shopping/types/variant.json).",
+     "severity": "approximated"
+    },
+    {
+     "field": "price_path.funded_by",
+     "note": "UCP: in variant.metadata.price_path only.",
+     "severity": "approximated"
+    },
+    {
+     "field": "price_path.valid_until",
+     "note": "UCP: in variant.metadata.price_path only.",
+     "severity": "approximated"
+    },
+    {
+     "field": "rule_s6",
+     "note": "rule s6 off: a marketplace storefront URL would be treated as not a seller offer",
+     "severity": "info"
+    }
+   ],
+   "external_ref": null,
+   "held": true,
+   "id": 4,
+   "journal": [
+    {
+     "at": "2026-10-30T07:05:05+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-30T07:05:05+00:00",
+     "by": "parleo",
+     "event": "held_for_merchant",
+     "note": "compiled; the brand's own team sends it"
+    }
+   ],
+   "listing_id": null,
+   "mode": "seller_external",
+   "payload": {
+    "product": {
+     "description": {
+      "plain": ""
+     },
+     "id": "feed:petco:sku:2579466",
+     "price_range": {
+      "max": {
+       "amount": 7799,
+       "currency": "USD"
+      },
+      "min": {
+       "amount": 7799,
+       "currency": "USD"
+      }
+     },
+     "tags": [
+      "Purina Pro Plan"
+     ],
+     "title": "Purina Pro Plan Sensitive Skin & Stomach Salmon & Rice",
+     "url": "https://www.petco.com/shop/en/petcostore/product/2579466",
+     "variants": [
+      {
+       "availability": {
+        "available": false,
+        "status": "unknown"
+       },
+       "description": {
+        "plain": "Purina Pro Plan Sensitive Skin & Stomach Salmon & Rice 30 lb"
+       },
+       "id": "sku:2579466",
+       "metadata": {
+        "price_path": {
+         "ongoing": {
+          "funded_by": "purina",
+          "kind": "ongoing",
+          "order_n": "ongoing",
+          "price": {
+           "amount": 7409,
+           "currency": "USD"
+          },
+          "program_id": "petco_autoship",
+          "program_name": "Petco Autoship",
+          "rule": "5% off",
+          "valid_until": "2026-10-31"
+         },
+         "steps": [
+          {
+           "funded_by": "purina",
+           "kind": "first_order",
+           "order_n": "1",
+           "price": {
+            "amount": 4679,
+            "currency": "USD"
+           },
+           "program_id": "petco_autoship",
+           "program_name": "Petco Autoship",
+           "rule": "40% off",
+           "valid_until": "2026-10-31"
+          },
+          {
+           "funded_by": "purina",
+           "kind": "second_order",
+           "order_n": "2",
+           "price": {
+            "amount": 6239,
+            "currency": "USD"
+           },
+           "program_id": "petco_autoship",
+           "program_name": "Petco Autoship",
+           "rule": "20% off",
+           "valid_until": "2026-10-31"
+          },
+          {
+           "funded_by": "purina",
+           "kind": "third_order",
+           "order_n": "3",
+           "price": {
+            "amount": 7019,
+            "currency": "USD"
+           },
+           "program_id": "petco_autoship",
+           "program_name": "Petco Autoship",
+           "rule": "10% off",
+           "valid_until": "2026-10-31"
+          }
+         ]
+        }
+       },
+       "options": [
+        {
+         "label": "30 lb",
+         "name": "size"
+        }
+       ],
+       "price": {
+        "amount": 7799,
+        "currency": "USD"
+       },
+       "sku": "2579466",
+       "title": "Purina Pro Plan Sensitive Skin & Stomach Salmon & Rice 30 lb",
+       "url": "https://www.petco.com/shop/en/petcostore/product/2579466"
+      }
+     ]
+    },
+    "ucp": {
+     "version": "2026-08-25"
+    }
+   },
+   "published_at": null,
+   "reason": "held_for_merchant",
+   "record_ref": "feed:petco:sku:2579466",
+   "spec_clause": null,
+   "spec_version": "ucp-2026-08-25",
+   "status": "compiled_not_published",
+   "validation": {
+    "errors": [],
+    "ok": true
+   }
+  },
+  {
+   "channel": "acp",
+   "channel_slug": "acp",
+   "compiled_at": "2026-10-30T07:05:05",
+   "error": "sku:2579466: missing required field 'image_url' (specs \u00a71)",
+   "expressiveness": [
+    {
+     "field": "gtin",
+     "note": "sku:2579466: no GTIN or MPN. ACP's OpenAI schema makes identifiers optional (specs \u00a71), so the row is valid, but an agent has only title and brand to match on.",
+     "severity": "info"
+    },
+    {
+     "field": "price_path.first_order",
+     "note": "ACP: the first-order price is sale_price, with no field for its condition (a first subscription order), so it reads as a price anyone gets (specs \u00a71).",
+     "severity": "approximated"
+    },
+    {
+     "field": "price_path.later_steps",
+     "note": "ACP: no field for later order prices (specs \u00a71).",
+     "severity": "dropped"
+    },
+    {
+     "field": "price_path.ongoing",
+     "note": "ACP: no subscribe-and-save fields (specs \u00a71).",
+     "severity": "dropped"
+    },
+    {
+     "field": "price_path.funded_by",
+     "note": "ACP: no field for who funds an offer.",
+     "severity": "dropped"
+    },
+    {
+     "field": "rule_s6",
+     "note": "rule s6 off: a marketplace storefront URL would be treated as not a seller offer",
+     "severity": "info"
+    }
+   ],
+   "external_ref": null,
+   "held": true,
+   "id": 3,
+   "journal": [
+    {
+     "at": "2026-10-30T07:05:05+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-30T07:05:05+00:00",
+     "by": "parleo",
+     "event": "held_for_merchant",
+     "note": "compiled; the brand's own team sends it"
+    }
+   ],
+   "listing_id": null,
+   "mode": "seller_external",
+   "payload": {
+    "items": [
+     {
+      "availability": "unknown",
+      "brand": "Purina Pro Plan",
+      "description": "Purina Pro Plan Sensitive Skin & Stomach Salmon & Rice 30 lb",
+      "image_url": null,
+      "is_eligible_checkout": false,
+      "is_eligible_search": true,
+      "item_id": "sku:2579466",
+      "listing_has_variations": false,
+      "price": "77.99 USD",
+      "sale_price": "46.79 USD",
+      "sale_price_end_date": "2026-10-31",
+      "seller_name": "Petco",
+      "size": "30 lb",
+      "target_countries": [
+       "US"
+      ],
+      "title": "Purina Pro Plan Sensitive Skin & Stomach Salmon & Rice 30 lb",
+      "url": "https://www.petco.com/shop/en/petcostore/product/2579466",
+      "variant_dict": {
+       "size": "30 lb"
+      }
+     }
+    ]
+   },
+   "published_at": null,
+   "reason": "held_for_merchant",
+   "record_ref": "feed:petco:sku:2579466",
+   "spec_clause": null,
+   "spec_version": "acp-feed-stable-2026-08-18",
+   "status": "compiled_not_published",
+   "validation": {
+    "errors": [
+     "sku:2579466: missing required field 'image_url' (specs \u00a71)"
+    ],
+    "ok": false
+   }
+  },
+  {
+   "channel": "merchant_center",
+   "channel_slug": "merchant_center",
+   "compiled_at": "2026-10-30T07:05:05",
+   "error": "sku:2579466: missing imageLink",
+   "expressiveness": [
+    {
+     "field": "gtin",
+     "note": "sku:2579466: no GTIN \u2014 identifier_exists=false; expect limited serving/possible disapproval.",
+     "severity": "info"
+    },
+    {
+     "field": "price_path.first_order",
+     "note": "GMC: the first-order price is salePrice, which Google reads as a price any buyer gets; the precise form is a promotion with SUBSCRIBE and FIRST_ORDER restrictions, not compiled from a price path (specs \u00a73).",
+     "severity": "approximated"
+    },
+    {
+     "field": "price_path.later_steps",
+     "note": "GMC: no field for later order prices (specs \u00a73).",
+     "severity": "dropped"
+    },
+    {
+     "field": "price_path.ongoing",
+     "note": "GMC: no subscription price on the product (specs \u00a73).",
+     "severity": "dropped"
+    },
+    {
+     "field": "price_path.funded_by",
+     "note": "GMC: no field for who funds an offer.",
+     "severity": "dropped"
+    },
+    {
+     "field": "rule_s6",
+     "note": "rule s6 off: a marketplace storefront URL would be treated as not a seller offer",
+     "severity": "info"
+    }
+   ],
+   "external_ref": null,
+   "held": true,
+   "id": 2,
+   "journal": [
+    {
+     "at": "2026-10-30T07:05:05+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-30T07:05:05+00:00",
+     "by": "parleo",
+     "event": "held_for_merchant",
+     "note": "compiled; the brand's own team sends it"
+    }
+   ],
+   "listing_id": null,
+   "mode": "seller_external",
+   "payload": {
+    "apiVersion": "products/v1",
+    "productInputs": [
+     {
+      "contentLanguage": "en",
+      "feedLabel": "US",
+      "offerId": "sku:2579466",
+      "productAttributes": {
+       "availability": "IN_STOCK",
+       "brand": "Purina Pro Plan",
+       "condition": "NEW",
+       "identifierExists": false,
+       "link": "https://www.petco.com/shop/en/petcostore/product/2579466",
+       "price": {
+        "amountMicros": "77990000",
+        "currencyCode": "USD"
+       },
+       "salePrice": {
+        "amountMicros": "46790000",
+        "currencyCode": "USD"
+       },
+       "salePriceEffectiveDate": {
+        "endTime": "2026-10-31T00:00:00Z"
+       },
+       "title": "Purina Pro Plan Sensitive Skin & Stomach Salmon & Rice 30 lb"
+      }
+     }
+    ]
+   },
+   "published_at": null,
+   "reason": "held_for_merchant",
+   "record_ref": "feed:petco:sku:2579466",
+   "spec_clause": null,
+   "spec_version": "gmc-products-v1-2026-08-18",
+   "status": "compiled_not_published",
+   "validation": {
+    "errors": [
+     "sku:2579466: missing imageLink"
+    ],
+    "ok": false
+   }
+  },
+  {
+   "channel": "schema_org",
+   "channel_slug": "schema_org",
+   "compiled_at": "2026-10-30T07:05:05",
+   "error": null,
+   "expressiveness": [
+    {
+     "field": "price_path.first_order",
+     "note": "schema.org: the first-order price is a UnitPriceSpecification beside the list price; the condition (a first subscription order) and the percent are description text (specs \u00a74).",
+     "severity": "approximated"
+    },
+    {
+     "field": "price_path.later_steps",
+     "note": "schema.org: second and third order prices are description text; there is no step vocabulary (specs \u00a74).",
+     "severity": "approximated"
+    },
+    {
+     "field": "price_path.ongoing",
+     "note": "schema.org: the recurring price is description text; no subscription pricing structure (specs matrix).",
+     "severity": "approximated"
+    },
+    {
+     "field": "price_path.funded_by",
+     "note": "schema.org: no field for who funds an offer.",
+     "severity": "dropped"
+    },
+    {
+     "field": "rule_s6",
+     "note": "rule s6 off: a marketplace storefront URL would be treated as not a seller offer",
+     "severity": "info"
+    }
+   ],
+   "external_ref": null,
+   "held": true,
+   "id": 1,
+   "journal": [
+    {
+     "at": "2026-10-30T07:05:05+00:00",
+     "by": "parleo",
+     "event": "compiled",
+     "note": null
+    },
+    {
+     "at": "2026-10-30T07:05:05+00:00",
+     "by": "parleo",
+     "event": "held_for_merchant",
+     "note": "compiled; the brand's own team sends it"
+    }
+   ],
+   "listing_id": null,
+   "mode": "seller_external",
+   "payload": {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    "additionalProperty": [
+     {
+      "@type": "PropertyValue",
+      "name": "size",
+      "value": "30 lb"
+     }
+    ],
+    "brand": {
+     "@type": "Brand",
+     "name": "Purina Pro Plan"
+    },
+    "description": "Petco Autoship: first order $46.79 (40% off), second $62.39 (20% off), third $70.19 (10% off), then $74.09 (5% off) on every order, through 2026-10-31.",
+    "name": "Purina Pro Plan Sensitive Skin & Stomach Salmon & Rice 30 lb",
+    "offers": {
+     "@type": "Offer",
+     "availability": "https://schema.org/InStock",
+     "price": "77.99",
+     "priceCurrency": "USD",
+     "priceSpecification": [
+      {
+       "@type": "UnitPriceSpecification",
+       "description": "40% off",
+       "name": "Petco Autoship, first order",
+       "price": "46.79",
+       "priceCurrency": "USD",
+       "validThrough": "2026-10-31"
+      }
+     ],
+     "seller": {
+      "@type": "Organization",
+      "name": "Petco"
+     },
+     "url": "https://www.petco.com/shop/en/petcostore/product/2579466"
+    },
+    "sku": "2579466",
+    "url": "https://www.petco.com/shop/en/petcostore/product/2579466"
+   },
+   "published_at": null,
+   "reason": "held_for_merchant",
+   "record_ref": "feed:petco:sku:2579466",
+   "spec_clause": null,
+   "spec_version": "schemaorg-merchant-listing-2026-08-18",
+   "status": "compiled_not_published",
+   "validation": {
+    "errors": [],
+    "ok": true
+   }
+  }
+ ],
+ "headers": {
+  "content-type": "application/json"
+ },
+ "status": 200
+}

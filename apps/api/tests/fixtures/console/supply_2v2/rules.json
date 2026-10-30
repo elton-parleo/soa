@@ -1,0 +1,189 @@
+{
+ "body": {
+  "kind": "seller",
+  "merchant": "petco",
+  "mode": "seller_external",
+  "rules": [
+   {
+    "approval": "approved",
+    "approved_at": "2026-10-30T07:05:05.537478",
+    "approved_by": "elton@parleo.io",
+    "audience": "Verified shopping agents, Unverified bots",
+    "code": "s1",
+    "compiled": true,
+    "detail": "Already visible on petco.com. Published with the end date when a brand ladder funds it.",
+    "history": [
+     {
+      "actor": "elton@parleo.io",
+      "at": "2026-10-30T07:05:05",
+      "changes": {
+       "approval": [
+        "needs_approval",
+        "approved"
+       ],
+       "on": [
+        false,
+        true
+       ]
+      },
+      "token_id": "88bf123b0708f6eb"
+     }
+    ],
+    "name": "Publish first-order Autoship prices",
+    "note": null,
+    "on": true,
+    "outcome": "3 SKUs gain a first-order price",
+    "scope": "4 tracked SKUs",
+    "stored": true
+   },
+   {
+    "approval": "approved",
+    "approved_at": "2026-10-30T07:05:05.552737",
+    "approved_by": "elton@parleo.io",
+    "audience": "All agents",
+    "code": "s2",
+    "compiled": true,
+    "detail": "Perks Premier prices appear in no public channel. Member-linked agents are not an audience yet, so none gets them.",
+    "history": [
+     {
+      "actor": "elton@parleo.io",
+      "at": "2026-10-30T07:05:05",
+      "changes": {
+       "approval": [
+        "needs_approval",
+        "approved"
+       ],
+       "on": [
+        false,
+        true
+       ]
+      },
+      "token_id": "88bf123b0708f6eb"
+     }
+    ],
+    "name": "Member prices stay out of public surfaces",
+    "note": null,
+    "on": true,
+    "outcome": "No member price in any public channel",
+    "scope": "All SKUs",
+    "stored": true
+   },
+   {
+    "approval": "approved",
+    "approved_at": "2026-10-30T07:05:05.565723",
+    "approved_by": "elton@parleo.io",
+    "audience": "All agents",
+    "code": "s3",
+    "compiled": true,
+    "detail": "An Rx item compiles at its list price, with no Autoship price, until Pricing picks one term.",
+    "history": [
+     {
+      "actor": "elton@parleo.io",
+      "at": "2026-10-30T07:05:05",
+      "changes": {
+       "approval": [
+        "needs_approval",
+        "approved"
+       ],
+       "on": [
+        false,
+        true
+       ]
+      },
+      "token_id": "88bf123b0708f6eb"
+     }
+    ],
+    "name": "Rx items: list price only",
+    "note": null,
+    "on": true,
+    "outcome": "NexGard PLUS stays at $235.59",
+    "scope": "1 Rx SKU",
+    "stored": true
+   },
+   {
+    "approval": "approved",
+    "approved_at": "2026-10-30T07:05:05.578300",
+    "approved_by": "elton@parleo.io",
+    "audience": "All agents",
+    "code": "s4",
+    "compiled": true,
+    "detail": "Retire Vital Care and Repeat Delivery in every published field.",
+    "history": [
+     {
+      "actor": "elton@parleo.io",
+      "at": "2026-10-30T07:05:05",
+      "changes": {
+       "approval": [
+        "needs_approval",
+        "approved"
+       ],
+       "on": [
+        false,
+        true
+       ]
+      },
+      "token_id": "88bf123b0708f6eb"
+     }
+    ],
+    "name": "Program name: Petco Perks",
+    "note": null,
+    "on": true,
+    "outcome": "Answers saying Vital Care and Repeat Delivery are flagged as a retired name",
+    "scope": "Program record",
+    "stored": true
+   },
+   {
+    "approval": "approved",
+    "approved_at": "2026-10-30T07:05:05.592782",
+    "approved_by": "elton@parleo.io",
+    "audience": "Verified shopping agents",
+    "code": "s5",
+    "compiled": true,
+    "detail": "Purina ladders publish funded_by so partner seats can see their money.",
+    "history": [
+     {
+      "actor": "elton@parleo.io",
+      "at": "2026-10-30T07:05:05",
+      "changes": {
+       "approval": [
+        "needs_approval",
+        "approved"
+       ],
+       "on": [
+        false,
+        true
+       ]
+      },
+      "token_id": "88bf123b0708f6eb"
+     }
+    ],
+    "name": "Brand ladders carry the funder",
+    "note": null,
+    "on": true,
+    "outcome": "Partner view opens",
+    "scope": "2 SKUs",
+    "stored": true
+   },
+   {
+    "approval": "needs_approval",
+    "approved_at": null,
+    "approved_by": null,
+    "audience": "All agents",
+    "code": "s6",
+    "compiled": false,
+    "detail": "Petco's Amazon storefront is not a Petco offer.",
+    "history": [],
+    "name": "Marketplace storefront excluded",
+    "note": null,
+    "on": false,
+    "outcome": "No change",
+    "scope": "Amazon",
+    "stored": true
+   }
+  ]
+ },
+ "headers": {
+  "content-type": "application/json"
+ },
+ "status": 200
+}

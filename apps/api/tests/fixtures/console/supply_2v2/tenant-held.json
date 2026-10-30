@@ -1,0 +1,128 @@
+{
+ "body": {
+  "display_name": "Wiggle & Snug",
+  "merchants": [
+   {
+    "channels": [
+     {
+      "channel": "schema_org",
+      "compiled": true,
+      "note": "compiled; the seller's own team sends it",
+      "reason": "held_for_merchant",
+      "rule": null
+     },
+     {
+      "channel": "merchant_center",
+      "compiled": true,
+      "note": "compiled; the seller's own team sends it",
+      "reason": "held_for_merchant",
+      "rule": null
+     },
+     {
+      "channel": "manufacturer_center",
+      "compiled": false,
+      "note": "Manufacturer Center is a brand's channel; a seller's product data goes to Merchant Center",
+      "reason": "not_for_seller",
+      "rule": null
+     },
+     {
+      "channel": "acp",
+      "compiled": true,
+      "note": "compiled; the seller's own team sends it",
+      "reason": "held_for_merchant",
+      "rule": null
+     },
+     {
+      "channel": "ucp_uip",
+      "compiled": true,
+      "note": "compiled; the seller's own team sends it",
+      "reason": "held_for_merchant",
+      "rule": null
+     },
+     {
+      "channel": "deals_api",
+      "compiled": true,
+      "note": "compiled; the seller's own team sends it",
+      "reason": "held_for_merchant",
+      "rule": null
+     },
+     {
+      "channel": "mcp",
+      "compiled": true,
+      "note": "served by get_product_true_cost on the Parleo MCP server; Parleo publishes it, nothing is sent",
+      "reason": "published_by_parleo",
+      "rule": null
+     },
+     {
+      "channel": "deal_directory",
+      "compiled": true,
+      "note": "compiled; the seller's own team sends it",
+      "reason": "held_for_merchant",
+      "rule": null
+     }
+    ],
+    "domain": "www.petco.com",
+    "has_record": true,
+    "held": {
+     "blocked": 0,
+     "by_channel": {
+      "acp": 4,
+      "deal_directory": 4,
+      "deals_api": 4,
+      "merchant_center": 4,
+      "schema_org": 4,
+      "ucp_uip": 4
+     },
+     "compiled_at": "2026-10-30T07:05:05",
+     "lines": {
+      "acp": 4,
+      "deal_directory": 4,
+      "deals_api": 4,
+      "merchant_center": 4,
+      "schema_org": 4,
+      "ucp_uip": 4
+     },
+     "published": {
+      "mcp": {
+       "acceptance": "approved",
+       "external_ref": "https://mcp.parleo.example#get_product_true_cost",
+       "failed": 0,
+       "lines": 4,
+       "published_at": "2026-10-30T07:05:05.795113+00:00",
+       "reason": null,
+       "records": 4,
+       "server": "https://mcp.parleo.example",
+       "skus": 4,
+       "verified_at": "2026-10-30T07:05:05+00:00",
+       "verified_skus": "4/4"
+      }
+     },
+     "published_total": 4,
+     "sent": {
+      "acp": null,
+      "deal_directory": null,
+      "deals_api": null,
+      "merchant_center": null,
+      "schema_org": null,
+      "ucp_uip": null
+     },
+     "total": 24
+    },
+    "hosting": "external",
+    "kind": "seller",
+    "mode": "seller_external",
+    "name": "Petco",
+    "own_domains": [
+     "petco.com"
+    ],
+    "slug": "petco"
+   }
+  ],
+  "slug": "wiggle-and-snug",
+  "soa_org_id": null
+ },
+ "headers": {
+  "content-type": "application/json"
+ },
+ "status": 200
+}

@@ -520,6 +520,11 @@ async def get_overview(cycle: str = Query(...), merchant: Optional[str] = Query(
         narratives_svc.with_overview(body, narratives_svc.lines_for(conn, row['id']))
     # 2T-1: a brand at retail (supply's mode manufacturer): the demo's lead, TrueSync card, charter,
     # strip, revenue, week in short, ranked signals, agents' facts, products' deals, first picks, activity
+    if ms is not None and _is_seller_external(ms, merchant):
+        # 2V-2: the TrueSync card reads the release card /truesync carries
+        from app.routers import console_seller
+        view = await console_seller.publishing(scope, ms, merchant, [])
+        body['truesync_card'] = {'mode': 'seller_external', **view['release']}
     if ms is not None and (next((m for m in ms.merchants or [] if m.get('slug') == merchant), None) or {}).get(
             'mode') == 'manufacturer':
         from app.routers.console_manufacturer import brand_overview
@@ -826,6 +831,10 @@ async def get_true_value(cycle: str = Query(...), merchant: Optional[str] = Quer
     # 2T-5 (TV1 to TV9): a brand at retail's True Value in the demo's shape
     ms = await check_merchant(scope, merchant)
     record_row = next((m for m in getattr(ms, 'merchants', None) or [] if m.get('slug') == merchant), None) or {}
+    if record_row.get('mode') == 'seller_external':
+        # 2V-2: the program cards, each row's program line, the ladder and the receipt, from the price paths
+        from app.routers import console_seller
+        await console_seller.true_value(scope, ms, merchant, body, dict(row))
     if record_row.get('mode') == 'manufacturer':
         await _true_value_brand(scope, dict(row), merchant, body, record_row,
                                 reference=reference if r_err is None else None,
@@ -1031,7 +1040,16 @@ async def get_truesync(merchant: str = Query(...), scope: CustomerScope = Depend
     # 2R-2 (B1): a brand at retail (supply's `mode` manufacturer): the five surfaces, what
     # changes on publish, the held file's preview and the artifacts, as /publishing serves them
     record = next((m for m in ms.merchants or [] if m.get('slug') == merchant), None)
-    if (record or {}).get('mode') == 'manufacturer':
+    if (record or {}).get('mode') == 'seller_external':
+        # 2V-2: a seller we do not host: its surfaces, preview, artifacts and the release card, as /publishing
+        from app.routers import console_seller
+        view = await console_seller.publishing(scope, ms, merchant,
+                                               [c for c in channels or [] if c.get('is_active', True)])
+        view.pop('diff', None)
+        errors = view.pop('read_errors')
+        body.update(view)
+        body.setdefault('read_errors', {}).update(errors)
+    elif (record or {}).get('mode') == 'manufacturer':
         from app.routers.console_manufacturer import brand_reads, publishing_view, release_view
         active = [c for c in channels or [] if c.get('is_active', True)]
         reads = await brand_reads(scope, merchant)
@@ -1087,6 +1105,12 @@ async def _record_inputs(merchant: str, scope: CustomerScope, *, incentives: boo
     }
 
 
+def _is_seller_external(ms: MerchantScope, merchant: str) -> bool:
+    """2V-2: supply's `mode` seller_external, a seller we do not host."""
+    return (next((m for m in ms.merchants or [] if m.get('slug') == merchant), None) or {}).get('mode') == \
+        'seller_external'
+
+
 def _is_brand_at_retail(ms: MerchantScope, merchant: str) -> bool:
     """supply's `mode` manufacturer on the merchant's /tenant record (2R-2)."""
     return (next((m for m in ms.merchants or [] if m.get('slug') == merchant), None) or {}).get('mode') == 'manufacturer'
@@ -1099,6 +1123,9 @@ async def get_record_list(merchant: str = Query(...), scope: CustomerScope = Dep
     current feed), each with its status. A merchant with no record yet is an
     empty list, not an error."""
     ms = await check_merchant(scope, merchant)   # 2H: a slug that is not the org's is a 404
+    if _is_seller_external(ms, merchant):
+        from app.routers import console_seller
+        return await console_seller.record_list(scope, ms, merchant)
     if _is_brand_at_retail(ms, merchant):
         # 2T-8 (B2): one row per feed SKU with its state from the readback, and the hero
         from app.routers.console_manufacturer import brand_record_list
@@ -1119,6 +1146,13 @@ async def get_record(merchant: str = Query(...), product: str = Query(...),
     compiled schema.org artifact. `product` is the list's `sku` (or the
     listing id)."""
     ms = await check_merchant(scope, merchant)   # 2H: a slug that is not the org's is a 404
+    if _is_seller_external(ms, merchant):
+        # 2V-2: the demo's offer record for one SKU, its price path as fields
+        from app.routers import console_seller
+        found = await console_seller.record(scope, ms, merchant, product)
+        if found is None:
+            raise HTTPException(status_code=404, detail=f"product {product!r} is not in {merchant!r}'s record")
+        return found
     if _is_brand_at_retail(ms, merchant):
         # 2T-8 (B2): the demo's master record for one feed SKU
         from app.routers.console_manufacturer import brand_record
@@ -1474,9 +1508,12 @@ async def get_prove(cycle: str = Query(...), merchant: Optional[str] = Query(Non
     `state` not_measured when the cycle asked no cheapest-place question or
     supply could not be read (named in read_errors), no_deals when supply
     read the shelves and found none."""
-    if merchant:
-        await check_merchant(scope, merchant)
+    ms = await check_merchant(scope, merchant) if merchant else None
     row = dict(cycle_in_scope(cycle, scope))
+    if ms is not None and _is_seller_external(ms, merchant):
+        # 2V-2: Funded offers: the brand-funded programs in the seller's record, and whether answers applied them
+        from app.routers import console_seller
+        return await console_seller.prove(scope, ms, merchant, row)
     promo, deals, as_of, p_err = await _promo_inputs(scope, row, merchant)
     with engine.connect() as conn:
         study = rm.load_study_block(conn, row.get('study_type')) or {}

@@ -1,0 +1,107 @@
+{
+ "body": {
+  "listings": [
+   {
+    "brand": "Purina Pro Plan",
+    "listing_id": 1,
+    "product_id": "feed:petco:sku:2579466",
+    "product_url": "https://www.petco.com/shop/en/petcostore/product/2579466",
+    "published_at": "2026-10-30T07:05:05.113686",
+    "spec_version": "sku-feed",
+    "title": "Purina Pro Plan Sensitive Skin & Stomach Salmon & Rice",
+    "variants": [
+     {
+      "attributes": {},
+      "count": null,
+      "currency": "USD",
+      "gtin": null,
+      "list_price": "77.99",
+      "size": "30 lb",
+      "status": "active",
+      "successor": null,
+      "title": "30 lb",
+      "variant_id": "sku:2579466",
+      "weight_range": null
+     }
+    ]
+   },
+   {
+    "brand": "Tidy Cats",
+    "listing_id": 2,
+    "product_id": "feed:petco:sku:3089211",
+    "product_url": "https://www.petco.com/shop/en/petcostore/product/3089211",
+    "published_at": "2026-10-30T07:05:05.113686",
+    "spec_version": "sku-feed",
+    "title": "Tidy Cats LightWeight 24/7 Performance",
+    "variants": [
+     {
+      "attributes": {},
+      "count": null,
+      "currency": "USD",
+      "gtin": null,
+      "list_price": "28.98",
+      "size": "17 lb",
+      "status": "active",
+      "successor": null,
+      "title": "17 lb",
+      "variant_id": "sku:3089211",
+      "weight_range": null
+     }
+    ]
+   },
+   {
+    "brand": "Greenies",
+    "listing_id": 3,
+    "product_id": "feed:petco:sku:2174511",
+    "product_url": "https://www.petco.com/shop/en/petcostore/product/2174511",
+    "published_at": "2026-10-30T07:05:05.113686",
+    "spec_version": "sku-feed",
+    "title": "Greenies Original Regular Dental Treats",
+    "variants": [
+     {
+      "attributes": {},
+      "count": 36,
+      "currency": "USD",
+      "gtin": null,
+      "list_price": "39.99",
+      "size": null,
+      "status": "active",
+      "successor": null,
+      "title": "36 ct",
+      "variant_id": "sku:2174511",
+      "weight_range": null
+     }
+    ]
+   },
+   {
+    "brand": "NexGard PLUS",
+    "listing_id": 4,
+    "product_id": "feed:petco:sku:3879911",
+    "product_url": "https://www.petco.com/shop/en/petcostore/product/3879911",
+    "published_at": "2026-10-30T07:05:05.113686",
+    "spec_version": "sku-feed",
+    "title": "NexGard PLUS Chewables for Dogs 33.1-66 lb",
+    "variants": [
+     {
+      "attributes": {},
+      "count": 6,
+      "currency": "USD",
+      "gtin": null,
+      "list_price": "235.59",
+      "size": null,
+      "status": "active",
+      "successor": null,
+      "title": "6 chews",
+      "variant_id": "sku:3879911",
+      "weight_range": null
+     }
+    ]
+   }
+  ],
+  "merchant": "petco"
+ },
+ "headers": {
+  "content-type": "application/json"
+ },
+ "status": 200
+}

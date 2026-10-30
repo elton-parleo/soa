@@ -1,0 +1,161 @@
+{
+ "body": {
+  "merchant": "petco",
+  "rows": [
+   {
+    "brand_name": "Purina Pro Plan",
+    "currency": "USD",
+    "description": null,
+    "gtin": null,
+    "gtin14": null,
+    "image_url": null,
+    "messages": [
+     {
+      "code": "gtin_missing",
+      "field": "gtin",
+      "message": "no GTIN: this variant is identified by sku 2579466 and https://www.petco.com/shop/en/petcostore/product/2579466. It is readable and scorable, and reference reads match it by SKU and URL. Google Merchant Center can carry it only as identifier_exists=false, when the publisher is told to include unidentified items; Manufacturer Center, which keys by GTIN, skips it.",
+      "severity": "warning"
+     }
+    ],
+    "multipack": null,
+    "pack_count": null,
+    "price": "77.99",
+    "product_name": "Purina Pro Plan Sensitive Skin & Stomach Salmon & Rice",
+    "provenance": null,
+    "retailers": [
+     {
+      "domain": "petco.com",
+      "url": "https://www.petco.com/shop/en/petcostore/product/2579466"
+     }
+    ],
+    "row_number": 2,
+    "size_unit": "lb",
+    "size_value": "30",
+    "sku": "2579466",
+    "status": "warning",
+    "variant_key": "sku:2579466",
+    "variant_label": "30 lb"
+   },
+   {
+    "brand_name": "Tidy Cats",
+    "currency": "USD",
+    "description": null,
+    "gtin": null,
+    "gtin14": null,
+    "image_url": null,
+    "messages": [
+     {
+      "code": "gtin_missing",
+      "field": "gtin",
+      "message": "no GTIN: this variant is identified by sku 3089211 and https://www.petco.com/shop/en/petcostore/product/3089211. It is readable and scorable, and reference reads match it by SKU and URL. Google Merchant Center can carry it only as identifier_exists=false, when the publisher is told to include unidentified items; Manufacturer Center, which keys by GTIN, skips it.",
+      "severity": "warning"
+     }
+    ],
+    "multipack": null,
+    "pack_count": null,
+    "price": "28.98",
+    "product_name": "Tidy Cats LightWeight 24/7 Performance",
+    "provenance": null,
+    "retailers": [
+     {
+      "domain": "petco.com",
+      "url": "https://www.petco.com/shop/en/petcostore/product/3089211"
+     }
+    ],
+    "row_number": 3,
+    "size_unit": "lb",
+    "size_value": "17",
+    "sku": "3089211",
+    "status": "warning",
+    "variant_key": "sku:3089211",
+    "variant_label": "17 lb"
+   },
+   {
+    "brand_name": "Greenies",
+    "currency": "USD",
+    "description": null,
+    "gtin": null,
+    "gtin14": null,
+    "image_url": null,
+    "messages": [
+     {
+      "code": "gtin_missing",
+      "field": "gtin",
+      "message": "no GTIN: this variant is identified by sku 2174511 and https://www.petco.com/shop/en/petcostore/product/2174511. It is readable and scorable, and reference reads match it by SKU and URL. Google Merchant Center can carry it only as identifier_exists=false, when the publisher is told to include unidentified items; Manufacturer Center, which keys by GTIN, skips it.",
+      "severity": "warning"
+     }
+    ],
+    "multipack": null,
+    "pack_count": 36,
+    "price": "39.99",
+    "product_name": "Greenies Original Regular Dental Treats",
+    "provenance": null,
+    "retailers": [
+     {
+      "domain": "petco.com",
+      "url": "https://www.petco.com/shop/en/petcostore/product/2174511"
+     }
+    ],
+    "row_number": 4,
+    "size_unit": null,
+    "size_value": null,
+    "sku": "2174511",
+    "status": "warning",
+    "variant_key": "sku:2174511",
+    "variant_label": "36 ct"
+   },
+   {
+    "brand_name": "NexGard PLUS",
+    "currency": "USD",
+    "description": null,
+    "gtin": null,
+    "gtin14": null,
+    "image_url": null,
+    "messages": [
+     {
+      "code": "gtin_missing",
+      "field": "gtin",
+      "message": "no GTIN: this variant is identified by sku 3879911 and https://www.petco.com/shop/en/petcostore/product/3879911. It is readable and scorable, and reference reads match it by SKU and URL. Google Merchant Center can carry it only as identifier_exists=false, when the publisher is told to include unidentified items; Manufacturer Center, which keys by GTIN, skips it.",
+      "severity": "warning"
+     }
+    ],
+    "multipack": null,
+    "pack_count": 6,
+    "price": "235.59",
+    "product_name": "NexGard PLUS Chewables for Dogs 33.1-66 lb",
+    "provenance": null,
+    "retailers": [
+     {
+      "domain": "petco.com",
+      "url": "https://www.petco.com/shop/en/petcostore/product/3879911"
+     }
+    ],
+    "row_number": 5,
+    "size_unit": null,
+    "size_value": null,
+    "sku": "3879911",
+    "status": "warning",
+    "variant_key": "sku:3879911",
+    "variant_label": "6 chews"
+   }
+  ],
+  "version": {
+   "committed_at": "2026-10-30T07:05:05.113686",
+   "counts": {
+    "left_out": 0,
+    "ready": 0,
+    "warning": 4
+   },
+   "id": 1,
+   "mode": "require_clean",
+   "row_count": 4,
+   "superseded_at": null,
+   "upload_id": "3027ef2536b84655b4d08a3453f8be95",
+   "version_number": 1
+  }
+ },
+ "headers": {
+  "content-type": "application/json"
+ },
+ "status": 200
+}

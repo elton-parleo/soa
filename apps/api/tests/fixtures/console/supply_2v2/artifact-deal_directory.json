@@ -1,0 +1,79 @@
+{
+ "body": {
+  "channel": "deal_directory",
+  "merchant": "petco",
+  "records": [
+   {
+    "merchant_slug": "petco",
+    "product_url": "https://www.petco.com/shop/en/petcostore/product/2579466",
+    "programs": [
+     {
+      "funded_by": "purina",
+      "mechanic": "subscription_discount",
+      "program_id": "petco_autoship",
+      "program_name": "Petco Autoship",
+      "skus": [
+       "sku:2579466"
+      ],
+      "valid_until": "2026-10-31"
+     }
+    ],
+    "record_ref": "feed:petco:sku:2579466",
+    "visible": true
+   },
+   {
+    "merchant_slug": "petco",
+    "product_url": "https://www.petco.com/shop/en/petcostore/product/3089211",
+    "programs": [
+     {
+      "funded_by": "purina",
+      "mechanic": "subscription_discount",
+      "program_id": "petco_autoship",
+      "program_name": "Petco Autoship",
+      "skus": [
+       "sku:3089211"
+      ],
+      "valid_until": "2026-10-31"
+     }
+    ],
+    "record_ref": "feed:petco:sku:3089211",
+    "visible": true
+   },
+   {
+    "merchant_slug": "petco",
+    "product_url": "https://www.petco.com/shop/en/petcostore/product/2174511",
+    "programs": [
+     {
+      "funded_by": null,
+      "mechanic": "subscription_discount",
+      "program_id": "petco_autoship",
+      "program_name": "Petco Autoship",
+      "skus": [
+       "sku:2174511"
+      ],
+      "valid_until": null
+     }
+    ],
+    "record_ref": "feed:petco:sku:2174511",
+    "visible": true
+   },
+   {
+    "merchant_slug": "petco",
+    "product_url": "https://www.petco.com/shop/en/petcostore/product/3879911",
+    "programs": [],
+    "record_ref": "feed:petco:sku:3879911",
+    "visible": false
+   }
+  ]
+ },
+ "headers": {
+  "content-disposition": "attachment; filename=\"petco-deal-directory-20261030.json\"",
+  "content-type": "application/json",
+  "x-truesync-compiled-at": "2026-10-30T07:05:05+00:00",
+  "x-truesync-merchant-kind": "seller",
+  "x-truesync-mode": "seller_external",
+  "x-truesync-record-count": "4",
+  "x-truesync-validator": "ok=3; failed=1"
+ },
+ "status": 200
+}

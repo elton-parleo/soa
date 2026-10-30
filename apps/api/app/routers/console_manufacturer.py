@@ -43,6 +43,7 @@ from app.services import console_manufacturer as manu
 from app.services import console_read_models as rm
 from app.services import console_release as rel
 from app.services import console_score as score_svc
+from app.services import console_seller as cs
 from soa_shared import severity, surfaces
 from soa_shared.database import engine
 
@@ -62,7 +63,8 @@ async def _manufacturer(scope: CustomerScope, merchant: str) -> tuple:
     manufacturer mode; 404 for one that is not (or a slug not the org's)."""
     ms = await check_merchant(scope, merchant)
     record = _record(ms)
-    if not manu.is_manufacturer(record):
+    # 2V-2: a seller we do not host (seller_external) is compiled and held too
+    if not cs.is_held_mode(record):
         raise HTTPException(status_code=404, detail=f"merchant {merchant!r} is not in manufacturer mode")
     return ms, record
 
@@ -423,7 +425,17 @@ async def get_publishing(merchant: str = Query(...), scope: CustomerScope = Depe
     """B2: Publishing, B1's surfaces, diff, preview and artifacts (the objects
     /truesync carries for the same merchant). 404 for a merchant not in
     manufacturer mode."""
-    ms, _record_ = await _manufacturer(scope, merchant)
+    ms, record = await _manufacturer(scope, merchant)
+    if cs.is_seller_external(record):
+        from app.routers import console_seller
+        c_status, channels, c_err = await full_loop._client(scope).get_channels()
+        if c_err is not None:
+            raise HTTPException(status_code=404 if c_status == 404 else 502,
+                                detail=f"TrueSync publishing unavailable: {c_err}")
+        body = await console_seller.publishing(scope, ms, merchant,
+                                               [c for c in channels or [] if c.get('is_active', True)])
+        body['merchant'] = merchant
+        return body
     client = full_loop._client(scope)
     reads = _reads(scope)
     (c_status, channels, c_err), (p_status, pubs, p_err), (k_status, catalog, k_err), (_, reference, r_err) = \
@@ -520,6 +532,9 @@ async def _rules_body(scope: CustomerScope, ms: MerchantScope, merchant: str) ->
     """The rules screen: every word of the rules is supply's (2R-2a A3); soa
     adds only the backtest."""
     record = _record(ms)
+    if cs.is_seller_external(record):
+        from app.routers import console_seller
+        return await console_seller.rules_body(scope, ms, merchant)
     client = full_loop._client(scope)
     (_, rules, rules_err), (catalog, pubs, held_errors) = await asyncio.gather(
         client.get_rules(merchant), _held_inputs(scope, merchant))
@@ -568,7 +583,7 @@ async def put_rule(code: str, body: RuleChange, merchant: str = Query(...),
     change = body.model_dump(exclude_none=True)
     if not change:
         raise HTTPException(status_code=422, detail="nothing to change: send on, approval or note")
-    if 'approval' in change and change['approval'] not in manu.APPROVAL_STATES:
+    if 'approval' in change and change['approval'] not in manu.APPROVAL_STATES:  # the same three for a seller
         raise HTTPException(status_code=422, detail=f"approval must be one of {', '.join(manu.APPROVAL_STATES)}")
     actor = user.get('email') or user.get('sub')
     _unwrap(*await full_loop._client(scope).put_rule(merchant, code, {**change, 'actor': actor}))
@@ -856,7 +871,10 @@ async def get_fixes(merchant: str = Query(...), scope: CustomerScope = Depends(c
     """2T-8 (B4): the Fix queue of a brand at retail, a view over the Overview's signals, the rules, the hold and
     the sent journal: one fix per source, ranked by what it wins back. No owner or due date is recorded: None. 404
     for a merchant not in manufacturer mode."""
-    ms, _record_ = await _manufacturer(scope, merchant)
+    ms, record = await _manufacturer(scope, merchant)
+    if cs.is_seller_external(record):
+        from app.routers import console_seller
+        return await console_seller.fixes(scope, ms, merchant)
     got = await _fix_inputs(scope, ms, merchant)
     body = _fixes_of(got)
     return {'merchant': merchant, 'mode': manu.MANUFACTURER, **body, 'cycle': (got['cycle'] or {}).get('cycle_code'),
@@ -865,6 +883,9 @@ async def get_fixes(merchant: str = Query(...), scope: CustomerScope = Depends(c
 
 async def _approvals_body(scope: CustomerScope, ms: MerchantScope, merchant: str) -> dict:
     from app.services import console_fixes as fx
+    if cs.is_seller_external(_record(ms)):
+        from app.routers import console_seller
+        return await console_seller.approvals(scope, ms, merchant)
     got = await _fix_inputs(scope, ms, merchant)
     fixes = _fixes_of(got)['fixes']
     body = fx.build_approvals(fixes=fixes, rules=got['rules'], pubs=got['pubs'], records=got['records'],
