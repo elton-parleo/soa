@@ -8834,3 +8834,33 @@ journal entry carries `rules`: every rule keeping it blocked.
   retailers only through `_retailer_name(domain)`, which already gives display names, so nothing here changes.
 
 Fixture: `tests/fixtures/console/supply_2u4/` (PROVENANCE.md). Tests: `tests/test_console_2u4_mcp.py`.
+
+## 2V-2: an externally hosted seller (`mode: seller_external`)
+
+Supply (parleo-supply-app#40, `docs/truesync/seller-mode.md` there) compiles and holds an externally hosted seller's records, as it does a brand's. Petco is `kind seller`, `hosting external`, and has no credential for Parleo to send through. `/tenant` reports such a merchant as `mode: seller_external`. Everywhere soa reads `manufacturer`, it now also reads `seller_external`, and answers from `app/routers/console_seller.py`, whose builders are in `app/services/console_seller.py`.
+
+A Parleo-hosted seller (W&S) is `mode: seller` and is unchanged: its publish path is the live one.
+
+**Reads.** One round to supply covers:
+- the rules: s1–s6, every word supply's
+- the merchant's publications
+- `/price-paths`: the full program truth, used by True Value, Prove and the Product record
+- the owned incentives: the loyalty program and its former names
+
+Publishing's diff reads each SKU's path as the held `deals_api` rows state it, i.e. with the rules applied.
+
+| endpoint | for `seller_external` |
+|---|---|
+| `/publishing` | `surfaces`: one per supply channel, in the demo's order (Merchant Center, UCP, OpenAI feed, Site markup, MCP endpoint, Deals API, Deal directory, Manufacturer Center). Each has `status` `held` \| `live` \| `blocked` \| `not_compiled` \| `not_for_seller`, `last`, the `fields` its held file carries, `sent` and `publication_ids`. Also `diff` (first-order price and rule with end date, ongoing price, program name former → current, member price; `was` is "absent"), `preview`, `artifacts`, `channel_states` and `release`. **Mark as sent** is `/publishing/sent`, unchanged |
+| `/truesync` | the same, minus the diff; `release` is the release card: held and sent counts, every surface's state and line, and the MCP readback (`acceptance`, `verified`) |
+| `/overview` | `truesync_card`: the release card |
+| `/rules`, `PUT /rules/{code}` | supply's s1–s6 (`build_rules`) and the demo's three backtest rows, counted on the newest scored cycle: price answers that quoted a first-order price, answers saying a retired program name, member prices in public channels (0 while s2 is on). `after` is "Next read" |
+| `/approvals`, `POST /approvals/{code}` | the rules that gate a fix (s1, s4), the held release, and `signed` |
+| `/fixes` | `first_order` ("publish first-order prices": s1 off or waiting, and price answers left the first-order price out); `retired_name` (answers say a former program name and s4 is not on); `release` (the held files) |
+| `/true-value` | `programs` (each owned program's terms and how answers quoted it), `program_lines` and each row's `program_line`, `ladder` (the first funded SKU: list, each step, ongoing, with bar widths) and `receipt` (list, the first-order discount, the first order, the member line marked not combinable), all from `/price-paths` |
+| `/prove` | **Funded offers**: one row per funder's program with its SKUs, steps, end date, the value on the first SKU, and how many answers about those SKUs applied it. The aside is the partner seat's count |
+| `/record/list`, `/record` | one row per SKU (Ladder, Standard first order, Rx list price); the offer record with the price path as fields (list, first order, second and third, ongoing, member, funded by, GTIN, Rx, what was not applied and why) |
+
+Counting answers: an answer *quoted* a price when one of its `$` amounts equals that price to the cent. It is *about* a SKU when it names the product's first three words or its SKU.
+
+Fixture: `tests/fixtures/console/supply_2v2/`, recorded from supply's branch (its PROVENANCE.md). Tests: `tests/test_console_2v2_seller.py`. Samples: `SOA_2V2_SAMPLE_DUMP=<dir>`.

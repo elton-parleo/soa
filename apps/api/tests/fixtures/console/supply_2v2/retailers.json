@@ -1,0 +1,15 @@
+{
+ "body": {
+  "comparison_domains": [],
+  "domains": [],
+  "merchant": "petco",
+  "own_domain": "petco.com",
+  "own_domains": [
+   "petco.com"
+  ]
+ },
+ "headers": {
+  "content-type": "application/json"
+ },
+ "status": 200
+}

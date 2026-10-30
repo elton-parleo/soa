@@ -371,6 +371,12 @@ class TrueSyncClient:
         """One publication's payload as a file, carried raw."""
         return await self.forward("GET", f"/api/truesync/publications/{int(publication_id)}/artifact", raw=True)
 
+    async def get_price_paths(self, merchant_slug: str, as_of: Optional[str] = None) -> ForwardResult:
+        """2V-2: every SKU's price path (supply 2V-1): list, first-order steps, ongoing and member prices,
+        each with its rule, funder and end date."""
+        return await self.get(f"/api/truesync/merchants/{_slug(merchant_slug)}/price-paths",
+                              params={"as_of": as_of} if as_of else None)
+
     async def link_tenant(self, soa_org_id: str) -> ForwardResult:
         """Tell supply which soa org this tenant is — after soa has committed it."""
         return await self.forward("PUT", "/api/truesync/tenant/link", json={"soa_org_id": soa_org_id})
