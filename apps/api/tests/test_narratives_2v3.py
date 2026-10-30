@@ -19,6 +19,69 @@ import pytest
 from soa_shared import local_time
 from soa_shared import narratives as n
 
+PURINA = {
+    'kind': 'product', 'product': '31.1 lb', 'store': 'Petco', 'gtin': '00017800149501', 'sku': '00017800149501',
+    'agents_asked': 6,
+    'retailer_prices_that_day': [{'retailer': 'Petco', 'price': '49.99', 'date': 'Oct 29'}],
+    'quotes': [
+        {'agent': 'Gemini', 'retailer': 'Walmart', 'price': '54.99', 'verdict': 'wrong price',
+         'for_variant': 'Purina ONE Lamb & Rice 40 lb'},
+        {'agent': 'Perplexity', 'retailer': 'Petco', 'price': '54.99', 'verdict': 'wrong price',
+         'for_variant': 'Purina ONE Lamb & Rice 40 lb'},
+        {'agent': 'Copilot', 'retailer': 'Petco', 'price': '54.99', 'verdict': 'wrong price',
+         'for_variant': 'Purina ONE Lamb & Rice 40 lb'},
+    ],
+    'issue': '3 of 6 agents quoted the wrong price.', 'aliases': ['00017800149501'],
+}
+TIDY = {
+    'kind': 'product', 'product': '17 lb', 'store': 'Petco', 'gtin': '00070230101015', 'sku': '00070230101015',
+    'agents_asked': 6,
+    'retailer_prices_that_day': [{'retailer': 'Petco', 'price': '19.99', 'date': 'Oct 29'}],
+    'quotes': [{'agent': 'ChatGPT', 'retailer': 'Petco', 'price': '8.99', 'verdict': 'wrong price',
+                'for_variant': 'Tidy Cats Free & Clean 6 lb'}],
+    'issue': '1 of 6 agents quoted the wrong price.', 'aliases': ['00070230101015'],
+}
+
+FL17 = [
+    (PURINA, "Gemini said Walmart offers Purina ONE Lamb & Rice in 40 lb bags. Petco's record pages show 40 lb.",
+     '40 lb'),
+    (TIDY, "ChatGPT quoted $8.99 for Tidy Cats Free & Clean, but Petco pages show 17 lb and 6 lb.", '6 lb'),
+    (PURINA, "Perplexity quoted $54.99 for Purina ONE Lamb & Rice, and Petco's record lists a 40 lb bag.", '40 lb'),
+    (PURINA, "Copilot quoted $54.99 for Purina ONE Lamb & Rice, but Petco's record lists a 40 lb bag.", '40 lb'),
+]
+
+
+# ── Q2 ─────────────────────────────────────────────────────────────────────
+
+@pytest.mark.parametrize('facts,line,size', FL17)
+def test_fl17_s_record_lines_drop(facts, line, size):
+    assert n.check(line, facts) == f'record_fact_not_in_digest:{size}'
+
+
+@pytest.mark.parametrize('facts,line,_size', FL17)
+def test_fl17_s_lines_fail_only_the_new_check(facts, line, _size, monkeypatch):
+    # what made them through: with the record check off, every other check passes
+    monkeypatch.setattr(n, 'record_fact_check', lambda line, facts: None)
+    assert n.check(line, facts) is None
+
+
+def test_what_the_record_holds_may_be_given_to_it():
+    line = "Gemini quoted $54.99 for a 40 lb bag. Petco's record lists 31.1 lb at $49.99."
+    assert n.check(line, PURINA) is None
+
+
+def test_a_price_or_program_the_record_does_not_hold_drops():
+    assert n.record_fact_check("Petco's page shows $54.99.", PURINA) == 'record_fact_not_in_digest:$54.99'
+    assert n.record_fact_check("Petco's record lists Petco Perks.", PURINA) == \
+        'record_fact_not_in_digest:Petco Perks'
+    held = {**PURINA, 'deals_live_that_day': [{'program': 'Petco Perks'}]}
+    assert n.record_fact_check("Petco's record lists Petco Perks.", held) is None
+
+
+def test_an_agent_s_own_clause_is_not_the_record_s():
+    assert n.record_fact_check("Gemini said Walmart's page shows 40 lb.", PURINA) is None
+
+
 # ── Q3 ─────────────────────────────────────────────────────────────────────
 
 def test_a_read_date_is_the_workspace_s_day():

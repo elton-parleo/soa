@@ -1814,6 +1814,63 @@ def off_issue(line: str, facts: dict, named: List[str]) -> bool:
     return bool(wrong) and not wrong & set(named)
 
 
+#: 2V-3 (Q2): what the facts hold that an agent said, the scorer noted or a
+#: product row's issue sums up: everything else is the record's and the pages'.
+AGENT_SAID_KEYS = ('agent_quoted', 'answer_spans', 'quotes', 'flags', 'sent_to', 'first pick',
+                   'named in order', 'named_stores', 'scorer_note', 'issue', 'gave_no_price',
+                   'priced_another_brand', 'claim_facts')
+#: a clause that says what the record or a page states
+_RECORD_CUE = re.compile(r"\b(?:records?|pages?|listings?|catalog|feed)\b", re.I)
+_CLAUSE_SPLIT = re.compile(r"(?<=[.!?])\s+|,\s+and\s+|,?\s+\b(?:but|while|whereas|although|though)\b\s+", re.I)
+_SIZE = re.compile(r"(\d+(?:\.\d+)?)\s*-?\s*(lbs?|pounds?|oz|ounces?|ct|count|pk|packs?|kg|ml)\b", re.I)
+_UNIT = {'lbs': 'lb', 'pound': 'lb', 'pounds': 'lb', 'ounce': 'oz', 'ounces': 'oz', 'count': 'ct',
+         'pack': 'pk', 'packs': 'pk'}
+_PROGRAM = re.compile(r"\b((?:[A-Z][\w&'\u2019+]*\s+)+(?:Perks|Rewards|Club|Insider|Plus|Pass|Care|Membership"
+                      r"|Program|Autoship|Delivery))\b")
+
+
+def record_facts(facts: dict) -> dict:
+    """The facts less what an agent said (AGENT_SAID_KEYS)."""
+    return {k: v for k, v in facts.items() if k not in AGENT_SAID_KEYS}
+
+
+def _sizes(text_: str) -> set:
+    out = set()
+    for m in _SIZE.finditer(text_ or ''):
+        unit = m.group(2).lower()
+        out.add((normalize_money(m.group(1)) or m.group(1), _UNIT.get(unit, unit)))
+    return out
+
+
+def record_fact_check(line: str, facts: dict) -> Optional[str]:
+    """
+    2V-3 (Q2): a size, count, price or program the line gives the record or
+    a page must be one the record holds, not one an agent said. FL17: "Gemini
+    said Walmart offers Purina ONE ... in 40 lb bags. Petco's record pages
+    show 40 lb." (the record is 31.1 lb). A clause naming an agent is the
+    agent's claim and is checked elsewhere. The first failure, or None.
+    """
+    record = record_facts(facts)
+    known = facts_text(record)
+    known_lower = known.lower().replace('\u2019', "'")
+    sizes = _sizes(known)
+    amounts = _amounts(record)
+    for clause in _CLAUSE_SPLIT.split(line):
+        if not clause or not _RECORD_CUE.search(clause) or _agents_in(clause):
+            continue
+        for m in _SIZE.finditer(clause):
+            unit = m.group(2).lower()
+            if (normalize_money(m.group(1)) or m.group(1), _UNIT.get(unit, unit)) not in sizes:
+                return f'record_fact_not_in_digest:{m.group(0)}'
+        for m in _AMOUNT.finditer(clause):
+            if normalize_money(m.group(1).replace(',', '')) not in amounts:
+                return f'record_fact_not_in_digest:${m.group(1)}'
+        for m in _PROGRAM.finditer(clause):
+            if m.group(1).lower().replace('\u2019', "'") not in known_lower:
+                return f'record_fact_not_in_digest:{m.group(1)}'
+    return None
+
+
 def check(line: Optional[str], facts: dict) -> Optional[str]:
     """None when the line passes every check, else the first failure."""
     if line is None or not str(line).strip():
@@ -1872,6 +1929,9 @@ def check(line: Optional[str], facts: dict) -> Optional[str]:
     unpaired = _unpaired_amount(line, facts)
     if unpaired:
         return f'unpaired_amount:${unpaired}'
+    recorded = record_fact_check(line, facts)
+    if recorded:
+        return recorded
     misread = _who_said_what(line, facts)
     if misread:
         return f'who_said_what:{misread}'
