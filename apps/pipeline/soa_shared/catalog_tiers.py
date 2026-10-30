@@ -794,6 +794,18 @@ def _code_question_text(snapshot, incentive) -> str:
     )
 
 
+def _points_scope(snapshot) -> str:
+    """Where a per-dollar rate is earned: "at Petco" for an external seller
+    (named as its catalog-accuracy questions name it), "on Pampers products"
+    for a brand."""
+    if is_external(snapshot) and snapshot.merchant_kind == 'seller':
+        from soa_shared import retailers as af
+        store = snapshot.display_name or (af.retailer_name(snapshot.own_domain)
+                                          if snapshot.own_domain else snapshot.study_brand)
+        return f"at {store}"
+    return f"on {snapshot.brand} products"
+
+
 def build_value_incentives(snapshot, *, category, persona, study_pattern) -> tuple:
     """
     One question per mechanic the record actually has. Returns
@@ -933,14 +945,13 @@ def build_value_incentives(snapshot, *, category, persona, study_pattern) -> tup
 
                 program = rule.get('program_name') or snapshot.program_name or 'the rewards programme'
                 if expectation['rule']['kind'] == 'per_dollar':
-                    text = (
-                        f"How many {program} points do you earn per dollar on "
-                        f"{snapshot.brand} products?"
-                    )
+                    text = f"How many {program} points do you earn per dollar {_points_scope(snapshot)}?"
                 else:
+                    # 2V-0: named as the member price above names it. A
+                    # seller's snapshot.brand is only its first feed row's.
                     text = (
                         f"How many {program} points does the "
-                        f"{_subject(snapshot.brand, product, variant)} earn?"
+                        f"{_intent_subject(snapshot, product, variant)} earn?"
                     )
 
                 rows.append(_row(
