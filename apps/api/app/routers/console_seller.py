@@ -241,8 +241,10 @@ async def approvals(scope: CustomerScope, ms: MerchantScope, merchant: str) -> d
 
 # ─── True Value, Prove, the Product record ────────────────────────────────
 
-async def true_value(scope: CustomerScope, ms: MerchantScope, merchant: str, body: dict, cycle: dict) -> None:
-    """True Value's program cards, each row's program line, the ladder and the receipt, from the price paths."""
+async def true_value(scope: CustomerScope, ms: MerchantScope, merchant: str, body: dict, cycle: dict,
+                     value_outcomes: Optional[List[dict]] = None) -> None:
+    """True Value's program cards, each row's program line, the ladder and the receipt, from the price paths. 2V-6
+    (X3): `value_outcomes` the cycle's value-tier rows (console._value_outcomes), which the cards' read-out keys on."""
     reads = await seller_reads(scope, merchant)
     answers, _price = cycle_answers(cycle)
     name = _name(ms, merchant)
@@ -253,7 +255,7 @@ async def true_value(scope: CustomerScope, ms: MerchantScope, merchant: str, bod
         program_lines[vid] = {**(program_lines.get(vid) or {}), 'line': line, 'by_surface': {}}
     body.update({'mode': cs.SELLER_EXTERNAL, 'program_lines': program_lines,
                  'programs': cs.build_programs(owned=reads['owned'], paths=reads['paths'], answers=answers,
-                                               merchant=name),
+                                               merchant=name, value_outcomes=value_outcomes),
                  'ladder': cs.build_ladder(paths=reads['paths'], answers=answers, name=name),
                  # 2V-5 (V3): each SKU's own price path, for a screen that selects one
                  'ladders': {str(r.get('sku')): cs.build_ladder(paths=reads['paths'], answers=answers, name=name,
@@ -298,7 +300,8 @@ async def record(scope: CustomerScope, ms: MerchantScope, merchant: str, product
     feed, reference = await _feed_and_reference(scope, merchant, errors)
     feed_row = next((f for f in (feed or {}).get('rows') or [] if str(f.get('sku')) == str(row.get('sku'))), None)
     body = cs.build_record(row=row, feed_row=feed_row, name=name, merchant=name,
-                           sent=manu.first_sent(reads['pubs']), held_any=any(manu.is_held(p) for p in reads['pubs']))
+                           sent=manu.first_sent(reads['pubs']), held_any=any(manu.is_held(p) for p in reads['pubs']),
+                           owned=reads['owned'])
     # 2V-4 (B4): the issues the record, the held files, the feed and the page read prove, each with its source
     domain = _domain(ms)
     body['issues'] = rt.build_issues(row=row, held_rows=rt.hold(reads['pubs']).get(rt.ref_of(row, merchant)) or {},
@@ -350,7 +353,7 @@ async def release_page(scope: CustomerScope, ms: MerchantScope, merchant: str, c
     records = rt.build_records(paths=reads['paths'], held_paths=reads['held_paths'], pubs=reads['pubs'], states=states,
                                channels=channels, rules=reads['rules'], name=name, slug=merchant, held=held, cycle=cycle,
                                price_answers=price_answers, agents=agents, merchant=name,
-                               feed_rows=(feed or {}).get('rows'))
+                               feed_rows=(feed or {}).get('rows'), owned=reads['owned'])
     release = rt.build_release(pubs=reads['pubs'], states=states, rules=reads['rules'], name=name, skus=len(refs),
                                held=held)
     card = view.get('release') or {}
