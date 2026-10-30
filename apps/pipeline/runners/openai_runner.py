@@ -41,7 +41,9 @@ class OpenAIRunner(BasePlatformRunner):
             )
         super().__init__(model=model, timeout_seconds=timeout_seconds)
         self.reasoning_effort = reasoning_effort
-        self._client = AsyncOpenAI(api_key=config.OPEN_AI_API_KEY)
+        # max_retries=0: BasePlatformRunner.run() owns retries (3 attempts);
+        # the SDK's own 2 retries on top would allow up to 9 calls per run.
+        self._client = AsyncOpenAI(api_key=config.OPEN_AI_API_KEY, max_retries=0)
 
     async def _call_api(self, query_text: str) -> PlatformResponse:
         response = await self._client.responses.create(

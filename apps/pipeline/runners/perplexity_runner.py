@@ -54,6 +54,7 @@ class PerplexityRunner(BasePlatformRunner):
         self._client = AsyncOpenAI(
             api_key=config.PERPLEXITY_API_KEY,
             base_url=_BASE_URL,
+            max_retries=0,  # BasePlatformRunner.run() owns retries
         )
 
     async def _call_api(self, query_text: str) -> PlatformResponse:

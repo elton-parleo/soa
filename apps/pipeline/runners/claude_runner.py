@@ -44,6 +44,7 @@ class ClaudeRunner(BasePlatformRunner):
         super().__init__(model=model, timeout_seconds=timeout_seconds)
         self.client = anthropic.AsyncAnthropic(
             api_key=config.ANTHROPIC_CLAUDE_API_KEY,
+            max_retries=0,  # BasePlatformRunner.run() owns retries
         )
 
     async def _call_api(self, query_text: str) -> PlatformResponse:
