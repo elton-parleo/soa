@@ -774,6 +774,26 @@ def extend_products(products: List[dict], *, attribute_answers: List[dict], deal
     return out
 
 
+def name_products(products: List[dict], feed_rows: Optional[List[dict]]) -> List[dict]:
+    """2V-3 (Q5): a seller's products named as its Product record names them, the feed's product name and the
+    variant label (console_product_record.record_name): "Purina Pro Plan Sensitive Skin & Stomach, 30 lb", not
+    "30 lb" twice. A product the feed does not hold keeps its label."""
+    from app.services.console_product_record import record_name
+    names: Dict[str, str] = {}
+    for f in feed_rows or []:
+        name = str((f or {}).get('product_name') or '').strip()
+        if not name:
+            continue
+        code = f.get('sku') or (str(f['variant_key'])[len('sku:'):]
+                                if str(f.get('variant_key') or '').startswith('sku:') else None)
+        for key in (rm._gtin14(f.get('gtin14') or f.get('gtin')), f.get('variant_key'), code,
+                    f"sku:{code}" if code else None, f"feed_sku:{code}" if code else None):
+            if key:
+                names.setdefault(str(key), name)
+    return [{**p, 'name': record_name(names[str(p.get('sku'))], p.get('name'))} if str(p.get('sku')) in names else p
+            for p in products]
+
+
 # ─── first picks ──────────────────────────────────────────────────────────
 
 def first_pick_footnote(vis: dict, *, retired_named: Optional[dict]) -> Optional[dict]:
