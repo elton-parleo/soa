@@ -1,8 +1,8 @@
-"""TEMPORARY (soa 2V-2): record parleo-supply-app's responses for Petco, an externally hosted seller, on the 2V-1
+"""TEMPORARY (soa 2V-4, re-recorded from supply main at 13c9c80, 2V-1 and 2V-2 merged): record parleo-supply-app's responses for Petco, an externally hosted seller, on the 2V-1
 fixture (tests/fixtures/feeds/petco_2v1.csv and petco_2v1_incentives.csv: four SKUs, Autoship with Purina's ladder,
 Perks Premier), priced as read on Oct 2 2026. Not committed to supply.
 
-SOA_2V2_RECORD=<dir> pytest tests/test_zz_record_2v2.py
+SOA_2V4_RECORD=<dir> pytest tests/test_zz_record_2v4.py
 """
 import json
 import os
@@ -13,7 +13,7 @@ from test_seller_offer_2v1 import READ_DAY, _commit_petco, petco, ws  # noqa: F4
 from truesync import offer_path
 from truesync.channels import mcp as mcp_channel
 
-OUT = os.environ.get("SOA_2V2_RECORD")
+OUT = os.environ.get("SOA_2V4_RECORD")
 #: Not a real address: the recording's stand-in for the mcp service's public URL.
 MCP_URL = "https://mcp.parleo.example"
 SLUG = "petco"
@@ -33,7 +33,7 @@ def _save(name, response):
         json.dump({"status": response.status_code, "headers": keep, "body": body}, fh, indent=1, sort_keys=True)
 
 
-@pytest.mark.skipif(not OUT, reason="recorder: set SOA_2V2_RECORD")
+@pytest.mark.skipif(not OUT, reason="recorder: set SOA_2V4_RECORD")
 def test_record(client, db, petco, ws, monkeypatch):  # noqa: F811
     base = f"/api/truesync/merchants/{SLUG}"
     monkeypatch.setenv(mcp_channel.PUBLIC_URL_ENV, MCP_URL)

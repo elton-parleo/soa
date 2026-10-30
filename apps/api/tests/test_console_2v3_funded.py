@@ -15,7 +15,7 @@ import os
 from app.services import console_read_models as rm
 from app.services import console_seller as cs
 
-PATHS = os.path.join(os.path.dirname(__file__), 'fixtures', 'console', 'supply_2v2', 'price-paths.json')
+PATHS = os.path.join(os.path.dirname(__file__), 'fixtures', 'console', 'supply_2v4', 'price-paths.json')
 
 
 def _paths():

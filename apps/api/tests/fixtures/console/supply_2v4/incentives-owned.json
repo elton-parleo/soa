@@ -23,7 +23,7 @@
     "points": null,
     "points_multiplier": null,
     "program_id": "petco_perks",
-    "set_at": "2026-10-30T07:05:05.129289",
+    "set_at": "2026-10-30T15:10:37.583777",
     "stacks_with": [],
     "steps": null,
     "tier_name": "Premier",
@@ -56,7 +56,7 @@
     "points": null,
     "points_multiplier": null,
     "program_id": "petco_autoship",
-    "set_at": "2026-10-30T07:05:05.129289",
+    "set_at": "2026-10-30T15:10:37.583777",
     "stacks_with": [],
     "steps": [
      {
@@ -98,7 +98,7 @@
     "points": null,
     "points_multiplier": null,
     "program_id": "petco_autoship",
-    "set_at": "2026-10-30T07:05:05.129289",
+    "set_at": "2026-10-30T15:10:37.583777",
     "stacks_with": [],
     "steps": [
      {
@@ -149,7 +149,7 @@
     "points": null,
     "points_multiplier": null,
     "program_id": "perks_premier",
-    "set_at": "2026-10-30T07:05:05.129289",
+    "set_at": "2026-10-30T15:10:37.583777",
     "stacks_with": [],
     "steps": null,
     "tier_name": "Premier",
@@ -175,7 +175,7 @@
     "points": null,
     "points_multiplier": null,
     "program_id": "perks_premier",
-    "set_at": "2026-10-30T07:05:05.129289",
+    "set_at": "2026-10-30T15:10:37.583777",
     "stacks_with": [],
     "steps": null,
     "tier_name": "Premier",

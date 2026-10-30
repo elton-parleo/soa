@@ -4,7 +4,7 @@ Product record names them: the feed's product name and the variant label.
 
 FL17's /overview read "30 lb", "36 ct, 36 oz", "31.1 lb", two rows both
 "30 lb". The feed here is the one 2V-2 recorded from supply on the Petco
-fixture (tests/fixtures/console/supply_2v2/feed.json). A brand's rows are not
+fixture (tests/fixtures/console/supply_2v4/feed.json). A brand's rows are not
 renamed: name_products is called for a seller_external merchant only
 (console_manufacturer.brand_overview), and test_console_2u5's recorded
 Pampers overview pins the brand.
@@ -15,7 +15,7 @@ import os
 from app.services import console_brand_overview as bo
 from app.services import console_product_record as pr
 
-FEED = os.path.join(os.path.dirname(__file__), 'fixtures', 'console', 'supply_2v2', 'feed.json')
+FEED = os.path.join(os.path.dirname(__file__), 'fixtures', 'console', 'supply_2v4', 'feed.json')
 
 
 def _feed_rows():

@@ -73,7 +73,7 @@
       "schema_org": 4,
       "ucp_uip": 4
      },
-     "compiled_at": "2026-10-30T07:05:05",
+     "compiled_at": "2026-10-30T15:10:37",
      "lines": {
       "acp": 4,
       "deal_directory": 4,
@@ -88,12 +88,12 @@
        "external_ref": "https://mcp.parleo.example#get_product_true_cost",
        "failed": 0,
        "lines": 4,
-       "published_at": "2026-10-30T07:05:05.795113+00:00",
+       "published_at": "2026-10-30T15:10:37.812260+00:00",
        "reason": null,
        "records": 4,
        "server": "https://mcp.parleo.example",
        "skus": 4,
-       "verified_at": "2026-10-30T07:05:05+00:00",
+       "verified_at": "2026-10-30T15:10:37+00:00",
        "verified_skus": "4/4"
       }
      },

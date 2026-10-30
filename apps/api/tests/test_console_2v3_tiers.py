@@ -13,7 +13,7 @@ import os
 from app.services import console_parity as parity
 from app.services import console_read_models as rm
 
-OWNED = os.path.join(os.path.dirname(__file__), 'fixtures', 'console', 'supply_2v2', 'incentives-owned.json')
+OWNED = os.path.join(os.path.dirname(__file__), 'fixtures', 'console', 'supply_2v4', 'incentives-owned.json')
 
 TIERS = [{'name': 'Petco Perks', 'tier_name': t, 'mechanic': 'loyalty_program', 'valid_until': None}
          for t in ('Member', 'Premier', 'Vital Care')]

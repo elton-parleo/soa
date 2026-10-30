@@ -37,7 +37,7 @@
    {
     "channel": "schema_org",
     "channel_slug": "schema_org",
-    "compiled_at": "2026-10-30T07:05:05",
+    "compiled_at": "2026-10-30T15:10:37",
     "error": null,
     "expressiveness": [
      {
@@ -71,13 +71,13 @@
     "id": 1,
     "journal": [
      {
-      "at": "2026-10-30T07:05:05+00:00",
+      "at": "2026-10-30T15:10:37+00:00",
       "by": "parleo",
       "event": "compiled",
       "note": null
      },
      {
-      "at": "2026-10-30T07:05:05+00:00",
+      "at": "2026-10-30T15:10:37+00:00",
       "by": "parleo",
       "event": "held_for_merchant",
       "note": "compiled; the brand's own team sends it"
@@ -139,7 +139,7 @@
    {
     "channel": "merchant_center",
     "channel_slug": "merchant_center",
-    "compiled_at": "2026-10-30T07:05:05",
+    "compiled_at": "2026-10-30T15:10:37",
     "error": "sku:2579466: missing imageLink",
     "expressiveness": [
      {
@@ -178,13 +178,13 @@
     "id": 2,
     "journal": [
      {
-      "at": "2026-10-30T07:05:05+00:00",
+      "at": "2026-10-30T15:10:37+00:00",
       "by": "parleo",
       "event": "compiled",
       "note": null
      },
      {
-      "at": "2026-10-30T07:05:05+00:00",
+      "at": "2026-10-30T15:10:37+00:00",
       "by": "parleo",
       "event": "held_for_merchant",
       "note": "compiled; the brand's own team sends it"
@@ -237,7 +237,7 @@
    {
     "channel": "acp",
     "channel_slug": "acp",
-    "compiled_at": "2026-10-30T07:05:05",
+    "compiled_at": "2026-10-30T15:10:37",
     "error": "sku:2579466: missing required field 'image_url' (specs \u00a71)",
     "expressiveness": [
      {
@@ -276,13 +276,13 @@
     "id": 3,
     "journal": [
      {
-      "at": "2026-10-30T07:05:05+00:00",
+      "at": "2026-10-30T15:10:37+00:00",
       "by": "parleo",
       "event": "compiled",
       "note": null
      },
      {
-      "at": "2026-10-30T07:05:05+00:00",
+      "at": "2026-10-30T15:10:37+00:00",
       "by": "parleo",
       "event": "held_for_merchant",
       "note": "compiled; the brand's own team sends it"
@@ -333,7 +333,7 @@
    {
     "channel": "ucp_uip",
     "channel_slug": "ucp_uip",
-    "compiled_at": "2026-10-30T07:05:05",
+    "compiled_at": "2026-10-30T15:10:37",
     "error": null,
     "expressiveness": [
      {
@@ -377,13 +377,13 @@
     "id": 4,
     "journal": [
      {
-      "at": "2026-10-30T07:05:05+00:00",
+      "at": "2026-10-30T15:10:37+00:00",
       "by": "parleo",
       "event": "compiled",
       "note": null
      },
      {
-      "at": "2026-10-30T07:05:05+00:00",
+      "at": "2026-10-30T15:10:37+00:00",
       "by": "parleo",
       "event": "held_for_merchant",
       "note": "compiled; the brand's own team sends it"
@@ -514,7 +514,7 @@
    {
     "channel": "deals_api",
     "channel_slug": "deals_api",
-    "compiled_at": "2026-10-30T07:05:05",
+    "compiled_at": "2026-10-30T15:10:37",
     "error": null,
     "expressiveness": [
      {
@@ -528,13 +528,13 @@
     "id": 5,
     "journal": [
      {
-      "at": "2026-10-30T07:05:05+00:00",
+      "at": "2026-10-30T15:10:37+00:00",
       "by": "parleo",
       "event": "compiled",
       "note": null
      },
      {
-      "at": "2026-10-30T07:05:05+00:00",
+      "at": "2026-10-30T15:10:37+00:00",
       "by": "parleo",
       "event": "held_for_merchant",
       "note": "compiled; the brand's own team sends it"
@@ -654,7 +654,7 @@
    {
     "channel": "deal_directory",
     "channel_slug": "deal_directory",
-    "compiled_at": "2026-10-30T07:05:05",
+    "compiled_at": "2026-10-30T15:10:37",
     "error": null,
     "expressiveness": [
      {
@@ -668,13 +668,13 @@
     "id": 6,
     "journal": [
      {
-      "at": "2026-10-30T07:05:05+00:00",
+      "at": "2026-10-30T15:10:37+00:00",
       "by": "parleo",
       "event": "compiled",
       "note": null
      },
      {
-      "at": "2026-10-30T07:05:05+00:00",
+      "at": "2026-10-30T15:10:37+00:00",
       "by": "parleo",
       "event": "held_for_merchant",
       "note": "compiled; the brand's own team sends it"
@@ -714,7 +714,7 @@
    {
     "channel": "schema_org",
     "channel_slug": "schema_org",
-    "compiled_at": "2026-10-30T07:05:05",
+    "compiled_at": "2026-10-30T15:10:37",
     "error": null,
     "expressiveness": [
      {
@@ -748,13 +748,13 @@
     "id": 7,
     "journal": [
      {
-      "at": "2026-10-30T07:05:05+00:00",
+      "at": "2026-10-30T15:10:37+00:00",
       "by": "parleo",
       "event": "compiled",
       "note": null
      },
      {
-      "at": "2026-10-30T07:05:05+00:00",
+      "at": "2026-10-30T15:10:37+00:00",
       "by": "parleo",
       "event": "held_for_merchant",
       "note": "compiled; the brand's own team sends it"
@@ -816,7 +816,7 @@
    {
     "channel": "merchant_center",
     "channel_slug": "merchant_center",
-    "compiled_at": "2026-10-30T07:05:05",
+    "compiled_at": "2026-10-30T15:10:37",
     "error": "sku:3089211: missing imageLink",
     "expressiveness": [
      {
@@ -855,13 +855,13 @@
     "id": 8,
     "journal": [
      {
-      "at": "2026-10-30T07:05:05+00:00",
+      "at": "2026-10-30T15:10:37+00:00",
       "by": "parleo",
       "event": "compiled",
       "note": null
      },
      {
-      "at": "2026-10-30T07:05:05+00:00",
+      "at": "2026-10-30T15:10:37+00:00",
       "by": "parleo",
       "event": "held_for_merchant",
       "note": "compiled; the brand's own team sends it"
@@ -914,7 +914,7 @@
    {
     "channel": "acp",
     "channel_slug": "acp",
-    "compiled_at": "2026-10-30T07:05:05",
+    "compiled_at": "2026-10-30T15:10:37",
     "error": "sku:3089211: missing required field 'image_url' (specs \u00a71)",
     "expressiveness": [
      {
@@ -953,13 +953,13 @@
     "id": 9,
     "journal": [
      {
-      "at": "2026-10-30T07:05:05+00:00",
+      "at": "2026-10-30T15:10:37+00:00",
       "by": "parleo",
       "event": "compiled",
       "note": null
      },
      {
-      "at": "2026-10-30T07:05:05+00:00",
+      "at": "2026-10-30T15:10:37+00:00",
       "by": "parleo",
       "event": "held_for_merchant",
       "note": "compiled; the brand's own team sends it"
@@ -1010,7 +1010,7 @@
    {
     "channel": "ucp_uip",
     "channel_slug": "ucp_uip",
-    "compiled_at": "2026-10-30T07:05:05",
+    "compiled_at": "2026-10-30T15:10:37",
     "error": null,
     "expressiveness": [
      {
@@ -1054,13 +1054,13 @@
     "id": 10,
     "journal": [
      {
-      "at": "2026-10-30T07:05:05+00:00",
+      "at": "2026-10-30T15:10:37+00:00",
       "by": "parleo",
       "event": "compiled",
       "note": null
      },
      {
-      "at": "2026-10-30T07:05:05+00:00",
+      "at": "2026-10-30T15:10:37+00:00",
       "by": "parleo",
       "event": "held_for_merchant",
       "note": "compiled; the brand's own team sends it"
@@ -1191,7 +1191,7 @@
    {
     "channel": "deals_api",
     "channel_slug": "deals_api",
-    "compiled_at": "2026-10-30T07:05:05",
+    "compiled_at": "2026-10-30T15:10:37",
     "error": null,
     "expressiveness": [
      {
@@ -1205,13 +1205,13 @@
     "id": 11,
     "journal": [
      {
-      "at": "2026-10-30T07:05:05+00:00",
+      "at": "2026-10-30T15:10:37+00:00",
       "by": "parleo",
       "event": "compiled",
       "note": null
      },
      {
-      "at": "2026-10-30T07:05:05+00:00",
+      "at": "2026-10-30T15:10:37+00:00",
       "by": "parleo",
       "event": "held_for_merchant",
       "note": "compiled; the brand's own team sends it"
@@ -1331,7 +1331,7 @@
    {
     "channel": "deal_directory",
     "channel_slug": "deal_directory",
-    "compiled_at": "2026-10-30T07:05:05",
+    "compiled_at": "2026-10-30T15:10:37",
     "error": null,
     "expressiveness": [
      {
@@ -1345,13 +1345,13 @@
     "id": 12,
     "journal": [
      {
-      "at": "2026-10-30T07:05:05+00:00",
+      "at": "2026-10-30T15:10:37+00:00",
       "by": "parleo",
       "event": "compiled",
       "note": null
      },
      {
-      "at": "2026-10-30T07:05:05+00:00",
+      "at": "2026-10-30T15:10:37+00:00",
       "by": "parleo",
       "event": "held_for_merchant",
       "note": "compiled; the brand's own team sends it"
@@ -1391,7 +1391,7 @@
    {
     "channel": "schema_org",
     "channel_slug": "schema_org",
-    "compiled_at": "2026-10-30T07:05:05",
+    "compiled_at": "2026-10-30T15:10:37",
     "error": null,
     "expressiveness": [
      {
@@ -1415,13 +1415,13 @@
     "id": 13,
     "journal": [
      {
-      "at": "2026-10-30T07:05:05+00:00",
+      "at": "2026-10-30T15:10:37+00:00",
       "by": "parleo",
       "event": "compiled",
       "note": null
      },
      {
-      "at": "2026-10-30T07:05:05+00:00",
+      "at": "2026-10-30T15:10:37+00:00",
       "by": "parleo",
       "event": "held_for_merchant",
       "note": "compiled; the brand's own team sends it"
@@ -1482,7 +1482,7 @@
    {
     "channel": "merchant_center",
     "channel_slug": "merchant_center",
-    "compiled_at": "2026-10-30T07:05:05",
+    "compiled_at": "2026-10-30T15:10:37",
     "error": "sku:2174511: missing imageLink",
     "expressiveness": [
      {
@@ -1511,13 +1511,13 @@
     "id": 14,
     "journal": [
      {
-      "at": "2026-10-30T07:05:05+00:00",
+      "at": "2026-10-30T15:10:37+00:00",
       "by": "parleo",
       "event": "compiled",
       "note": null
      },
      {
-      "at": "2026-10-30T07:05:05+00:00",
+      "at": "2026-10-30T15:10:37+00:00",
       "by": "parleo",
       "event": "held_for_merchant",
       "note": "compiled; the brand's own team sends it"
@@ -1567,7 +1567,7 @@
    {
     "channel": "acp",
     "channel_slug": "acp",
-    "compiled_at": "2026-10-30T07:05:05",
+    "compiled_at": "2026-10-30T15:10:37",
     "error": "sku:2174511: missing required field 'image_url' (specs \u00a71)",
     "expressiveness": [
      {
@@ -1596,13 +1596,13 @@
     "id": 15,
     "journal": [
      {
-      "at": "2026-10-30T07:05:05+00:00",
+      "at": "2026-10-30T15:10:37+00:00",
       "by": "parleo",
       "event": "compiled",
       "note": null
      },
      {
-      "at": "2026-10-30T07:05:05+00:00",
+      "at": "2026-10-30T15:10:37+00:00",
       "by": "parleo",
       "event": "held_for_merchant",
       "note": "compiled; the brand's own team sends it"
@@ -1651,7 +1651,7 @@
    {
     "channel": "ucp_uip",
     "channel_slug": "ucp_uip",
-    "compiled_at": "2026-10-30T07:05:05",
+    "compiled_at": "2026-10-30T15:10:37",
     "error": null,
     "expressiveness": [
      {
@@ -1680,13 +1680,13 @@
     "id": 16,
     "journal": [
      {
-      "at": "2026-10-30T07:05:05+00:00",
+      "at": "2026-10-30T15:10:37+00:00",
       "by": "parleo",
       "event": "compiled",
       "note": null
      },
      {
-      "at": "2026-10-30T07:05:05+00:00",
+      "at": "2026-10-30T15:10:37+00:00",
       "by": "parleo",
       "event": "held_for_merchant",
       "note": "compiled; the brand's own team sends it"
@@ -1787,7 +1787,7 @@
    {
     "channel": "deals_api",
     "channel_slug": "deals_api",
-    "compiled_at": "2026-10-30T07:05:05",
+    "compiled_at": "2026-10-30T15:10:37",
     "error": null,
     "expressiveness": [
      {
@@ -1801,13 +1801,13 @@
     "id": 17,
     "journal": [
      {
-      "at": "2026-10-30T07:05:05+00:00",
+      "at": "2026-10-30T15:10:37+00:00",
       "by": "parleo",
       "event": "compiled",
       "note": null
      },
      {
-      "at": "2026-10-30T07:05:05+00:00",
+      "at": "2026-10-30T15:10:37+00:00",
       "by": "parleo",
       "event": "held_for_merchant",
       "note": "compiled; the brand's own team sends it"
@@ -1891,7 +1891,7 @@
    {
     "channel": "deal_directory",
     "channel_slug": "deal_directory",
-    "compiled_at": "2026-10-30T07:05:05",
+    "compiled_at": "2026-10-30T15:10:37",
     "error": null,
     "expressiveness": [
      {
@@ -1905,13 +1905,13 @@
     "id": 18,
     "journal": [
      {
-      "at": "2026-10-30T07:05:05+00:00",
+      "at": "2026-10-30T15:10:37+00:00",
       "by": "parleo",
       "event": "compiled",
       "note": null
      },
      {
-      "at": "2026-10-30T07:05:05+00:00",
+      "at": "2026-10-30T15:10:37+00:00",
       "by": "parleo",
       "event": "held_for_merchant",
       "note": "compiled; the brand's own team sends it"
@@ -1951,7 +1951,7 @@
    {
     "channel": "schema_org",
     "channel_slug": "schema_org",
-    "compiled_at": "2026-10-30T07:05:05",
+    "compiled_at": "2026-10-30T15:10:37",
     "error": null,
     "expressiveness": [
      {
@@ -1965,13 +1965,13 @@
     "id": 19,
     "journal": [
      {
-      "at": "2026-10-30T07:05:05+00:00",
+      "at": "2026-10-30T15:10:37+00:00",
       "by": "parleo",
       "event": "compiled",
       "note": null
      },
      {
-      "at": "2026-10-30T07:05:05+00:00",
+      "at": "2026-10-30T15:10:37+00:00",
       "by": "parleo",
       "event": "held_for_merchant",
       "note": "compiled; the brand's own team sends it"
@@ -2022,7 +2022,7 @@
    {
     "channel": "merchant_center",
     "channel_slug": "merchant_center",
-    "compiled_at": "2026-10-30T07:05:05",
+    "compiled_at": "2026-10-30T15:10:37",
     "error": "sku:3879911: missing imageLink",
     "expressiveness": [
      {
@@ -2041,13 +2041,13 @@
     "id": 20,
     "journal": [
      {
-      "at": "2026-10-30T07:05:05+00:00",
+      "at": "2026-10-30T15:10:37+00:00",
       "by": "parleo",
       "event": "compiled",
       "note": null
      },
      {
-      "at": "2026-10-30T07:05:05+00:00",
+      "at": "2026-10-30T15:10:37+00:00",
       "by": "parleo",
       "event": "held_for_merchant",
       "note": "compiled; the brand's own team sends it"
@@ -2093,7 +2093,7 @@
    {
     "channel": "acp",
     "channel_slug": "acp",
-    "compiled_at": "2026-10-30T07:05:05",
+    "compiled_at": "2026-10-30T15:10:37",
     "error": "sku:3879911: missing required field 'image_url' (specs \u00a71)",
     "expressiveness": [
      {
@@ -2112,13 +2112,13 @@
     "id": 21,
     "journal": [
      {
-      "at": "2026-10-30T07:05:05+00:00",
+      "at": "2026-10-30T15:10:37+00:00",
       "by": "parleo",
       "event": "compiled",
       "note": null
      },
      {
-      "at": "2026-10-30T07:05:05+00:00",
+      "at": "2026-10-30T15:10:37+00:00",
       "by": "parleo",
       "event": "held_for_merchant",
       "note": "compiled; the brand's own team sends it"
@@ -2166,7 +2166,7 @@
    {
     "channel": "ucp_uip",
     "channel_slug": "ucp_uip",
-    "compiled_at": "2026-10-30T07:05:05",
+    "compiled_at": "2026-10-30T15:10:37",
     "error": null,
     "expressiveness": [
      {
@@ -2185,13 +2185,13 @@
     "id": 22,
     "journal": [
      {
-      "at": "2026-10-30T07:05:05+00:00",
+      "at": "2026-10-30T15:10:37+00:00",
       "by": "parleo",
       "event": "compiled",
       "note": null
      },
      {
-      "at": "2026-10-30T07:05:05+00:00",
+      "at": "2026-10-30T15:10:37+00:00",
       "by": "parleo",
       "event": "held_for_merchant",
       "note": "compiled; the brand's own team sends it"
@@ -2264,7 +2264,7 @@
    {
     "channel": "deals_api",
     "channel_slug": "deals_api",
-    "compiled_at": "2026-10-30T07:05:05",
+    "compiled_at": "2026-10-30T15:10:37",
     "error": "no owned program price to list (every path is list price only)",
     "expressiveness": [
      {
@@ -2278,13 +2278,13 @@
     "id": 23,
     "journal": [
      {
-      "at": "2026-10-30T07:05:05+00:00",
+      "at": "2026-10-30T15:10:37+00:00",
       "by": "parleo",
       "event": "compiled",
       "note": null
      },
      {
-      "at": "2026-10-30T07:05:05+00:00",
+      "at": "2026-10-30T15:10:37+00:00",
       "by": "parleo",
       "event": "held_for_merchant",
       "note": "compiled; the brand's own team sends it"
@@ -2341,7 +2341,7 @@
    {
     "channel": "deal_directory",
     "channel_slug": "deal_directory",
-    "compiled_at": "2026-10-30T07:05:05",
+    "compiled_at": "2026-10-30T15:10:37",
     "error": "no owned program price to list (every path is list price only)",
     "expressiveness": [
      {
@@ -2355,13 +2355,13 @@
     "id": 24,
     "journal": [
      {
-      "at": "2026-10-30T07:05:05+00:00",
+      "at": "2026-10-30T15:10:37+00:00",
       "by": "parleo",
       "event": "compiled",
       "note": null
      },
      {
-      "at": "2026-10-30T07:05:05+00:00",
+      "at": "2026-10-30T15:10:37+00:00",
       "by": "parleo",
       "event": "held_for_merchant",
       "note": "compiled; the brand's own team sends it"
@@ -2392,7 +2392,7 @@
    {
     "channel": "mcp",
     "channel_slug": "mcp",
-    "compiled_at": "2026-10-30T07:05:05",
+    "compiled_at": "2026-10-30T15:10:37",
     "error": null,
     "expressiveness": [],
     "external_ref": "https://mcp.parleo.example#get_product_true_cost",
@@ -2400,13 +2400,13 @@
     "id": 25,
     "journal": [
      {
-      "at": "2026-10-30T07:05:05+00:00",
+      "at": "2026-10-30T15:10:37+00:00",
       "by": "parleo",
       "event": "compiled",
       "note": null
      },
      {
-      "at": "2026-10-30T07:05:05.770774+00:00",
+      "at": "2026-10-30T15:10:37.802930+00:00",
       "by": "parleo",
       "event": "published",
       "note": "https://mcp.parleo.example#get_product_true_cost"
@@ -2432,7 +2432,7 @@
      ],
      "tool": "get_product_true_cost"
     },
-    "published_at": "2026-10-30T07:05:05.770774Z",
+    "published_at": "2026-10-30T15:10:37.802930Z",
     "reason": null,
     "record_ref": "feed:petco:sku:2579466",
     "spec_clause": null,
@@ -2446,7 +2446,7 @@
    {
     "channel": "mcp",
     "channel_slug": "mcp",
-    "compiled_at": "2026-10-30T07:05:05",
+    "compiled_at": "2026-10-30T15:10:37",
     "error": null,
     "expressiveness": [],
     "external_ref": "https://mcp.parleo.example#get_product_true_cost",
@@ -2454,13 +2454,13 @@
     "id": 26,
     "journal": [
      {
-      "at": "2026-10-30T07:05:05+00:00",
+      "at": "2026-10-30T15:10:37+00:00",
       "by": "parleo",
       "event": "compiled",
       "note": null
      },
      {
-      "at": "2026-10-30T07:05:05.779269+00:00",
+      "at": "2026-10-30T15:10:37.806261+00:00",
       "by": "parleo",
       "event": "published",
       "note": "https://mcp.parleo.example#get_product_true_cost"
@@ -2486,7 +2486,7 @@
      ],
      "tool": "get_product_true_cost"
     },
-    "published_at": "2026-10-30T07:05:05.779269Z",
+    "published_at": "2026-10-30T15:10:37.806261Z",
     "reason": null,
     "record_ref": "feed:petco:sku:3089211",
     "spec_clause": null,
@@ -2500,7 +2500,7 @@
    {
     "channel": "mcp",
     "channel_slug": "mcp",
-    "compiled_at": "2026-10-30T07:05:05",
+    "compiled_at": "2026-10-30T15:10:37",
     "error": null,
     "expressiveness": [],
     "external_ref": "https://mcp.parleo.example#get_product_true_cost",
@@ -2508,13 +2508,13 @@
     "id": 27,
     "journal": [
      {
-      "at": "2026-10-30T07:05:05+00:00",
+      "at": "2026-10-30T15:10:37+00:00",
       "by": "parleo",
       "event": "compiled",
       "note": null
      },
      {
-      "at": "2026-10-30T07:05:05.787434+00:00",
+      "at": "2026-10-30T15:10:37.809208+00:00",
       "by": "parleo",
       "event": "published",
       "note": "https://mcp.parleo.example#get_product_true_cost"
@@ -2540,7 +2540,7 @@
      ],
      "tool": "get_product_true_cost"
     },
-    "published_at": "2026-10-30T07:05:05.787434Z",
+    "published_at": "2026-10-30T15:10:37.809208Z",
     "reason": null,
     "record_ref": "feed:petco:sku:2174511",
     "spec_clause": null,
@@ -2554,7 +2554,7 @@
    {
     "channel": "mcp",
     "channel_slug": "mcp",
-    "compiled_at": "2026-10-30T07:05:05",
+    "compiled_at": "2026-10-30T15:10:37",
     "error": null,
     "expressiveness": [],
     "external_ref": "https://mcp.parleo.example#get_product_true_cost",
@@ -2562,13 +2562,13 @@
     "id": 28,
     "journal": [
      {
-      "at": "2026-10-30T07:05:05+00:00",
+      "at": "2026-10-30T15:10:37+00:00",
       "by": "parleo",
       "event": "compiled",
       "note": null
      },
      {
-      "at": "2026-10-30T07:05:05.795113+00:00",
+      "at": "2026-10-30T15:10:37.812260+00:00",
       "by": "parleo",
       "event": "published",
       "note": "https://mcp.parleo.example#get_product_true_cost"
@@ -2594,7 +2594,7 @@
      ],
      "tool": "get_product_true_cost"
     },
-    "published_at": "2026-10-30T07:05:05.795113Z",
+    "published_at": "2026-10-30T15:10:37.812260Z",
     "reason": null,
     "record_ref": "feed:petco:sku:3879911",
     "spec_clause": null,

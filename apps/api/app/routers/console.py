@@ -520,13 +520,14 @@ async def get_overview(cycle: str = Query(...), merchant: Optional[str] = Query(
         narratives_svc.with_overview(body, narratives_svc.lines_for(conn, row['id']))
     # 2T-1: a brand at retail (supply's mode manufacturer): the demo's lead, TrueSync card, charter,
     # strip, revenue, week in short, ranked signals, agents' facts, products' deals, first picks, activity
-    if ms is not None and _is_seller_external(ms, merchant):
-        # 2V-2: the TrueSync card reads the release card /truesync carries
+    if _is_seller_external(ms, merchant):
+        # 2V-4 (B2): an external seller reads the demo's retail Overview: the lead, the TrueSync card (2V-2's
+        # release card with TrueSync's workspace), the strip, revenue, the week in short, actions, the fix
+        # queue, the seller's signals, its products named, activity
         from app.routers import console_seller
-        view = await console_seller.publishing(scope, ms, merchant, [])
-        body['truesync_card'] = {'mode': 'seller_external', **view['release']}
-    if ms is not None and (next((m for m in ms.merchants or [] if m.get('slug') == merchant), None) or {}).get(
-            'mode') == 'manufacturer':
+        await console_seller.retail_overview(scope, ms, merchant, row, body, prev=prev, rows=rows, vis=vis,
+                                             access=access)
+    if _external_kind(ms, merchant) == 'brand':
         from app.routers.console_manufacturer import brand_overview
         await brand_overview(scope, ms, merchant, row, body, prev=prev, rows=rows, vis=vis, true_value=tv,
                              attribute_answers=answers, accuracy=accuracy, promo=promo, deals=_deals,
@@ -831,11 +832,11 @@ async def get_true_value(cycle: str = Query(...), merchant: Optional[str] = Quer
     # 2T-5 (TV1 to TV9): a brand at retail's True Value in the demo's shape
     ms = await check_merchant(scope, merchant)
     record_row = next((m for m in getattr(ms, 'merchants', None) or [] if m.get('slug') == merchant), None) or {}
-    if record_row.get('mode') == 'seller_external':
+    if _external_kind(ms, merchant) == 'seller':
         # 2V-2: the program cards, each row's program line, the ladder and the receipt, from the price paths
         from app.routers import console_seller
         await console_seller.true_value(scope, ms, merchant, body, dict(row))
-    if record_row.get('mode') == 'manufacturer':
+    if _external_kind(ms, merchant) == 'brand':
         await _true_value_brand(scope, dict(row), merchant, body, record_row,
                                 reference=reference if r_err is None else None,
                                 feed_rows=(feed or {}).get('rows') if f_err is None else None)
@@ -911,7 +912,7 @@ async def get_accessibility(merchant: str = Query(...), scope: CustomerScope = D
         listed = (retailers or {}).get('own_domains') or [(retailers or {}).get('own_domain')]
         own = [str(d).lower().removeprefix('www.') for d in listed if d]
     record_row = next((m for m in getattr(ms, 'merchants', None) or [] if m.get('slug') == merchant), None) or {}
-    if record_row.get('mode') == 'manufacturer':
+    if _external_kind(ms, merchant) == 'brand':
         return await _brand_accessibility(client, merchant, payload, reference if r_err is None else None, r_err,
                                           retailers if o_err is None else None, own, record, cycle_code, record_row)
     return parity.extend_accessibility(rm.accessibility_from_supply(payload), reference if r_err is None else None,
@@ -1040,16 +1041,25 @@ async def get_truesync(merchant: str = Query(...), scope: CustomerScope = Depend
     # 2R-2 (B1): a brand at retail (supply's `mode` manufacturer): the five surfaces, what
     # changes on publish, the held file's preview and the artifacts, as /publishing serves them
     record = next((m for m in ms.merchants or [] if m.get('slug') == merchant), None)
-    if (record or {}).get('mode') == 'seller_external':
+    if _external_kind(ms, merchant) == 'seller':
         # 2V-2: a seller we do not host: its surfaces, preview, artifacts and the release card, as /publishing
         from app.routers import console_seller
-        view = await console_seller.publishing(scope, ms, merchant,
-                                               [c for c in channels or [] if c.get('is_active', True)])
+        active = [c for c in channels or [] if c.get('is_active', True)]
+        reads = await console_seller.seller_reads(scope, merchant)
+        view = await console_seller.publishing(scope, ms, merchant, active, reads=reads)
         view.pop('diff', None)
         errors = view.pop('read_errors')
         body.update(view)
+        # 2V-4 (B3): the release page, the brand page's shape over the seller's channels; the matrix is one row
+        # per SKU on the eight channels
+        page = await console_seller.release_page(scope, ms, merchant, active, view=view, reads=reads)
+        errors.update(page.pop('read_errors'))
+        body['products'] = page.pop('records')
+        seller_cols = {c.get('id'): c for c in body.get('channels') or []}
+        body['channels'] = [{**seller_cols.get(c['id'], {}), **c} for c in page.pop('channels')]
+        body.update(page)
         body.setdefault('read_errors', {}).update(errors)
-    elif (record or {}).get('mode') == 'manufacturer':
+    elif _external_kind(ms, merchant) == 'brand':
         from app.routers.console_manufacturer import brand_reads, publishing_view, release_view
         active = [c for c in channels or [] if c.get('is_active', True)]
         reads = await brand_reads(scope, merchant)
@@ -1105,15 +1115,24 @@ async def _record_inputs(merchant: str, scope: CustomerScope, *, incentives: boo
     }
 
 
+def _external_kind(ms: Optional[MerchantScope], merchant: Optional[str]) -> Optional[str]:
+    """2V-4 (B1): the one gate. 'brand' or 'seller' for an external merchant (hosting external, either kind:
+    console_seller.is_external), else None. Every held-mode read model branches here, on kind only where the
+    content differs."""
+    if ms is None or not merchant:
+        return None
+    from app.services import console_seller as cs
+    return cs.external_kind(next((m for m in ms.merchants or [] if m.get('slug') == merchant), None))
+
+
 def _is_seller_external(ms: MerchantScope, merchant: str) -> bool:
-    """2V-2: supply's `mode` seller_external, a seller we do not host."""
-    return (next((m for m in ms.merchants or [] if m.get('slug') == merchant), None) or {}).get('mode') == \
-        'seller_external'
+    """2V-2: a seller we do not host (2V-4: the gate, kind seller)."""
+    return _external_kind(ms, merchant) == 'seller'
 
 
 def _is_brand_at_retail(ms: MerchantScope, merchant: str) -> bool:
-    """supply's `mode` manufacturer on the merchant's /tenant record (2R-2)."""
-    return (next((m for m in ms.merchants or [] if m.get('slug') == merchant), None) or {}).get('mode') == 'manufacturer'
+    """2R-2: a brand at retail (2V-4: the gate, kind brand)."""
+    return _external_kind(ms, merchant) == 'brand'
 
 
 @router.get("/record/list")
@@ -1568,7 +1587,7 @@ async def get_revenue(cycle: str = Query(...), merchant: Optional[str] = Query(N
         errors['access'] = error
     # 2T-1 (B2): a brand at retail's Missed is its size answers wrong, as its Overview reads it
     answers, site = None, None
-    if (next((m for m in ms.merchants or [] if m.get('slug') == ms.slug), None) or {}).get('mode') == 'manufacturer':
+    if _is_brand_at_retail(ms, ms.slug):
         answers, _reference, a_err = await _attribute_inputs(scope, row, ms.slug)
         if a_err is not None:
             errors['reference'] = a_err
