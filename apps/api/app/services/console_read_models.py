@@ -1511,15 +1511,17 @@ def _program_agents(scored: List[dict]) -> Dict[str, dict]:
     return out
 
 
-def incentive_name(inc: dict, fallback: str = 'Program') -> str:
-    """2V-3 (Q7): an owned incentive by its program and its tier, "Petco Perks · Premier": three tiers of one
-    program read as one name three times on FL17's record and True Value. The tier is left out when the name
-    already says it ("Perks Premier")."""
+def incentive_name(inc: dict, fallback: str = 'Program', siblings: Optional[List[dict]] = None) -> str:
+    """2V-3 (Q7): an owned incentive's name, with its tier when another incentive in `siblings` has the same name
+    ("Petco Perks · Premier"): three tiers of one program read as one name three times on FL17's record and True
+    Value. A name that is alone (Wiggle & Snug's "Member Rewards"), or already says its tier ("Perks Premier"), is
+    as before."""
     name = inc.get('name') or inc.get('tier_name') or inc.get('code') or fallback
     tier = str(inc.get('tier_name') or '').strip()
-    if tier and _norm_tier(tier) not in _norm_tier(name):
-        return f"{name} · {tier}"
-    return name
+    if not tier or _norm_tier(tier) in (_norm_tier(name) or ''):
+        return name
+    shared = [o for o in siblings or [] if o is not inc and (o.get('name') or o.get('tier_name') or o.get('code')) == name]
+    return f"{name} · {tier}" if shared else name
 
 
 def build_programs(incentives: List[dict], value_outcomes: List[dict], *, record: Optional[dict] = None) -> List[dict]:
@@ -1544,7 +1546,7 @@ def build_programs(incentives: List[dict], value_outcomes: List[dict], *, record
         if (inc.get('code') and _norm_code(inc['code']) in have_codes) or \
                 (inc.get('tier_name') and _norm_tier(inc['tier_name']) in have_tiers):
             continue
-        programs.append({**inc, 'name': incentive_name(inc, inc.get('mechanic') or 'Program'),
+        programs.append({**inc, 'name': incentive_name(inc, inc.get('mechanic') or 'Program', incentives),
                          'terms': _program_terms(inc), 'offer_ids': [], 'source': 'owned_incentive'})
     out = []
     for prog in programs:
