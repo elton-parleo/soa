@@ -254,12 +254,14 @@ class RunOrchestrator:
         if not queries:
             logger.warning("No active queries found in soa_queries.")
 
-        # 2. Build full work list
+        # 2. Build full work list — run-number first, so repetitions of
+        # the same (query, platform) slot are spread across the cycle
+        # instead of queued back to back behind one platform semaphore.
         work_items: List[Tuple[SoaQuery, str, int]] = [
             (query, platform, run_num)
+            for run_num in range(1, self.runs_per_query + 1)
             for query in queries
             for platform in self.platforms
-            for run_num in range(1, self.runs_per_query + 1)
         ]
         total_planned = len(work_items)
 
@@ -319,41 +321,51 @@ class RunOrchestrator:
                 platform, config.SOA_DEFAULT_INTER_RUN_DELAY
             )
 
-            async with sems[platform]:
-                # Apply inter-run delay if this (query, platform) ran recently
+            def _gap_remaining() -> float:
                 last = slot_last_run.get(slot_key, 0.0)
-                gap = time.monotonic() - last
-                if last and gap < inter_run_delay:
-                    await asyncio.sleep(inter_run_delay - gap)
+                return inter_run_delay - (time.monotonic() - last) if last else 0.0
 
-                result = await self._execute_single_run(query, platform, run_num)
-                slot_last_run[slot_key] = time.monotonic()
+            # Wait out the inter-run delay OUTSIDE the platform semaphore,
+            # so a slot that ran recently never holds a connection slot
+            # while it sleeps. If a sibling run of the same slot finished
+            # while this one queued, release and wait again.
+            while True:
+                wait = _gap_remaining()
+                if wait > 0:
+                    await asyncio.sleep(wait)
+                    continue
+                async with sems[platform]:
+                    if _gap_remaining() > 0:
+                        continue
+                    result = await self._execute_single_run(query, platform, run_num)
+                    slot_last_run[slot_key] = time.monotonic()
+                break
 
-                if result.status == "success":
-                    counters["completed"] += 1
-                    # 7. Update cycle status after first successful run
-                    if not first_run_done:
-                        first_run_done = True
-                        self._update_cycle_status("running")
-                elif result.status == "timeout":
-                    counters["timeouts"] += 1
-                elif result.status == "error":
-                    counters["errors"] += 1
-                # 'skipped' does not update any counter — already counted in pre-filter
+            if result.status == "success":
+                counters["completed"] += 1
+                # 7. Update cycle status after first successful run
+                if not first_run_done:
+                    first_run_done = True
+                    self._update_cycle_status("running")
+            elif result.status == "timeout":
+                counters["timeouts"] += 1
+            elif result.status == "error":
+                counters["errors"] += 1
+            # 'skipped' does not update any counter — already counted in pre-filter
 
-                # E3: one throttled console line per RESOLVED run (never
-                # per pre-filtered 'skipped' item) — no `await` between
-                # the counter updates above and this read, so the sum is
-                # exactly as safe under this same coroutine's own
-                # in-flight increments as `counters["completed"] += 1`
-                # itself already is (see RunOrchestrator's module-level
-                # concurrency note in lite_events.py).
-                if self._lite_request_id is not None and result.status in ("success", "error", "timeout"):
-                    resolved = counters["completed"] + counters["errors"] + counters["timeouts"]
-                    lite_events.emit_log(
-                        self._lite_request_id, lite_events.TASK_QUERIES,
-                        f"q{resolved}/{total_planned} answered",
-                    )
+            # E3: one throttled console line per RESOLVED run (never
+            # per pre-filtered 'skipped' item) — no `await` between
+            # the counter updates above and this read, so the sum is
+            # exactly as safe under this same coroutine's own
+            # in-flight increments as `counters["completed"] += 1`
+            # itself already is (see RunOrchestrator's module-level
+            # concurrency note in lite_events.py).
+            if self._lite_request_id is not None and result.status in ("success", "error", "timeout"):
+                resolved = counters["completed"] + counters["errors"] + counters["timeouts"]
+                lite_events.emit_log(
+                    self._lite_request_id, lite_events.TASK_QUERIES,
+                    f"q{resolved}/{total_planned} answered",
+                )
 
         await asyncio.gather(*[_run_one(item) for item in pending])
 
