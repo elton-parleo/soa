@@ -610,6 +610,23 @@ def build_funded_offers(*, paths: List[dict], answers: List[dict], name: str) ->
             'note': T['prove.note']}
 
 
+def funded_pass_through(*, paths: List[dict], answers: List[dict]) -> Optional[dict]:
+    """
+    2V-3 (Q6): Funded offers' pass-through: of the cycle's cheapest-place answers (the catalog-built rows, by their
+    source: console_seller.cycle_answers, rm.catalog_intent), `n` those about a SKU a funder pays for and `k` those
+    that applied its price path. None when the cycle asked no cheapest-place question, the one case "not measured"
+    is true. FL17 asked ten, filed under the brand-direct tier, and the screen said it asked none.
+    """
+    cheapest = [a for a in answers if a.get('intent') == 'cheapest_place']
+    if not cheapest:
+        return None
+    funded = [r for r in paths if (((r.get('price_path') or {}).get('steps') or [None])[0] or {}).get('funded_by')]
+    about = [a for a in cheapest if any(mentions(a, r) for r in funded)]
+    applied = [a for a in about if any(quoted_step(a, r.get('price_path')) for r in funded)]
+    return {'n': len(about), 'k': len(applied), 'asked': len(cheapest), 'intent': 'cheapest_place',
+            'source': 'catalog'}
+
+
 # ─── Product record ───────────────────────────────────────────────────────
 
 def build_record(*, row: dict, feed_row: Optional[dict], name: str, merchant: str, sent: Optional[dict],
