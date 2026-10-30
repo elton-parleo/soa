@@ -98,3 +98,50 @@ def test_the_console_and_the_lines_share_one_day_rule():
     console_days.use_zone('America/Los_Angeles')
     stamp = '2026-10-30T02:15:00+00:00'
     assert console_days.short_day(stamp) == local_time.short_day(stamp, 'America/Los_Angeles') == 'Oct 29'
+
+
+# ── Q4 ─────────────────────────────────────────────────────────────────────
+
+def test_a_labelless_row_is_named_by_its_question_never_its_key():
+    assert n.question_product('What does the NexGard Chewables for Dogs cost at Petco?') == 'NexGard Chewables for Dogs'
+    assert n.question_product('What does the Wiggle & Snug Cloud Wipes 3-Pack cost?') == \
+        'Wiggle & Snug Cloud Wipes 3-Pack'
+    assert n.product_label('NexGard Chewables for Dogs', None) == 'NexGard Chewables for Dogs'
+    assert n.product_label('NexGard Chewables for Dogs', '31.1 lb') == '31.1 lb'   # unchanged: its digest stays
+    assert n.product_label(None, None) is None
+    reference = {'prices': [{'variant_ref': 'feed_sku:78', 'retailer_domain': 'petco.com', 'price': '69.99',
+                             'observed_at': '2026-10-29T18:00:00+00:00'}]}
+    runs = [{'query_text': 'What does the NexGard Chewables for Dogs cost at Petco?', 'platform': 'gemini',
+             'source_ref': {'variant_ref': 'feed_sku:78'}, 'outcome': 'wrong',
+             'expected_answer': {'type': 'price', 'attributed_to': 'petco.com'},
+             'claim_results': [{'target': 'asked', 'stated': '59.99'}]}]
+    out = n.product_facts(reference, runs, n.Merchant(name='Petco', kind='seller', terms=('Petco',)))
+    assert out['feed_sku:78']['product'] == 'NexGard Chewables for Dogs'
+
+
+@pytest.mark.parametrize('line,reason', [
+    ("Perplexity first picked Costco, then <brand>.", 'placeholder:<brand>'),
+    ("Perplexity first picked Costco, then .", 'empty_name:then .'),
+    ("Perplexity named \"\" first.", 'empty_name:""'),
+    ("Gemini quoted $59.99 for feed_sku:78.", 'subject_key:feed_sku:78.'),
+])
+def test_a_slot_an_empty_name_or_a_key_is_never_written(line, reason):
+    assert n.placeholder_check(line) == reason
+    assert n.check(line, PURINA) == reason
+
+
+def test_an_entity_with_no_name_is_not_a_pick():
+    from soa_shared import surfaces
+    run = {'answer_status': surfaces.ANSWERED, 'tier': 'category_control', 'platform': 'perplexity',
+           'query_text': 'Best dog food for a puppy?', 'source_ref': {}}
+    mentions = [{'name': 'Costco', 'position': 1}, {'name': '', 'position': 2}, {'name': None, 'position': 3}]
+    petco = n.Merchant(name='Petco', kind='seller', terms=('Petco',))
+    facts = n.answer_facts(run, None, mentions, petco, {})
+    assert (facts['first pick'], facts['named in order']) == ('Costco', ['Costco'])
+    # a nameless first pick is no rival's pick: nothing to write
+    assert n.answer_facts(run, None, [{'name': '', 'position': 1}], petco, {}) is None
+
+
+def test_the_store_is_not_the_store_it_is_the_record_s():
+    line = "Copilot quoted $54.99, but Petco is the store."
+    assert n.normalise(line, PURINA) == "Copilot quoted $54.99, but the record is Petco's."

@@ -747,8 +747,9 @@ def answer_facts(run: dict, outcome: Optional[dict], mentions: List[dict], merch
     the cycle's brand truths (attribute_accuracy.truth_index)."""
     if run.get('answer_status') not in (None, surfaces.ANSWERED):
         return None
-    named = [m['name'] for m in sorted(mentions, key=lambda m: m.get('position') or 99)]
-    first = next((m['name'] for m in mentions if m.get('position') == 1), None)
+    # 2V-3 (Q4): an entity with no name is no name to write ("then <brand>")
+    named = [m['name'] for m in sorted(mentions, key=lambda m: m.get('position') or 99) if str(m.get('name') or '').strip()]
+    first = next((m['name'] for m in mentions if m.get('position') == 1 and str(m.get('name') or '').strip()), None)
     brand_choice = unprompted.is_brand_choice(run, merchant.terms)
     ref = _json(run.get('source_ref')) or {}
     attribute = attribute_accuracy.answer_attribute(ref, _json((outcome or {}).get('extraction')),
@@ -952,6 +953,26 @@ def walled_retailers(quotes: List[dict]) -> List[str]:
     return sorted(r for r, qs in by.items() if all(q['verdict'] == 'unverifiable' for q in qs))
 
 
+_ASKED = re.compile(r"^What does the (?P<product>.+?) cost(?: at .+)?\?$")
+
+
+def question_product(query_text: Optional[str]) -> Optional[str]:
+    """'What does the NexGard Chewables for Dogs, 1 ct cost at Petco?' ->
+    'NexGard Chewables for Dogs, 1 ct'. The catalog tier's wording is fixed
+    (soa_shared/catalog_tiers.py), so this is a parse, not a guess."""
+    m = _ASKED.match(str(query_text or '').strip())
+    return m.group('product').strip() if m else None
+
+
+def product_label(asked: Optional[str], variant_label: Optional[str]) -> Optional[str]:
+    """2V-3 (Q4): a product row's name: the record's variant label, else the
+    product as its catalog question named it; never the row's key (FL17
+    wrote "product:feed_sku:78" for the GTIN-less NexGard row, which has no
+    label). A row with a label keeps it, so its facts (and digest) do not move."""
+    label = str(variant_label or '').strip()
+    return label or asked or None
+
+
 def product_facts(reference: Optional[dict], catalog_runs: List[dict], merchant: Merchant) -> Dict[str, dict]:
     """{product key: facts} for each variant in the cycle's cached
     retailer-prices that a catalog question asked about. The key is True
@@ -963,17 +984,20 @@ def product_facts(reference: Optional[dict], catalog_runs: List[dict], merchant:
         key = _gtin14(row.get('gtin')) or row.get('variant_ref')
         if not key:
             continue
-        g = groups.setdefault(key, {'label': row.get('variant_label') or key, 'rows': [], 'aliases': []})
+        g = groups.setdefault(key, {'label': row.get('variant_label'), 'rows': [], 'aliases': []})
         g['rows'].append(row)
         for a in _ref_keys(row):
             if a not in g['aliases']:
                 g['aliases'].append(a)
             alias.setdefault(a, key)
     quotes: Dict[str, List[dict]] = {}
+    named_as: Dict[str, str] = {}
     for run in catalog_runs:
         key = next((alias[k] for k in _source_keys(_json(run.get('source_ref'))) if k in alias), None)
         if key is None or run.get('outcome') is None:
             continue
+        if key not in named_as and question_product(run.get('query_text')):
+            named_as[key] = question_product(run.get('query_text'))
         expected = _json(run.get('expected_answer')) or {}
         claims = [c for c in _json(run.get('claim_results')) or [] if isinstance(c, dict)]
         asked = next((c for c in claims if c.get('target', 'asked') == 'asked' and _money(c.get('stated'))), None)
@@ -1014,7 +1038,7 @@ def product_facts(reference: Optional[dict], catalog_runs: List[dict], merchant:
         issue, direction = issue_sentence(qs, agents, prices)
         out[key] = _drop_none({
             'kind': PRODUCT,
-            'product': g['label'],
+            'product': product_label(named_as.get(key), g['label']),
             **merchant.facts(),
             'gtin': _gtin14(row0.get('gtin')),
             'sku': row0.get('sku') or row0.get('variant_ref'),
@@ -1615,6 +1639,10 @@ def normalise(line: str, facts: dict) -> str:
         run = m.group(0).strip('.,:;!?()"')
         return _DASH.sub('-', m.group(0)) if run and run in known else m.group(0)
     line = _DASHED_RUN.sub(held, line)
+    # 2V-3 (Q4): "... but Petco is the store" says whose record it is
+    store = str(facts.get('store') or '').strip()
+    if store:
+        line = re.sub(r"\b" + re.escape(store) + r"\s+is\s+the\s+store\b", f"the record is {store}'s", line)
     # 2O-1 (B3): one store is the place to buy it, not places
     if len(facts.get('named_stores') or []) == 1:
         line = _PLACES.sub('as the place to buy it', line)
@@ -1871,6 +1899,28 @@ def record_fact_check(line: str, facts: dict) -> Optional[str]:
     return None
 
 
+#: 2V-3 (Q4): a template slot the writer left in, or a name it left empty
+_PLACEHOLDER = re.compile(r"<[^<>]*>|\{[^{}]*\}|\[(?:brand|store|retailer|product|name)\]", re.I)
+_EMPTY_NAME = re.compile(r"\"\s*\"|''|\(\s*\)|\b(?:then|picked|named|chose|over|and|or)\s+[,.;!?]", re.I)
+#: a subject key the facts carry for joining, never for a reader
+_SUBJECT_KEY = re.compile(r"\b(?:feed_sku|sku|product|answer):\S+|\bfeed_sku\b", re.I)
+
+
+def placeholder_check(line: str) -> Optional[str]:
+    """2V-3 (Q4): "Perplexity first picked Costco, then <brand>." is never
+    written: a literal slot, an empty name, or a subject key ("feed_sku:78")."""
+    m = _PLACEHOLDER.search(line)
+    if m:
+        return f'placeholder:{m.group(0)}'
+    m = _EMPTY_NAME.search(line)
+    if m:
+        return f'empty_name:{m.group(0).strip()}'
+    m = _SUBJECT_KEY.search(line)
+    if m:
+        return f'subject_key:{m.group(0)}'
+    return None
+
+
 def check(line: Optional[str], facts: dict) -> Optional[str]:
     """None when the line passes every check, else the first failure."""
     if line is None or not str(line).strip():
@@ -1878,6 +1928,9 @@ def check(line: Optional[str], facts: dict) -> Optional[str]:
     line = normalise(str(line).strip(), facts)
     if len(line) > max_chars(facts):
         return f'too_long:{len(line)}'
+    slot = placeholder_check(line)
+    if slot:
+        return slot
     scrubbed = line
     for agent in AGENT_WORDS:
         scrubbed = scrubbed.replace(agent, ' ')
