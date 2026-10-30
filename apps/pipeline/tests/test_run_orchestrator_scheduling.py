@@ -7,6 +7,7 @@ each repetition starts at least inter_run_delay after the slot's previous
 run finished.
 """
 import asyncio
+import threading
 import time
 from datetime import date
 
@@ -91,3 +92,20 @@ def test_the_delay_is_not_slept_while_holding_the_platform_semaphore(calls):
     semaphore after each slot's first run (the old order and placement)
     took about 1.5s; waiting it out while other slots run takes about 0.7s."""
     assert _run() < 1.1
+
+
+def test_soa_runs_reads_and_writes_run_off_the_event_loop_thread(calls, monkeypatch):
+    """_get_existing_run/_upsert_run block on the database; they run in a
+    worker thread (asyncio.to_thread) so in-flight API calls keep going."""
+    loop_thread = threading.get_ident()
+    seen = []
+    for name in ('_get_existing_run', '_upsert_run'):
+        original = getattr(RunOrchestrator, name)
+
+        def wrapped(self, *a, _original=original, _name=name, **k):
+            seen.append((_name, threading.get_ident() != loop_thread))
+            return _original(self, *a, **k)
+        monkeypatch.setattr(RunOrchestrator, name, wrapped)
+    _run()
+    assert len(seen) == 12
+    assert all(off_loop for _, off_loop in seen)

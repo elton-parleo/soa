@@ -15,6 +15,7 @@ Responsibilities:
 import asyncio
 import datetime
 import logging
+import os
 import time
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
@@ -76,6 +77,15 @@ _PLATFORM_MAX_CONCURRENT: Dict[str, int] = {
     "aimode":          config.SOA_SERPAPI_MAX_CONCURRENT,
     "copilot":         config.SOA_SERPAPI_MAX_CONCURRENT,
 }
+
+
+# Per-run soa_runs reads/writes run in worker threads (asyncio.to_thread);
+# never more at once than soa_shared/database.py's pool holds, so a thread
+# never waits out the pool timeout for a connection (pooled mode: 1).
+_DB_MAX_CONCURRENT: int = (
+    1 if config.USE_POOLED_DB.lower() == "true"
+    else int(os.getenv("DATABASE_POOL_SIZE") or 5)
+)
 
 
 def normalize_platforms(platforms: List[str]) -> List[str]:
@@ -309,6 +319,12 @@ class RunOrchestrator:
             {p: resolve_platform_concurrency(self.cycle_code, p, self.max_concurrent) for p in self.platforms},
         )
 
+        # sqlite (tests) shares one connection across threads: one at a time.
+        bind = session_factory.kw.get("bind")
+        self._db_sem = asyncio.Semaphore(
+            1 if bind is not None and bind.dialect.name == "sqlite" else _DB_MAX_CONCURRENT
+        )
+
         # Group pending by (query_id, platform) to apply inter-run delay
         # between repetitions of the same slot
         slot_last_run: Dict[Tuple[int, str], float] = {}
@@ -421,11 +437,16 @@ class RunOrchestrator:
         # ── STEP 1: Check for existing run ──
         # Do this BEFORE any API call.
         # Never make an API call if the run already has a success record.
-        existing = self._get_existing_run(
-            query_id=query.id,
-            platform=platform,
-            run_number=run_number,
-        )
+        # Blocking DB calls run in a worker thread so they never stall the
+        # event loop's in-flight API calls; _db_sem caps them at the
+        # connection pool's size (see _DB_MAX_CONCURRENT).
+        async with self._db_sem:
+            existing = await asyncio.to_thread(
+                self._get_existing_run,
+                query_id=query.id,
+                platform=platform,
+                run_number=run_number,
+            )
 
         if existing is not None:
             if existing.status == "success":
@@ -454,13 +475,15 @@ class RunOrchestrator:
         # checks for existing records before calling the API, and
         # _upsert_run() uses update-or-insert logic. If a DB error occurs
         # here it is a genuine unexpected failure and should propagate.
-        self._upsert_run(
-            existing=existing,
-            query=query,
-            platform=platform,
-            run_number=run_number,
-            response=response,
-        )
+        async with self._db_sem:
+            await asyncio.to_thread(
+                self._upsert_run,
+                existing=existing,
+                query=query,
+                platform=platform,
+                run_number=run_number,
+                response=response,
+            )
 
         logger.info(
             "Run %s/%s/%s/%d: %s in %dms",

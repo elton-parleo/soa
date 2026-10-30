@@ -23,6 +23,7 @@ import json
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
 import lite_events
 import runners.run_orchestrator as run_orchestrator_module
@@ -75,7 +76,10 @@ class _FakeChatgptRunner:
 
 @pytest.fixture
 def db(monkeypatch):
-    engine = create_engine("sqlite:///:memory:")
+    # StaticPool: one shared connection, so the orchestrator's worker-thread
+    # DB calls (asyncio.to_thread) see the same in-memory database.
+    engine = create_engine("sqlite:///:memory:", poolclass=StaticPool,
+                           connect_args={"check_same_thread": False})
     with engine.begin() as conn:
         conn.exec_driver_sql("""
             CREATE TABLE soa_entities (
