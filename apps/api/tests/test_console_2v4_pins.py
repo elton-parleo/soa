@@ -1,7 +1,8 @@
 """
 2V-4 (B8): brand mode and the hosted seller do not move. Each read below is
 pinned by the sha256 of its canonical JSON (sorted keys, wall-clock stamps
-dropped), computed on soa `main` before 2V-4 (the pin file says the commit):
+dropped), computed on soa `main` at 729ceea, before 2V-4, on each engine (sqlite and the Postgres CI runs, whose
+types serialise differently):
 Pampers at retail on 2U-5's recorded harness (mode manufacturer), and Wiggle
 & Snug, the Parleo-hosted seller, on 2P-1's pair. A read that differs fails
 here with its endpoint named.
@@ -40,7 +41,8 @@ def digest(body) -> str:
     return hashlib.sha256(json.dumps(_canon(body), sort_keys=True).encode()).hexdigest()
 
 
-def _check(kind: str, got: dict):
+def _check(kind: str, got: dict, request):
+    kind = f"{kind}:{request.node.callspec.params['db']}"
     if os.environ.get('SOA_2V4_PIN_WRITE'):
         pins = json.load(open(PINS)) if os.path.exists(PINS) else {}
         pins[kind] = got
@@ -54,17 +56,17 @@ def _check(kind: str, got: dict):
     assert set(got) == set(want)
 
 
-def test_brand_mode_reads_are_unchanged(http, db, upstream):
+def test_brand_mode_reads_are_unchanged(http, db, upstream, request):
     t2u5._shape(db, http, upstream)
     got = {}
     for endpoint, params in BRAND_READS:
         got[endpoint] = digest(t2u5._read(http, endpoint, **params))
     record = t2u5._read(http, 'record/list')['products'][0]
     got['record'] = digest(t2u5._read(http, 'record', product=record['sku']))
-    _check('brand_pampers_2u5', got)
+    _check('brand_pampers_2u5', got, request)
 
 
-def test_the_hosted_seller_reads_are_unchanged(http, db, upstream):
+def test_the_hosted_seller_reads_are_unchanged(http, db, upstream, request):
     _pair(db, http, upstream)
     got = {}
     for endpoint, params in HOSTED_READS:
@@ -75,4 +77,4 @@ def test_the_hosted_seller_reads_are_unchanged(http, db, upstream):
             got[endpoint] = digest(r.json())
         else:
             got[endpoint] = digest(_get(http, endpoint, merchant=WS))
-    _check('hosted_wiggle_and_snug', got)
+    _check('hosted_wiggle_and_snug', got, request)
