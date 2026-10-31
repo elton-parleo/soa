@@ -256,7 +256,7 @@ describe('favicon set — declared in all three built HTML entries', () => {
 // isAuditHost() gate).
 describe('lemlist visitor-tracking pixel — landing document only (Part 1)', () => {
   it('audit.html loads it async', () => {
-    expect(auditHtml).toMatch(/<script async src="https:\/\/app\.lemlist\.com\/api\/visitors\/tracking\?[^"]*"><\/script>/)
+    expect(auditHtml).toMatch(/<script async src="https:\/\/visitors\.lemlist\.com\/api\/visitors\/tracking\?[^"]*"><\/script>/)
   })
 
   it('audit-report.html (/r/, /s/) carries no lemlist reference', () => {
