@@ -147,7 +147,7 @@ describe('prefixed build — tracker placement is unchanged (S3, Part 1)', () =>
   })
 
   it('lemlist is on the landing and nowhere near /r/ or /s/', () => {
-    expect(auditHtml).toMatch(/<script async src="https:\/\/app\.lemlist\.com\/api\/visitors\/tracking\?[^"]*"><\/script>/)
+    expect(auditHtml).toMatch(/<script async src="https:\/\/visitors\.lemlist\.com\/api\/visitors\/tracking\?[^"]*"><\/script>/)
     expect(auditReportHtml).not.toMatch(/lemlist/i)
   })
 
